@@ -158,3 +158,16 @@ test("the real binary stays quiet: no SQLite warning in hook output", () => {
   );
   expect(result).toBe("");
 });
+
+test("injections say whether the hook or MCP put them in", () => {
+  const base = {
+    ts: "2026-10-14T08:00:00.000Z",
+    type: "injection",
+    tokens: 10,
+    entries: [{ id: "a" }],
+  };
+  expect(formatEvent({ ...base, source: "startup" })).toContain(
+    "1 rule (10 tokens) via hook (startup): a",
+  );
+  expect(formatEvent({ ...base, source: "mcp" })).toContain("via MCP: a");
+});
