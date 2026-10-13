@@ -11,6 +11,9 @@
     },
     {
       "path": "../mcp"
+    },
+    {
+      "path": "../dashboard"
     }
   ]
 }

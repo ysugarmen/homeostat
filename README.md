@@ -25,7 +25,10 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat curate` | The curator run (CI) |
 | `homeostat deep-dive` | The deep-dive run (CI) |
 | `homeostat export --out <repo>` | Write accepted entries into a code repo as each tool's rules files |
-| `homeostat up` | Run the curator and deep dive on their schedules from a shared box |
+| `homeostat up` | Serve the dashboard and run the curator and deep dive on their schedules (a shared box; also the Docker image) |
+| `homeostat dashboard` | Serve just the dashboard on localhost:4747 |
+| `homeostat search`, `explain`, `list`, `status` | Read the KB from the terminal (`--json` for agents) |
+| `homeostat events` | The local event log, one line per event |
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |
 | `homeostat mcp` | Serve the KB to any agent over MCP (stdio) |
 
@@ -39,7 +42,7 @@ The Claude Code plugin is in [`packages/plugin`](packages/plugin).
 | `packages/cli` | The `homeostat` command and the plugin's hook handlers |
 | `packages/plugin` | Claude Code plugin: skills and hooks |
 | `packages/mcp` | MCP server: context, search, explain, learn, flag, report |
-| `packages/dashboard` | Dashboard (Phase 4, not started) |
+| `packages/dashboard` | Local dashboard: setup forms and metrics, server-rendered |
 | `examples/starter-kb` | A small example knowledge base |
 
 ## Development

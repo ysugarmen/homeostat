@@ -1,0 +1,14 @@
+{
+  "name": "@homeostat/dashboard",
+  "version": "0.0.0",
+  "description": "Local dashboard for a Homeostat knowledge base: setup and metrics.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@homeostat/core": "workspace:*",
+    "yaml": "^2.9.1"
+  }
+}

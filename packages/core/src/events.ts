@@ -94,10 +94,10 @@ export function readEvents(kbRoot: string, q: EventQuery = {}): Event[] {
   ).map((r) => JSON.parse(r.data) as Event);
 }
 
-/** One readable line per event, for `homeostat events`. */
-export function formatEvent(e: Event): string {
-  const { ts, type, ...rest } = e;
-  const detail = (() => {
+/** What happened in one event, without its time and type. */
+export function describeEvent(e: Event): string {
+  const { type, ...rest } = e;
+  return (() => {
     switch (type) {
       case "injection": {
         const entries = (rest.entries as { id: string }[] | undefined) ?? [];
@@ -121,7 +121,11 @@ export function formatEvent(e: Event): string {
         return JSON.stringify(rest);
     }
   })();
-  return `${String(ts).replace("T", " ").slice(0, 19)}  ${type.padEnd(18)} ${detail}`;
+}
+
+/** One readable line per event, for `homeostat events`. */
+export function formatEvent(e: Event): string {
+  return `${String(e.ts).replace("T", " ").slice(0, 19)}  ${e.type.padEnd(18)} ${describeEvent(e)}`;
 }
 
 /** Records a failed agent run, when `dir` is a KB (so liveness shows the failure). */

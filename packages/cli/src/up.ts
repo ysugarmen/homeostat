@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { type AgentName, dueAgents, readKbFiles, validate } from "@homeostat/core";
+import { startDashboard } from "@homeostat/dashboard";
 import type { Io } from "./cli.ts";
 import { runCurate } from "./curate.ts";
 import { runDeepDive } from "./deep-dive.ts";
@@ -11,6 +12,11 @@ export interface UpOptions {
   once?: boolean;
   /** Run every enabled agent now, ignoring the schedule, then exit. */
   runNow?: boolean;
+  /** Commander turns `--no-dashboard` into `dashboard: false`. */
+  dashboard?: boolean;
+  port?: string;
+  /** Interface for the dashboard; 0.0.0.0 inside a container. */
+  host?: string;
 }
 
 const RUNNERS: Record<AgentName, (dir: string, io: Io) => Promise<number>> = {
@@ -42,8 +48,8 @@ async function tick(root: string, io: Io, now: Date, all: boolean): Promise<numb
 }
 
 /**
- * `homeostat up`: the central scheduler for a shared box, the alternative to the CI schedule. Checks the
- * agents' cron schedules (UTC) every minute. The dashboard joins it in Phase 4.
+ * `homeostat up`: the central scheduler for a shared box, the alternative to the CI schedule, plus
+ * the dashboard. Checks the agents' cron schedules (UTC) every minute.
  */
 export async function runUp(opts: UpOptions, io: Io): Promise<number> {
   const root = resolve(opts.dir);
@@ -54,6 +60,14 @@ export async function runUp(opts: UpOptions, io: Io): Promise<number> {
     return code;
   }
 
+  if (opts.dashboard !== false) {
+    const { url } = await startDashboard({
+      kbRoot: root,
+      port: opts.port ? Number(opts.port) : 4747,
+      ...(opts.host ? { host: opts.host } : {}),
+    });
+    io.stdout(`homeostat up: dashboard at ${url}\n`);
+  }
   io.stdout(`homeostat up: scheduling agents for ${root} (UTC); Ctrl-C to stop\n`);
   let last = "";
   let running = false;
@@ -76,5 +90,25 @@ export async function runUp(opts: UpOptions, io: Io): Promise<number> {
       done();
     });
   });
+  return 0;
+}
+
+/** `homeostat dashboard`: just the dashboard, until Ctrl-C. */
+export async function runDashboard(
+  opts: { dir: string; port: string; host?: string },
+  io: Io,
+): Promise<number> {
+  const root = resolve(opts.dir);
+  if (!validate(readKbFiles(root)).config) {
+    io.stderr(`homeostat.yaml is missing or invalid in ${root}; run homeostat validate\n`);
+    return 1;
+  }
+  const { url, server } = await startDashboard({
+    kbRoot: root,
+    port: Number(opts.port),
+    ...(opts.host ? { host: opts.host } : {}),
+  });
+  io.stdout(`homeostat dashboard: ${url} (Ctrl-C to stop)\n`);
+  await new Promise<void>((done) => process.once("SIGINT", () => server.close(() => done())));
   return 0;
 }

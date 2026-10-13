@@ -12,7 +12,7 @@ import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
 import { runMcp } from "./mcp.ts";
 import { runExplain, runList, runSearch, runStatus } from "./query.ts";
-import { runUp, type UpOptions } from "./up.ts";
+import { runDashboard, runUp, type UpOptions } from "./up.ts";
 import { runValidate } from "./validate.ts";
 
 /** Everything the commands touch outside the file system, so tests can supply their own. */
@@ -252,13 +252,26 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
   program
     .command("up")
     .description(
-      "Run the curator and deep dive on their schedules from a shared box (the dashboard comes later).",
+      "Serve the dashboard and run the curator and deep dive on their schedules (a shared box).",
     )
     .option("--dir <dir>", "knowledge base checkout", ".")
     .option("--once", "check the schedule once and exit")
     .option("--run-now", "run every enabled agent now and exit")
+    .option("--no-dashboard", "schedule the agents without serving the dashboard")
+    .option("--port <port>", "dashboard port", "4747")
+    .option("--host <host>", "dashboard interface (default 127.0.0.1; 0.0.0.0 in a container)")
     .action(async (opts: UpOptions) => {
       exitCode = await runUp(opts, io);
+    });
+
+  program
+    .command("dashboard")
+    .description("Serve the setup and metrics dashboard on localhost.")
+    .option("--dir <dir>", "knowledge base root", ".")
+    .option("--port <port>", "port", "4747")
+    .option("--host <host>", "interface (default 127.0.0.1; 0.0.0.0 in a container)")
+    .action(async (opts: { dir: string; port: string; host?: string }) => {
+      exitCode = await runDashboard(opts, io);
     });
 
   program

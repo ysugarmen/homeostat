@@ -81,6 +81,7 @@ export {
 export { explainEntry, hitLine, kbReport } from "./describe.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
 export {
+  describeEvent,
   EVENTS_DB,
   type Event,
   type EventQuery,
