@@ -56,6 +56,7 @@ export function checkEntry(entry: Entry, ctx: CheckContext): Issue[] {
       ["owner", fm.owner],
       ["source.author", fm.source.author],
       ["approvedBy", fm.approvedBy],
+      ...(fm.flags ?? []).map((f, i): [string, string] => [`flags.${i}.by`, f.by]),
     ];
     for (const [path, member] of refs) {
       if (member !== undefined && !ctx.members.includes(member)) {

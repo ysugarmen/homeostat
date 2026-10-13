@@ -88,6 +88,7 @@ export {
 } from "./export.ts";
 export { BLOCK_END, BLOCK_START, removeBlock, replaceBlock } from "./export-block.ts";
 export { applyFixes } from "./fix.ts";
+export { type Flag, flagEntry } from "./flag.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export * from "./providers/index.ts";
 export {
@@ -101,6 +102,7 @@ export {
   sourceSchema,
 } from "./schema.ts";
 export { type ScoreContext, type ScoreReason, type ScoreResult, score } from "./score.ts";
+export { type SearchHit, type SearchOptions, searchEntries, tokenize } from "./search.ts";
 export {
   CONTEXT_HEADER,
   renderContext,

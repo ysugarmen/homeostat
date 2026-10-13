@@ -44,6 +44,10 @@ export const frontmatterSchema = z.strictObject({
   conflictsWith: z.array(id).optional(),
   supersedes: id.optional(),
   tags: z.array(z.string().min(1)).optional(),
+  /** "This is wrong" reports; each costs the entry score and sends it back to review. */
+  flags: z
+    .array(z.strictObject({ by: memberId, reason: z.string().min(1), date: isoDate }))
+    .optional(),
   tokens: z.int().min(0),
 });
 

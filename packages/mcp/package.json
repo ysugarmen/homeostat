@@ -1,0 +1,14 @@
+{
+  "name": "@homeostat/mcp",
+  "version": "0.0.0",
+  "description": "MCP server exposing a Homeostat knowledge base to any agent.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@homeostat/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.1"
+  }
+}

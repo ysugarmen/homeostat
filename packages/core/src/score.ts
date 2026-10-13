@@ -3,7 +3,7 @@ import type { Frontmatter, SourceType } from "./schema.ts";
 
 export interface ScoreContext {
   config: Config;
-  /** Open "this is wrong" flags on the entry. */
+  /** Open "this is wrong" flags; defaults to the entry's `flags`. */
   flags?: number;
 }
 
@@ -51,7 +51,7 @@ export function score(entry: Frontmatter, ctx: ScoreContext): ScoreResult {
     add("conflict", `conflicts with ${entry.conflictsWith.join(", ")}`);
   }
 
-  const flags = ctx.flags ?? 0;
+  const flags = ctx.flags ?? entry.flags?.length ?? 0;
   if (flags > 0) add("flag", `${flags} open flag${flags === 1 ? "" : "s"}`, flags);
 
   return { score: reasons.reduce((sum, r) => sum + r.delta, 0), reasons };
