@@ -8,11 +8,11 @@ import { type ExportOptions, runExport } from "./export.ts";
 import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
+import { runUp, type UpOptions } from "./up.ts";
 import { runValidate } from "./validate.ts";
 
 /** Commands from the execution plan that exist in the CLI but are not built yet. */
 const PLANNED: readonly [name: string, description: string, step: string][] = [
-  ["up", "Start the agents and dashboard", "2.5"],
   ["status", "Show agent and knowledge-base health", "4.3"],
 ];
 
@@ -164,6 +164,18 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--no-llm", "skip Claude: no merged text and no conflict check")
     .action(async (opts: DeepDiveOptions) => {
       exitCode = await runDeepDive(opts, io);
+    });
+
+  program
+    .command("up")
+    .description(
+      "Run the curator and deep dive on their schedules from a shared box (the dashboard comes later).",
+    )
+    .option("--dir <dir>", "knowledge base checkout", ".")
+    .option("--once", "check the schedule once and exit")
+    .option("--run-now", "run every enabled agent now and exit")
+    .action(async (opts: UpOptions) => {
+      exitCode = await runUp(opts, io);
     });
 
   program

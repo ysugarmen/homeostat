@@ -1,6 +1,12 @@
 export { type BodySections, parseBody, RULE_MAX_WORDS, WHY_MAX_WORDS } from "./body.ts";
 export { type CheckContext, CORE_AREA, checkEntry } from "./check.ts";
-export { askClaude, type ClaudeClient, type ClaudeOptions, type Effort } from "./claude.ts";
+export {
+  askClaude,
+  type ClaudeClient,
+  type ClaudeOptions,
+  ClaudeUnavailableError,
+  type Effort,
+} from "./claude.ts";
 export { CODEOWNERS_FILE, generateCodeowners } from "./codeowners.ts";
 export {
   CONFIG_FILE,
@@ -20,6 +26,7 @@ export {
   TITLE_SIMILARITY,
   titleSimilarity,
 } from "./conflicts.ts";
+export { type AgentName, cronMatches, dueAgents } from "./cron.ts";
 export {
   type CuratedEntry,
   CurateError,

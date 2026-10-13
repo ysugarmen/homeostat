@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import {
   ClaudeConflictJudge,
   ClaudeMerger,
+  ClaudeUnavailableError,
   type DeepDiveChange,
   DeepDiveError,
   deepDive,
@@ -92,7 +93,11 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
     });
     return 0;
   } catch (e) {
-    if (e instanceof CliError || e instanceof DeepDiveError) {
+    if (
+      e instanceof CliError ||
+      e instanceof DeepDiveError ||
+      e instanceof ClaudeUnavailableError
+    ) {
       io.stderr(`${e.message}\n`);
       return 1;
     }

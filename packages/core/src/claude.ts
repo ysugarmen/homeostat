@@ -24,17 +24,38 @@ export async function askClaude<S extends z.ZodType>(
   user: string,
   schema: S,
 ): Promise<z.infer<S> | null> {
-  const response = await opts.client.beta.messages.parse({
-    model: opts.model,
-    max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: opts.effort, format: betaZodOutputFormat(schema) },
-    system,
-    messages: [{ role: "user", content: user }],
-  });
+  let response: Awaited<ReturnType<ClaudeClient["beta"]["messages"]["parse"]>>;
+  try {
+    response = await opts.client.beta.messages.parse({
+      model: opts.model,
+      max_tokens: 16000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: opts.effort, format: betaZodOutputFormat(schema) },
+      system,
+      messages: [{ role: "user", content: user }],
+    });
+  } catch (e) {
+    // The SDK has already retried what is retryable; anything left stops the whole run.
+    if (e instanceof Anthropic.AuthenticationError || isMissingCredentials(e)) {
+      throw new ClaudeUnavailableError(
+        "no usable Claude API credentials: set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN)",
+      );
+    }
+    if (e instanceof Anthropic.APIError) {
+      throw new ClaudeUnavailableError(`Claude API error ${e.status ?? ""}: ${e.message}`.trim());
+    }
+    throw e;
+  }
   if (response.stop_reason === "refusal") return null;
   return (response.parsed_output as z.infer<S> | null | undefined) ?? null;
 }
+
+/** Claude could not be reached or refused the credentials; the agent run cannot continue. */
+export class ClaudeUnavailableError extends Error {}
+
+// The SDK reports missing credentials with a plain Error, so match its message.
+const isMissingCredentials = (e: unknown) =>
+  e instanceof Error && e.message.startsWith("Could not resolve authentication method");
 
 export const defaultClient = (client?: ClaudeClient): ClaudeClient => client ?? new Anthropic();

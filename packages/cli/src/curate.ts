@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import {
   ClaudeDrafter,
+  ClaudeUnavailableError,
   CurateError,
   type CurateResult,
   curate,
@@ -101,7 +102,7 @@ export async function runCurate(opts: CurateOptions, io: Io): Promise<number> {
   try {
     return await curateRun(opts, io);
   } catch (e) {
-    if (e instanceof CliError || e instanceof CurateError) {
+    if (e instanceof CliError || e instanceof CurateError || e instanceof ClaudeUnavailableError) {
       io.stderr(`${e.message}\n`);
       return 1;
     }

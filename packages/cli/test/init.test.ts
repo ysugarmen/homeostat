@@ -151,10 +151,7 @@ describe("kbx init", () => {
 });
 
 describe("planned commands", () => {
-  test.each([
-    ["up", "2.5"],
-    ["status", "4.3"],
-  ])("kbx %s says which step builds it", async (command, step) => {
+  test.each([["status", "4.3"]])("kbx %s says which step builds it", async (command, step) => {
     const { code, stderr } = await run(command);
     expect(code).toBe(1);
     expect(stderr).toContain(`kbx ${command} is not built yet (execution plan step ${step})`);
