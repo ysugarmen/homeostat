@@ -63,6 +63,14 @@ export {
   type RuleText,
 } from "./deepdive.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
+export {
+  BLOCK_FILES,
+  type ExportOutput,
+  type ExportTarget,
+  exportRules,
+  OWNED_DIRS,
+} from "./export.ts";
+export { BLOCK_END, BLOCK_START, removeBlock, replaceBlock } from "./export-block.ts";
 export { applyFixes } from "./fix.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export * from "./providers/index.ts";

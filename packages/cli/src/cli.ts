@@ -4,6 +4,7 @@ import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
+import { type ExportOptions, runExport } from "./export.ts";
 import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
@@ -11,7 +12,6 @@ import { runValidate } from "./validate.ts";
 
 /** Commands from the execution plan that exist in the CLI but are not built yet. */
 const PLANNED: readonly [name: string, description: string, step: string][] = [
-  ["export", "Write accepted entries to agent rules files", "2.7"],
   ["up", "Start the agents and dashboard", "2.5"],
   ["status", "Show agent and knowledge-base health", "4.3"],
 ];
@@ -120,6 +120,23 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--push", "push --branch to origin after committing")
     .action(async (url: string | undefined, opts: LearnOptions) => {
       exitCode = await runLearn(url, opts, io);
+    });
+
+  program
+    .command("export")
+    .description(
+      "Write accepted entries into a code repo as Claude, Cursor, Copilot and AGENTS.md rules.",
+    )
+    .option("--kb <dir>", "knowledge base checkout (default: $KBX_DIR, else the current dir)")
+    .option("--out <dir>", "code repo to write into", ".")
+    .option(
+      "--target <target>",
+      "claude, cursor, agents-md or copilot; repeatable (default: kbx.yaml)",
+      collect,
+    )
+    .option("--check", "exit 1 if the exported files are out of date, without writing")
+    .action((opts: ExportOptions) => {
+      exitCode = runExport(opts, io);
     });
 
   program

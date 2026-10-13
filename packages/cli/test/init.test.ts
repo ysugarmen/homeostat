@@ -152,7 +152,6 @@ describe("kbx init", () => {
 
 describe("planned commands", () => {
   test.each([
-    ["export", "2.7"],
     ["up", "2.5"],
     ["status", "4.3"],
   ])("kbx %s says which step builds it", async (command, step) => {
