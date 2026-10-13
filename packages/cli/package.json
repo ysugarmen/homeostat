@@ -5,7 +5,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "homeostat": "./bin/homeostat.js"
+    "homeostat": "./bin/homeostat.js",
+    "homeo": "./bin/homeostat.js"
   },
   "dependencies": {
     "@homeostat/core": "workspace:*",

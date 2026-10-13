@@ -14,6 +14,8 @@ Nothing scheduled runs on a laptop: the agents run in the KB repo's CI (or `home
 
 ## Commands
 
+Every command also works under the short alias `homeo` (`homeo learn`, `homeo validate`, ...).
+
 | Command | What it does |
 | --- | --- |
 | `homeostat init` | Scaffold `homeostat.yaml`, `knowledge/` and the CI jobs (validate on PRs, daily curator, weekly deep dive) in a KB repo |

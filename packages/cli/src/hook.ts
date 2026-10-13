@@ -121,7 +121,7 @@ function writeState(kbRoot: string, session: string, state: HandoffState) {
 /** How the agent should invoke this same homeostat: the running bin when known, else `homeostat`. */
 function homeostatCommand(): string {
   const bin = process.argv[1];
-  return bin && /[\\/]homeostat(\.js)?$/.test(bin) ? `node "${bin}"` : "homeostat";
+  return bin && /[\\/](homeostat|homeo)(\.js)?$/.test(bin) ? `node "${bin}"` : "homeostat";
 }
 
 function handoffInstructions(kbRoot: string, config: Config, member: string): string {

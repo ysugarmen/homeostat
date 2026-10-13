@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 
 const bin = new URL("../bin/homeostat.js", import.meta.url).pathname;
@@ -21,4 +22,9 @@ test("piping into a reader that closes early is not a crash", () => {
   );
   expect(out).toContain("Usage: homeostat");
   expect(out).not.toContain("EPIPE");
+});
+
+test("the CLI installs as both homeostat and the short alias homeo", () => {
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  expect(pkg.bin).toEqual({ homeostat: "./bin/homeostat.js", homeo: "./bin/homeostat.js" });
 });
