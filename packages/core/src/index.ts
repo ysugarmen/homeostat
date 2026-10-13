@@ -1,5 +1,6 @@
 export { type BodySections, parseBody, RULE_MAX_WORDS, WHY_MAX_WORDS } from "./body.ts";
 export { type CheckContext, CORE_AREA, checkEntry } from "./check.ts";
+export { CODEOWNERS_FILE, generateCodeowners } from "./codeowners.ts";
 export {
   CONFIG_FILE,
   type Config,

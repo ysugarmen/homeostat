@@ -43,7 +43,7 @@ Goal: a public-safe core with a defined data model, separated from anything spec
 - [x] **1.2 Knowledge entry schema.** The heart of the product; everything else reads or writes it. One markdown file per entry with YAML frontmatter: `id`, `title`, `scope` (glob paths the entry applies to), `area`, `source` (`type`: pr-feedback | manual | agent-handoff | deep-dive; `url`; `author`), `score`, `owner`, `status` (candidate | accepted | disputed | retired), `created`, `lastConfirmed`, `conflictsWith`, `tokens` (cached count). Body: the rule in one paragraph, then a *why*, then an optional *example*. *Done when:* `schema.json` validates and three real entries from the pilot are rewritten in the format. **Status:** `packages/core/schema/entry.schema.json` is generated from the zod schema; `examples/starter-kb` has three generic entries in the format (generic rather than pilot entries, to keep the public repo clean).
 - [x] **1.3 Config file.** `kbx.yaml` at the KB repo root: `team` (members with id, role senior|member, areas), `areas` (name → path globs), `scoring` (the +3/+2/+1/−2 rules as editable weights, auto-merge threshold, review cadence), `agents` (curator schedule, deep-dive schedule, enabled flags), `distribution` (which rules files to export, token budget per session), `notifications` (Slack webhook, digest day). *Done when:* an example config exists and `validate` rejects a malformed one with a clear message.
 - [x] **1.4 Scoring and validation as a library.** Port the Bitbucket pipeline logic into `packages/core`: `score(entry, context)`, `detectConflicts(entries)`, `validate(repo)`. Pure functions, no I/O, unit-tested, because the CLI and the CI job both call them. *Done when:* tests cover each scoring rule and the conflict case, and `validate` runs green on `examples/starter-kb`.
-- [ ] **1.5 CODEOWNERS generation.** Port the auto-generator from `team.json` to the new config. *Done when:* running it on the example produces a correct CODEOWNERS.
+- [x] **1.5 CODEOWNERS generation.** Port the auto-generator from `team.json` to the new config. *Done when:* running it on the example produces a correct CODEOWNERS.
 - [x] **1.6 Scrub.** *Done when:* a search for the employer's name across the public repo returns nothing, and no real person or customer name appears in examples.
 
 ## Phase 2 — CLI and Claude Code plugin (weeks 3–5)
@@ -186,6 +186,7 @@ Session 1 (2026-10-13), agreed before Phase 1 code:
 - **Approval** is recorded as an optional `approvedBy` field, so `validate()` stays pure.
 - **Token counts** use `js-tiktoken` (`cl100k_base`) as an approximation; good enough for budgeting, documented as approximate.
 - **Tooling:** Biome for lint and format; `typescript` and `@types/node` as dev dependencies.
+- **CODEOWNERS (1.5):** members get an optional `handle` (`@user`, `@org/team` or an email), because member ids are not platform identities. Seniors own `*` and `kbx.yaml`; members listing an area own `knowledge/<area>/` (seniors if nobody does); an entry owner outside the area gets a line for that entry. `kbx codeowners --check` lets CI catch a stale file.
 
 ## Working agreement
 

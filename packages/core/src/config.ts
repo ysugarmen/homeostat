@@ -47,6 +47,14 @@ export const configSchema = z.strictObject({
           id: name,
           role: z.enum(["senior", "member"]),
           areas: z.array(z.string()).default([]),
+          /** CODEOWNERS identity: `@user`, `@org/team` or an email. */
+          handle: z
+            .string()
+            .regex(
+              /^(@[\w.-]+(\/[\w.-]+)?|[^@\s]+@[^@\s]+\.[^@\s]+)$/,
+              "handle must be @user, @org/team or an email",
+            )
+            .optional(),
         }),
       )
       .min(1),

@@ -4,12 +4,15 @@ version: 1
 team:
   members:
     - id: dana
+      handle: "@dana"
       role: senior
       areas: [integrations, core]
     - id: lee
+      handle: "@lee"
       role: member
       areas: [frontend]
     - id: sam
+      handle: "@sam"
       role: senior
       areas: [frontend, core]
 
