@@ -1,10 +1,10 @@
 import {
-  type Config,
-  detectConflicts,
   type Entry,
+  explainEntry,
+  hitLine,
   type KbFiles,
+  kbReport,
   renderContext,
-  score,
   searchEntries,
   selectEntries,
   validate,
@@ -207,32 +207,6 @@ function distance(a: string, b: string): number {
   return (d[a.length] as number[])[b.length] ?? 0;
 }
 
-function describeEntry(e: Entry, config: Config): string {
-  const fm = e.frontmatter;
-  const reasons = score(fm, { config }).reasons.map(
-    (r) => `${r.delta > 0 ? "+" : ""}${r.delta} ${r.note}`,
-  );
-  const lines = [
-    `# ${fm.title} (${fm.id})`,
-    `Status: ${fm.status} · score ${fm.score} (${reasons.join(", ") || "no signals"}) · owner ${fm.owner} · area ${fm.area}`,
-    `Applies to: ${fm.scope.join(", ")}`,
-    `Source: ${fm.source.type} by ${fm.source.author}${fm.source.url ? ` — ${fm.source.url}` : ""}${fm.source.changedCode ? " (code changed after the comment)" : ""}`,
-    `Created ${fm.created}, last confirmed ${fm.lastConfirmed}`,
-    ...(fm.conflictsWith?.length ? [`Conflicts with: ${fm.conflictsWith.join(", ")}`] : []),
-    ...(fm.supersedes ? [`Supersedes: ${fm.supersedes}`] : []),
-    ...(fm.flags ?? []).map((f) => `Flagged by ${f.by} on ${f.date}: ${f.reason}`),
-    "",
-    `Rule: ${e.sections.rule ?? ""}`,
-    "",
-    `Why: ${e.sections.why ?? ""}`,
-    ...(e.sections.example ? ["", e.sections.example] : []),
-  ];
-  return lines.join("\n");
-}
-
-const hitLine = (e: Entry) =>
-  `- ${e.frontmatter.id}: ${e.frontmatter.title} [${e.frontmatter.area}, score ${e.frontmatter.score}]\n  ${e.sections.rule ?? ""}`;
-
 /** Builds the Homeostat MCP server. Transport-agnostic: the CLI connects it to stdio. */
 export function createServer(deps: McpDeps, version = "0.0.0"): Server {
   const server = new Server(
@@ -325,7 +299,7 @@ export function createServer(deps: McpDeps, version = "0.0.0"): Server {
               : "";
             return fail(`No entry with id "${a.id}".${hint}`);
           }
-          return text(describeEntry(e, config));
+          return text(explainEntry(e, config));
         }
         case "learn":
           return text(await deps.learn(args as unknown as LearnInput));
@@ -336,7 +310,13 @@ export function createServer(deps: McpDeps, version = "0.0.0"): Server {
           return text(await deps.flag(a.id, a.reason));
         }
         case "report":
-          return text(report(entries, config, (args as { days?: number }).days ?? 7, deps));
+          return text(
+            kbReport(entries, config, {
+              days: (args as { days?: number }).days ?? 7,
+              now: deps.now(),
+              events: deps.events?.() ?? [],
+            }),
+          );
         case "list": {
           const a = args as z.infer<typeof schemas.list>;
           const accepted = entries.filter(
@@ -356,42 +336,4 @@ export function createServer(deps: McpDeps, version = "0.0.0"): Server {
   });
 
   return server;
-}
-
-function report(entries: Entry[], config: Config, days: number, deps: McpDeps): string {
-  const now = deps.now();
-  const since = new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10);
-  const staleBefore = new Date(now.getTime() - config.agents.deepDive.staleAfterDays * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-  const byStatus = new Map<string, number>();
-  for (const e of entries)
-    byStatus.set(e.frontmatter.status, (byStatus.get(e.frontmatter.status) ?? 0) + 1);
-  const fresh = entries.filter((e) => e.frontmatter.created >= since);
-  const flagged = entries.filter((e) => e.frontmatter.flags?.length);
-  const stale = entries.filter(
-    (e) => e.frontmatter.status === "accepted" && e.frontmatter.lastConfirmed < staleBefore,
-  );
-  const duplicates = detectConflicts(entries.map((e) => e.frontmatter)).filter(
-    (c) => c.kind === "possible-duplicate",
-  );
-  const events = (deps.events?.() ?? []).filter(
-    (e) => typeof e.ts === "string" && e.ts.slice(0, 10) >= since,
-  );
-  const injections = events.filter((e) => e.type === "injection").length;
-  const unknown = events.filter(
-    (e) => e.type === "mcp-unknown-tool" || e.type === "mcp-alias",
-  ).length;
-
-  return [
-    `Knowledge base, last ${days} days (since ${since}):`,
-    `- Entries: ${entries.length} (${[...byStatus].map(([s, n]) => `${n} ${s}`).join(", ") || "none"})`,
-    `- New: ${fresh.length}${fresh.length ? ` (${fresh.map((e) => e.frontmatter.id).join(", ")})` : ""}`,
-    `- Flagged: ${flagged.length}${flagged.length ? ` (${flagged.map((e) => e.frontmatter.id).join(", ")})` : ""}`,
-    `- Disputed: ${byStatus.get("disputed") ?? 0}`,
-    `- Stale (not confirmed in ${config.agents.deepDive.staleAfterDays} days): ${stale.length}`,
-    `- Possible duplicates: ${duplicates.length}`,
-    `- Rule injections into sessions: ${injections}`,
-    `- Guessed tool names logged: ${unknown}`,
-  ].join("\n");
 }

@@ -78,6 +78,7 @@ export {
   mergePrompt,
   type RuleText,
 } from "./deepdive.ts";
+export { explainEntry, hitLine, kbReport } from "./describe.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
 export {
   BLOCK_FILES,

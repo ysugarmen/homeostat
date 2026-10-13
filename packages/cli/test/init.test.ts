@@ -151,19 +151,6 @@ describe("homeostat init", () => {
   });
 });
 
-describe("planned commands", () => {
-  test.each([["status", "4.3"]])(
-    "homeostat %s says which step builds it",
-    async (command, step) => {
-      const { code, stderr } = await run(command);
-      expect(code).toBe(1);
-      expect(stderr).toContain(
-        `homeostat ${command} is not built yet (execution plan step ${step})`,
-      );
-    },
-  );
-});
-
 describe("homeostat init .gitignore", () => {
   test("ignores the local .homeostat/ event log", async () => {
     const dir = repo();

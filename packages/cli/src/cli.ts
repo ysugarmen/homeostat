@@ -10,13 +10,9 @@ import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
 import { runMcp } from "./mcp.ts";
+import { runExplain, runList, runSearch, runStatus } from "./query.ts";
 import { runUp, type UpOptions } from "./up.ts";
 import { runValidate } from "./validate.ts";
-
-/** Commands from the execution plan that exist in the CLI but are not built yet. */
-const PLANNED: readonly [name: string, description: string, step: string][] = [
-  ["status", "Show agent and knowledge-base health", "4.3"],
-];
 
 /** Everything the commands touch outside the file system, so tests can supply their own. */
 export interface Io {
@@ -72,6 +68,7 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
 
   program
     .command("validate")
+    .aliases(["check", "lint"])
     .description("Check homeostat.yaml and every entry under knowledge/.")
     .argument("[dir]", "knowledge base root", ".")
     .option("--fix", "rewrite stale score and tokens values")
@@ -104,6 +101,7 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
   const collect = (value: string, previous: string[] = []) => [...previous, value];
   program
     .command("learn")
+    .aliases(["add", "remember"])
     .description("Write a candidate entry from flags, prompts, or a PR review comment URL.")
     .argument("[url]", "Bitbucket or GitHub PR review comment link")
     .option("--dir <dir>", "knowledge base root", ".")
@@ -122,6 +120,56 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--push", "push --branch to origin after committing")
     .action(async (url: string | undefined, opts: LearnOptions) => {
       exitCode = await runLearn(url, opts, io);
+    });
+
+  program
+    .command("search")
+    .aliases(["find"])
+    .description("Search accepted entries by topic or keyword.")
+    .argument("<query...>", "words to search for")
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--area <area>", "only this area")
+    .option("--path <path>", "only entries whose scope covers this file")
+    .option("--limit <n>", "how many to show", "10")
+    .option("--all", "include candidates, disputed and retired entries")
+    .option("--json", "print JSON")
+    .action((query: string[], opts) => {
+      exitCode = runSearch(query, opts, io);
+    });
+
+  program
+    .command("explain")
+    .aliases(["show", "why"])
+    .description("Why an entry exists: source, score breakdown, owner, conflicts, text.")
+    .argument("<id>", "entry id")
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--json", "print JSON")
+    .action((id: string, opts) => {
+      exitCode = runExplain(id, opts, io);
+    });
+
+  program
+    .command("list")
+    .aliases(["ls"])
+    .description("List entries with their status and score.")
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--area <area>", "only this area")
+    .option("--status <status>", "only this status")
+    .option("--json", "print JSON")
+    .action((opts) => {
+      exitCode = runList(opts, io);
+    });
+
+  program
+    .command("status")
+    .aliases(["report", "health"])
+    .description(
+      "Knowledge base health: entries by status, new, flagged, stale, duplicates, injections.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--days <n>", "window in days", "7")
+    .action((opts) => {
+      exitCode = runStatus(opts, io);
     });
 
   program
@@ -207,18 +255,6 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .action(async (event: string) => {
       exitCode = await runHook(event, io);
     });
-
-  for (const [name, description, step] of PLANNED) {
-    program
-      .command(name)
-      .description(`${description} (not built yet)`)
-      .allowUnknownOption()
-      .allowExcessArguments()
-      .action(() => {
-        io.stderr(`homeostat ${name} is not built yet (execution plan step ${step})\n`);
-        exitCode = 1;
-      });
-  }
 
   try {
     await program.parseAsync([...argv]);
