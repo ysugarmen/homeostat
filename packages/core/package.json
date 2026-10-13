@@ -1,0 +1,11 @@
+{
+  "name": "@kbx/core",
+  "version": "0.0.0",
+  "description": "Entry schema, scoring, conflict detection and validation for kbx knowledge bases.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {}
+}

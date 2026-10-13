@@ -1,0 +1,13 @@
+{
+  "name": "kbx",
+  "version": "0.0.0",
+  "description": "Command-line interface for kbx knowledge bases.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "kbx": "./bin/kbx.js"
+  },
+  "dependencies": {
+    "@kbx/core": "workspace:*"
+  }
+}
