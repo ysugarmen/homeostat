@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
+  AGENT_ENV,
   CONFIG_FILE,
   CORE_AREA,
   type Config,
@@ -183,6 +184,8 @@ export const HOOK_EVENTS = Object.keys(HANDLERS);
  * never break a session, so every failure is reported on stderr and the exit code is still 0.
  */
 export async function runHook(event: string, io: Io): Promise<number> {
+  // An agent's own `claude -p` call must not inject rules or ask for handoff notes.
+  if (io.env?.[AGENT_ENV]) return 0;
   try {
     const handler = HANDLERS[event];
     if (!handler) throw new HookSkip(`unknown hook event "${event}"`);

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import type { ClaudeClient } from "../src/claude.ts";
+import { apiAsker, type ClaudeClient } from "../src/claude.ts";
 import { curate } from "../src/curator/curate.ts";
 import { ClaudeDrafter, type Draft, type Drafter, draftPrompt } from "../src/curator/draft.ts";
 import { type ReviewThread, reviewThreads } from "../src/curator/threads.ts";
@@ -156,7 +156,9 @@ describe("ClaudeDrafter", () => {
 
   test("sends the configured model and effort with a structured-output format and fallbacks", async () => {
     const { client, calls } = stub({ keep: true, title: " T ", rule: "R", why: "W", area: "core" });
-    const drafter = new ClaudeDrafter({ client, model: "claude-opus-5-5", effort: "medium" });
+    const drafter = new ClaudeDrafter(
+      apiAsker({ client, model: "claude-opus-5-5", effort: "medium" }),
+    );
     expect(await drafter.draft(thread, { areas: {} })).toEqual({
       title: "T",
       rule: "R",
@@ -173,13 +175,13 @@ describe("ClaudeDrafter", () => {
 
   test("returns null when the model says there is no lasting rule", async () => {
     const { client } = stub({ keep: false, title: "", rule: "", why: "", area: "core" });
-    const drafter = new ClaudeDrafter({ client, model: "m", effort: "low" });
+    const drafter = new ClaudeDrafter(apiAsker({ client, model: "m", effort: "low" }));
     expect(await drafter.draft(thread, { areas: {} })).toBeNull();
   });
 
   test("returns null on a refusal", async () => {
     const { client } = stub(null, "refusal");
-    const drafter = new ClaudeDrafter({ client, model: "m", effort: "low" });
+    const drafter = new ClaudeDrafter(apiAsker({ client, model: "m", effort: "low" }));
     expect(await drafter.draft(thread, { areas: {} })).toBeNull();
   });
 });

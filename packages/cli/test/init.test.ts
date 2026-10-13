@@ -195,3 +195,26 @@ describe("kbx init curator schedule", () => {
     expect(stdout).toContain("Repository settings > Pipelines > Schedules");
   });
 });
+
+describe("kbx init Claude runtime in CI", () => {
+  test("GitHub agent workflows install Claude Code and pass the subscription token", async () => {
+    const dir = repo("git@github.com:acme/team-kb.git");
+    const { stdout } = await run("init", dir);
+    for (const file of ["kbx-curator.yml", "kbx-deep-dive.yml"]) {
+      const workflow = read(dir, `.github/workflows/${file}`);
+      expect(workflow).toContain("npm install -g @anthropic-ai/claude-code");
+      expect(workflow).toContain("CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}");
+    }
+    expect(stdout).toContain("claude setup-token");
+  });
+
+  test("Bitbucket agent pipelines install Claude Code", async () => {
+    const dir = repo("git@bitbucket.org:acme/team-kb.git");
+    const { stdout } = await run("init", dir);
+    const installs = read(dir, "bitbucket-pipelines.yml").match(
+      /npm install -g @anthropic-ai\/claude-code/g,
+    );
+    expect(installs).toHaveLength(2);
+    expect(stdout).toContain("CLAUDE_CODE_OAUTH_TOKEN");
+  });
+});

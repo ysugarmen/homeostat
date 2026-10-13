@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import type { ClaudeClient } from "../src/claude.ts";
+import { apiAsker, type ClaudeClient } from "../src/claude.ts";
 import {
   ClaudeConflictJudge,
   ClaudeMerger,
@@ -226,11 +226,13 @@ describe("Claude merger and judge", () => {
   test("the merger sends both entries and returns the combined text", async () => {
     const { client, calls } = stub({ title: " T ", rule: "R", why: "W" });
     const [a, b] = entries();
-    const merged = await new ClaudeMerger({
-      client,
-      model: "claude-opus-5-5",
-      effort: "medium",
-    }).merge(a as Entry, b as Entry);
+    const merged = await new ClaudeMerger(
+      apiAsker({
+        client,
+        model: "claude-opus-5-5",
+        effort: "medium",
+      }),
+    ).merge(a as Entry, b as Entry);
     expect(merged).toEqual({ title: "T", rule: "R", why: "W" });
     expect(String((calls[0]?.messages as { content: string }[])[0]?.content)).toContain(
       `id: ${(a as Entry).frontmatter.id}`,
@@ -245,10 +247,9 @@ describe("Claude merger and judge", () => {
         { id: "invented", reason: "r" },
       ],
     });
-    const found = await new ClaudeConflictJudge({ client, model: "m", effort: "low" }).conflicts(
-      a as Entry,
-      [b as Entry],
-    );
+    const found = await new ClaudeConflictJudge(
+      apiAsker({ client, model: "m", effort: "low" }),
+    ).conflicts(a as Entry, [b as Entry]);
     expect(found).toEqual([{ id: (b as Entry).frontmatter.id, reason: "r" }]);
   });
 });

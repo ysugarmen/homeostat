@@ -1,12 +1,21 @@
 export { type BodySections, parseBody, RULE_MAX_WORDS, WHY_MAX_WORDS } from "./body.ts";
 export { type CheckContext, CORE_AREA, checkEntry } from "./check.ts";
 export {
-  askClaude,
+  type ApiAskerOptions,
+  type Asker,
+  apiAsker,
   type ClaudeClient,
-  type ClaudeOptions,
   ClaudeUnavailableError,
   type Effort,
 } from "./claude.ts";
+export {
+  AGENT_ENV,
+  type ClaudeCodeAskerOptions,
+  type CommandRunner,
+  claudeCodeArgs,
+  claudeCodeAsker,
+  type RunResult,
+} from "./claude-code.ts";
 export { CODEOWNERS_FILE, generateCodeowners } from "./codeowners.ts";
 export {
   CONFIG_FILE,

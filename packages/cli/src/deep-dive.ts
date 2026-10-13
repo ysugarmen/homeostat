@@ -8,6 +8,7 @@ import {
   deepDive,
   validate,
 } from "@kbx/core";
+import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { plural } from "./format.ts";
@@ -47,10 +48,10 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
 
     const now = io.now?.() ?? new Date();
     const today = now.toISOString().slice(0, 10);
-    const claude = { model: config.agents.deepDive.model, effort: config.agents.deepDive.effort };
+    const ask = askerFor(config, "deepDive", io);
     const useLlm = opts.llm !== false;
-    const merger = useLlm ? (io.merger ?? new ClaudeMerger(claude)) : undefined;
-    const judge = useLlm ? (io.judge ?? new ClaudeConflictJudge(claude)) : undefined;
+    const merger = useLlm ? (io.merger ?? new ClaudeMerger(ask)) : undefined;
+    const judge = useLlm ? (io.judge ?? new ClaudeConflictJudge(ask)) : undefined;
 
     const { changes, notes } = await deepDive({
       files,

@@ -9,6 +9,7 @@ import {
   type RepoRef,
   validate,
 } from "@kbx/core";
+import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { plural } from "./format.ts";
@@ -126,9 +127,7 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   const today = now.toISOString().slice(0, 10);
 
   const provider = providerFor(sources.host, io, "read pull requests and open the KB PR");
-  const drafter =
-    io.drafter ??
-    new ClaudeDrafter({ model: config.agents.curator.model, effort: config.agents.curator.effort });
+  const drafter = io.drafter ?? new ClaudeDrafter(askerFor(config, "curator", io));
 
   const result = await curate({ files, provider, drafter, since, today });
   for (const s of result.scanned) {

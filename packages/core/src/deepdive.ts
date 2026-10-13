@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parseBody } from "./body.ts";
-import { askClaude, type ClaudeClient, type ClaudeOptions, defaultClient } from "./claude.ts";
+import type { Asker } from "./claude.ts";
 import type { Config } from "./config.ts";
 import { detectConflicts, scopesOverlap } from "./conflicts.ts";
 import { type Entry, formatEntry } from "./entry.ts";
@@ -229,12 +229,12 @@ const judgeSchema = z.object({
 });
 
 export class ClaudeMerger implements Merger {
-  private readonly opts: ClaudeOptions & { client: ClaudeClient };
-  constructor(opts: ClaudeOptions) {
-    this.opts = { ...opts, client: defaultClient(opts.client) };
+  private readonly ask: Asker;
+  constructor(ask: Asker) {
+    this.ask = ask;
   }
   async merge(keep: Entry, drop: Entry): Promise<RuleText> {
-    const out = await askClaude(this.opts, MERGE_SYSTEM, mergePrompt(keep, drop), mergeSchema);
+    const out = await this.ask(MERGE_SYSTEM, mergePrompt(keep, drop), mergeSchema);
     if (!out) {
       return {
         title: keep.frontmatter.title,
@@ -247,17 +247,12 @@ export class ClaudeMerger implements Merger {
 }
 
 export class ClaudeConflictJudge implements ConflictJudge {
-  private readonly opts: ClaudeOptions & { client: ClaudeClient };
-  constructor(opts: ClaudeOptions) {
-    this.opts = { ...opts, client: defaultClient(opts.client) };
+  private readonly ask: Asker;
+  constructor(ask: Asker) {
+    this.ask = ask;
   }
   async conflicts(entry: Entry, candidates: Entry[]) {
-    const out = await askClaude(
-      this.opts,
-      JUDGE_SYSTEM,
-      judgePrompt(entry, candidates),
-      judgeSchema,
-    );
+    const out = await this.ask(JUDGE_SYSTEM, judgePrompt(entry, candidates), judgeSchema);
     const known = new Set(candidates.map((c) => c.frontmatter.id));
     return (out?.conflicts ?? []).filter((c) => known.has(c.id));
   }

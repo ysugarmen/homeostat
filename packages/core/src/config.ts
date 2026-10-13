@@ -83,6 +83,11 @@ export const configSchema = z.strictObject({
     .prefault({}),
   agents: z
     .strictObject({
+      /**
+       * How the agents reach Claude: `claude-code` runs `claude -p` with whatever Claude Code is
+       * logged in with (a subscription works); `api` calls the Messages API with ANTHROPIC_API_KEY.
+       */
+      runtime: z.enum(["claude-code", "api"]).default("claude-code"),
       curator: agentSchema("0 6 * * *", 26).prefault({}),
       deepDive: agentSchema("0 7 * * 1", 7 * 24)
         .extend({

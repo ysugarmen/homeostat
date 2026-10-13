@@ -59,6 +59,8 @@ distribution:
 const VALIDATE_STEP = "npx --yes kbx@0 validate";
 const CURATE_STEP = "npx --yes kbx@0 curate";
 const DEEP_DIVE_STEP = "npx --yes kbx@0 deep-dive";
+/** The agents default to the Claude Code runtime, so their CI jobs install Claude Code. */
+const INSTALL_CLAUDE = "npm install -g @anthropic-ai/claude-code";
 
 interface CiFile {
   path: string;
@@ -98,9 +100,13 @@ jobs:
       - run: |
           git config user.name "kbx ${name}"
           git config user.email "kbx@users.noreply.github.com"
+      - run: ${INSTALL_CLAUDE}
       - run: ${command}
         env:
           GITHUB_TOKEN: \${{ secrets.KBX_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          # Claude Code runtime (the default): a subscription token from \`claude setup-token\`.
+          CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Or per-use billing with a Console key (agents.runtime: api, or Claude Code with a key).
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
 `;
 
@@ -184,6 +190,7 @@ pipelines:
           script:
             - git config user.name "kbx curator"
             - git config user.email "kbx-curator@noreply.invalid"
+            - ${INSTALL_CLAUDE}
             - ${CURATE_STEP}
     # Scheduled weekly the same way.
     kbx-deep-dive:
@@ -192,6 +199,7 @@ pipelines:
           script:
             - git config user.name "kbx deep-dive"
             - git config user.email "kbx-deep-dive@noreply.invalid"
+            - ${INSTALL_CLAUDE}
             - ${DEEP_DIVE_STEP}
 `,
       snippet: `pipelines:
@@ -216,16 +224,18 @@ const TOKEN_HELP: Record<Host, string> = {
 Ask a workspace admin for a workspace access token with:
   code repos:  pullrequest:read, repository:read
   this repo:   pullrequest:write, repository:write
-Store it as the secured repository variable KBX_BITBUCKET_TOKEN, and your Claude API key as
-ANTHROPIC_API_KEY. Then schedule the kbx-curator pipeline daily and kbx-deep-dive weekly under
+Store it as the secured repository variable KBX_BITBUCKET_TOKEN. For Claude, run
+\`claude setup-token\` (uses a Claude subscription) and store the token as CLAUDE_CODE_OAUTH_TOKEN,
+or set agents.runtime: api and store a Console key as ANTHROPIC_API_KEY. Then schedule the kbx-curator pipeline daily and kbx-deep-dive weekly under
 Repository settings > Pipelines > Schedules, and add a sources section to kbx.yaml.`,
   github: `The curator reads PRs from your code repos and opens one PR on this repo each day.
 The workflow's GITHUB_TOKEN covers this repo. To read other repos, create a fine-grained
 token or GitHub App with:
   code repos:  Pull requests: read, Contents: read
   this repo:   Pull requests: write, Contents: write
-Store it as the Actions secret KBX_GITHUB_TOKEN, your Claude API key as ANTHROPIC_API_KEY,
-and add a sources section to kbx.yaml.`,
+Store it as the Actions secret KBX_GITHUB_TOKEN. For Claude, run \`claude setup-token\` (uses a
+Claude subscription) and store the token as CLAUDE_CODE_OAUTH_TOKEN, or set agents.runtime: api
+and store a Console key as ANTHROPIC_API_KEY. Then add a sources section to kbx.yaml.`,
 };
 
 export interface InitOptions {

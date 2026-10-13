@@ -1,0 +1,132 @@
+import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
+import { z } from "zod";
+import { type Asker, ClaudeUnavailableError, type Effort } from "./claude.ts";
+
+export interface RunResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+/** Runs a command with `input` on stdin; rejects with an ENOENT error when it is not installed. */
+export type CommandRunner = (
+  command: string,
+  args: readonly string[],
+  input: string,
+  env: NodeJS.ProcessEnv,
+) => Promise<RunResult>;
+
+const spawnRunner: CommandRunner = (command, args, input, env) =>
+  new Promise((resolve, reject) => {
+    // Run outside any repo so no project CLAUDE.md or settings are picked up.
+    const child = spawn(command, [...args], {
+      cwd: tmpdir(),
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout, stderr }));
+    child.stdin.on("error", () => {});
+    child.stdin.end(input);
+  });
+
+export interface ClaudeCodeAskerOptions {
+  model: string;
+  effort: Effort;
+  /** The Claude Code binary; defaults to `claude` on the PATH. */
+  command?: string;
+  /** Injected for tests. */
+  run?: CommandRunner;
+  env?: NodeJS.ProcessEnv;
+}
+
+/** Set on the child so the kbx plugin's own hooks never fire inside an agent call. */
+export const AGENT_ENV = "KBX_AGENT";
+
+/**
+ * Flags for a bare structured call: our system prompt instead of Claude Code's, no tools, no MCP
+ * servers, no skills, no user/project settings (so no plugins or hooks). That keeps a call at
+ * about a thousand input tokens instead of the full interactive context.
+ */
+export function claudeCodeArgs(
+  opts: { model: string; effort: Effort },
+  system: string,
+  jsonSchema: object,
+) {
+  return [
+    "-p",
+    "--system-prompt",
+    system,
+    "--output-format",
+    "json",
+    "--json-schema",
+    JSON.stringify(jsonSchema),
+    "--tools",
+    "",
+    "--strict-mcp-config",
+    "--disable-slash-commands",
+    "--setting-sources",
+    "",
+    "--no-session-persistence",
+    "--model",
+    opts.model,
+    "--effort",
+    opts.effort,
+  ];
+}
+
+const resultSchema = z.object({
+  is_error: z.boolean().optional(),
+  subtype: z.string().optional(),
+  stop_reason: z.string().nullable().optional(),
+  result: z.string().optional(),
+  structured_output: z.unknown().optional(),
+});
+
+/**
+ * The Claude Code runtime: runs `claude -p`, which uses whatever Claude Code is logged in with.
+ * That can be a Claude subscription (an interactive login, or `claude setup-token` exported as
+ * CLAUDE_CODE_OAUTH_TOKEN in CI) or an API key, so no Console credits are needed.
+ */
+export function claudeCodeAsker(opts: ClaudeCodeAskerOptions): Asker {
+  const run = opts.run ?? spawnRunner;
+  const command = opts.command ?? "claude";
+  return async (system, user, schema) => {
+    const { $schema: _, ...jsonSchema } = z.toJSONSchema(schema) as Record<string, unknown>;
+    const args = claudeCodeArgs(opts, system, jsonSchema);
+    let out: RunResult;
+    try {
+      out = await run(command, args, user, { ...(opts.env ?? process.env), [AGENT_ENV]: "1" });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new ClaudeUnavailableError(
+          `Claude Code (${command}) is not installed: install it, or use agents.runtime: api`,
+        );
+      }
+      throw e;
+    }
+
+    let parsed: z.infer<typeof resultSchema>;
+    try {
+      parsed = resultSchema.parse(JSON.parse(out.stdout));
+    } catch {
+      const detail = (out.stderr || out.stdout).trim().split("\n").slice(-3).join(" ");
+      throw new ClaudeUnavailableError(`Claude Code failed (exit ${out.code}): ${detail}`);
+    }
+    if (parsed.is_error || parsed.subtype !== "success") {
+      const detail = parsed.result ?? parsed.subtype ?? "unknown error";
+      const login = /log ?in|auth|credential|token|api key/i.test(detail)
+        ? " (run `claude` to log in, or set CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`)"
+        : "";
+      throw new ClaudeUnavailableError(`Claude Code: ${detail}${login}`);
+    }
+    if (parsed.stop_reason === "refusal") return null;
+    const value = schema.safeParse(parsed.structured_output);
+    return value.success ? value.data : null;
+  };
+}

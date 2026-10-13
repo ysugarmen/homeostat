@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { askClaude, type ClaudeClient, type ClaudeOptions, defaultClient } from "../claude.ts";
+import type { Asker } from "../claude.ts";
 import type { ReviewThread } from "./threads.ts";
 
 export interface Draft {
@@ -64,15 +64,16 @@ Areas and the paths they cover:
 ${areas.map((a) => `- ${a}`).join("\n")}`;
 }
 
+/** Drafts with Claude through either runtime (API or Claude Code). */
 export class ClaudeDrafter implements Drafter {
-  private readonly opts: ClaudeOptions & { client: ClaudeClient };
+  private readonly ask: Asker;
 
-  constructor(opts: ClaudeOptions) {
-    this.opts = { ...opts, client: defaultClient(opts.client) };
+  constructor(ask: Asker) {
+    this.ask = ask;
   }
 
   async draft(thread: ReviewThread, ctx: DraftContext): Promise<Draft | null> {
-    const out = await askClaude(this.opts, DRAFT_SYSTEM, draftPrompt(thread, ctx), draftSchema);
+    const out = await this.ask(DRAFT_SYSTEM, draftPrompt(thread, ctx), draftSchema);
     if (!out?.keep) return null;
     return {
       title: out.title.trim(),

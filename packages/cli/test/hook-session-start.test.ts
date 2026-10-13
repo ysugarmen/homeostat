@@ -161,3 +161,18 @@ describe("kbx hook session-start", () => {
     expect(stderr).toContain("kbx:");
   });
 });
+
+test("inside an agent's own claude -p call the hooks do nothing", async () => {
+  const kbDir = kb();
+  const cwd = codeRepo(["services/integrations/queue/worker.ts"]);
+  const { code, stdout } = await hook(
+    "session-start",
+    { session_id: "a", cwd },
+    {
+      KBX_DIR: kbDir,
+      KBX_AGENT: "1",
+    },
+  );
+  expect(code).toBe(0);
+  expect(stdout).toBe("");
+});
