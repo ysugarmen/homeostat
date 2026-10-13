@@ -1,6 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
+import { askClaude, type ClaudeClient, type ClaudeOptions, defaultClient } from "../claude.ts";
 import type { ReviewThread } from "./threads.ts";
 
 export interface Draft {
@@ -65,39 +64,15 @@ Areas and the paths they cover:
 ${areas.map((a) => `- ${a}`).join("\n")}`;
 }
 
-/** The part of the Anthropic client the drafter uses, so tests can pass a stub. */
-export type DraftClient = Pick<Anthropic, "beta">;
-
-export interface ClaudeDrafterOptions {
-  model: string;
-  effort: "low" | "medium" | "high" | "xhigh" | "max";
-  /** Defaults to a client reading ANTHROPIC_API_KEY (or the other standard credentials). */
-  client?: DraftClient;
-}
-
 export class ClaudeDrafter implements Drafter {
-  private readonly client: DraftClient;
-  private readonly model: string;
-  private readonly effort: ClaudeDrafterOptions["effort"];
+  private readonly opts: ClaudeOptions & { client: ClaudeClient };
 
-  constructor(opts: ClaudeDrafterOptions) {
-    this.client = opts.client ?? new Anthropic();
-    this.model = opts.model;
-    this.effort = opts.effort;
+  constructor(opts: ClaudeOptions) {
+    this.opts = { ...opts, client: defaultClient(opts.client) };
   }
 
   async draft(thread: ReviewThread, ctx: DraftContext): Promise<Draft | null> {
-    const response = await this.client.beta.messages.parse({
-      model: this.model,
-      max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: this.effort, format: betaZodOutputFormat(draftSchema) },
-      system: DRAFT_SYSTEM,
-      messages: [{ role: "user", content: draftPrompt(thread, ctx) }],
-    });
-    if (response.stop_reason === "refusal") return null;
-    const out = response.parsed_output;
+    const out = await askClaude(this.opts, DRAFT_SYSTEM, draftPrompt(thread, ctx), draftSchema);
     if (!out?.keep) return null;
     return {
       title: out.title.trim(),

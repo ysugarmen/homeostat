@@ -58,6 +58,7 @@ distribution:
 
 const VALIDATE_STEP = "npx --yes kbx@0 validate";
 const CURATE_STEP = "npx --yes kbx@0 curate";
+const DEEP_DIVE_STEP = "npx --yes kbx@0 deep-dive";
 
 interface CiFile {
   path: string;
@@ -66,12 +67,18 @@ interface CiFile {
   snippet: string;
 }
 
-const GITHUB_CURATOR = `name: kbx curator
+/** A scheduled GitHub Actions workflow that runs one kbx agent and may open a PR here. */
+const githubAgentWorkflow = (
+  name: string,
+  purpose: string,
+  cron: string,
+  command: string,
+) => `name: kbx ${name}
 
-# The daily curator: drafts entries from merged review feedback and opens one PR here.
+# ${purpose}
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "${cron}"
   workflow_dispatch:
 
 permissions:
@@ -79,7 +86,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  curate:
+  run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,13 +96,26 @@ jobs:
         with:
           node-version: 24
       - run: |
-          git config user.name "kbx curator"
-          git config user.email "kbx-curator@users.noreply.github.com"
-      - run: ${CURATE_STEP}
+          git config user.name "kbx ${name}"
+          git config user.email "kbx@users.noreply.github.com"
+      - run: ${command}
         env:
           GITHUB_TOKEN: \${{ secrets.KBX_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
 `;
+
+const GITHUB_CURATOR = githubAgentWorkflow(
+  "curator",
+  "The daily curator: drafts entries from merged review feedback and opens one PR here.",
+  "0 6 * * *",
+  CURATE_STEP,
+);
+const GITHUB_DEEP_DIVE = githubAgentWorkflow(
+  "deep-dive",
+  "The weekly deep dive: merges near-duplicates, marks contradictions, retires stale entries.",
+  "0 7 * * 1",
+  DEEP_DIVE_STEP,
+);
 
 const CI_FILES: Record<Host, CiFile[]> = {
   github: [
@@ -127,6 +147,11 @@ jobs:
       path: ".github/workflows/kbx-curator.yml",
       content: GITHUB_CURATOR,
       snippet: GITHUB_CURATOR,
+    },
+    {
+      path: ".github/workflows/kbx-deep-dive.yml",
+      content: GITHUB_DEEP_DIVE,
+      snippet: GITHUB_DEEP_DIVE,
     },
   ],
   bitbucket: [
@@ -160,6 +185,14 @@ pipelines:
             - git config user.name "kbx curator"
             - git config user.email "kbx-curator@noreply.invalid"
             - ${CURATE_STEP}
+    # Scheduled weekly the same way.
+    kbx-deep-dive:
+      - step:
+          name: kbx deep dive
+          script:
+            - git config user.name "kbx deep-dive"
+            - git config user.email "kbx-deep-dive@noreply.invalid"
+            - ${DEEP_DIVE_STEP}
 `,
       snippet: `pipelines:
   pull-requests:
@@ -184,7 +217,7 @@ Ask a workspace admin for a workspace access token with:
   code repos:  pullrequest:read, repository:read
   this repo:   pullrequest:write, repository:write
 Store it as the secured repository variable KBX_BITBUCKET_TOKEN, and your Claude API key as
-ANTHROPIC_API_KEY. Then schedule the kbx-curator pipeline daily under
+ANTHROPIC_API_KEY. Then schedule the kbx-curator pipeline daily and kbx-deep-dive weekly under
 Repository settings > Pipelines > Schedules, and add a sources section to kbx.yaml.`,
   github: `The curator reads PRs from your code repos and opens one PR on this repo each day.
 The workflow's GITHUB_TOKEN covers this repo. To read other repos, create a fine-grained

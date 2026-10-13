@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import {
   ClaudeDrafter,
-  type CuratedEntry,
   CurateError,
   type CurateResult,
   curate,
@@ -12,8 +11,9 @@ import {
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { plural } from "./format.ts";
-import { commitFile, git, pushBranch } from "./git.ts";
+import { git } from "./git.ts";
 import { CliError, providerFor } from "./provider.ts";
+import { publish } from "./publish.ts";
 
 export interface CurateOptions {
   dir: string;
@@ -25,16 +25,6 @@ const toRepo = (ref: string): RepoRef => {
   const [owner = "", name = ""] = ref.split("/");
   return { owner, name };
 };
-
-/** First of `base`, `base-2`, ... that exists neither locally nor on origin. */
-function freeBranch(root: string, base: string): string {
-  const taken = (name: string) =>
-    git(root, "rev-parse", "--verify", "--quiet", `refs/heads/${name}`) !== undefined ||
-    Boolean(git(root, "ls-remote", "--heads", "origin", name));
-  let name = base;
-  for (let n = 2; taken(name); n++) name = `${base}-${n}`;
-  return name;
-}
 
 function prBody(result: CurateResult, since: Date, threshold: number): string {
   const rows = result.entries.map(({ frontmatter: fm }) => {
@@ -159,53 +149,22 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   if (result.entries.length === 0) {
     io.stdout("no new entries\n");
   } else {
-    await publish(root, result.entries, {
+    await publish({
+      root,
+      branch: `kbx/curator-${today}`,
+      changes: result.entries.map((e) => ({
+        path: e.path,
+        text: e.text,
+        message: `kbx: ${e.frontmatter.status} ${e.frontmatter.id}`,
+      })),
       provider,
       kbRepo,
       base: sources.baseBranch,
-      hasOrigin,
-      io,
+      title: `kbx: ${plural(result.entries.length, "knowledge entry", "knowledge entries")} from review feedback`,
       body: prBody(result, since, config.scoring.autoMergeThreshold),
-      today,
+      io,
     });
   }
   if (hasOrigin) await openCandidatePrs(root, provider, kbRepo, sources.baseBranch, io);
   return 0;
-}
-
-async function publish(
-  root: string,
-  entries: CuratedEntry[],
-  ctx: {
-    provider: Provider;
-    kbRepo: RepoRef;
-    base: string;
-    hasOrigin: boolean;
-    io: Io;
-    body: string;
-    today: string;
-  },
-) {
-  const branch = freeBranch(root, `kbx/curator-${ctx.today}`);
-  // Start the branch from the base so the PR holds only the new entries.
-  const baseRef =
-    git(root, "rev-parse", "--verify", "--quiet", `refs/remotes/origin/${ctx.base}`) ??
-    git(root, "rev-parse", "--verify", "--quiet", `refs/heads/${ctx.base}`);
-  if (baseRef) git(root, "branch", branch, baseRef);
-  for (const e of entries) {
-    commitFile(root, branch, e.path, e.text, `kbx: ${e.frontmatter.status} ${e.frontmatter.id}`);
-  }
-  ctx.io.stdout(`committed ${plural(entries.length, "entry", "entries")} to ${branch}\n`);
-  if (!ctx.hasOrigin) {
-    ctx.io.stdout("no origin remote: branch left local, no PR opened\n");
-    return;
-  }
-  pushBranch(root, branch);
-  const pr = await ctx.provider.openPullRequest(ctx.kbRepo, {
-    title: `kbx: ${plural(entries.length, "knowledge entry", "knowledge entries")} from review feedback`,
-    body: ctx.body,
-    sourceBranch: branch,
-    targetBranch: ctx.base,
-  });
-  ctx.io.stdout(`opened ${pr.url}\n`);
 }

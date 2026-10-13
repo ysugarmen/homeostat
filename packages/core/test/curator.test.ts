@@ -1,14 +1,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import type { ClaudeClient } from "../src/claude.ts";
 import { curate } from "../src/curator/curate.ts";
-import {
-  ClaudeDrafter,
-  type Draft,
-  type DraftClient,
-  type Drafter,
-  draftPrompt,
-} from "../src/curator/draft.ts";
+import { ClaudeDrafter, type Draft, type Drafter, draftPrompt } from "../src/curator/draft.ts";
 import { type ReviewThread, reviewThreads } from "../src/curator/threads.ts";
 import { commentKeyOf, parseCommentUrl } from "../src/curator/urls.ts";
 import { parseEntry } from "../src/entry.ts";
@@ -155,7 +150,7 @@ describe("ClaudeDrafter", () => {
           },
         },
       },
-    } as unknown as DraftClient;
+    } as unknown as ClaudeClient;
     return { client, calls };
   }
 

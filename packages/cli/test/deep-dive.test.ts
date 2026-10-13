@@ -1,0 +1,145 @@
+import { execFileSync } from "node:child_process";
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  type ConflictJudge,
+  countTokens,
+  type Entry,
+  type Frontmatter,
+  formatEntry,
+  type Merger,
+  type NewPullRequest,
+  type Provider,
+  parseEntry,
+} from "@kbx/core";
+import { describe, expect, test } from "vitest";
+import { type Io, runCli } from "../src/cli.ts";
+
+const examples = new URL("../../../examples/", import.meta.url).pathname;
+const DUP = "knowledge/integrations/retry-helper-for-all-outbound-http.md";
+const KEEP = "knowledge/integrations/outbound-http-retry-helper.md";
+
+/** The starter KB plus a seeded near-duplicate, as a git repo with a bare origin. */
+function kbRepo() {
+  const dir = mkdtempSync(join(tmpdir(), "kbx-dd-"));
+  cpSync(join(examples, "starter-kb"), dir, { recursive: true });
+  writeFileSync(
+    join(dir, "kbx.yaml"),
+    readFileSync(join(dir, "kbx.yaml"), "utf8").replace("host: bitbucket", "host: github"),
+  );
+  const body =
+    "## Rule\nEvery outbound HTTP call goes through withRetry().\n\n## Why\nHand-rolled retries skipped the request-id header.";
+  const fm: Frontmatter = {
+    id: "retry-helper-for-all-outbound-http",
+    title: "Use the shared retry helper for all outbound HTTP calls",
+    area: "integrations",
+    scope: ["services/integrations/**"],
+    status: "accepted",
+    score: 3,
+    owner: "dana",
+    source: { type: "manual", author: "dana" },
+    created: "2026-10-10",
+    lastConfirmed: "2026-10-10",
+    tokens: countTokens(body),
+  };
+  writeFileSync(join(dir, DUP), formatEntry(fm, body));
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim();
+  const origin = mkdtempSync(join(tmpdir(), "kbx-dd-origin-"));
+  execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin]);
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "ci");
+  git("config", "user.email", "ci@example.com");
+  git("add", "-A");
+  git("commit", "-qm", "init");
+  git("remote", "add", "origin", origin);
+  git("push", "-q", "origin", "main");
+  return { dir, git };
+}
+
+class RecordingProvider {
+  readonly kind = "github" as const;
+  opened: NewPullRequest[] = [];
+  async openPullRequest(_repo: unknown, pr: NewPullRequest) {
+    this.opened.push(pr);
+    return { id: 8, url: "https://github.com/acme/team-kb/pull/8" };
+  }
+}
+
+async function run(args: string[], extra: Partial<Io> = {}) {
+  let stdout = "";
+  let stderr = "";
+  const provider = new RecordingProvider();
+  const code = await runCli(["node", "kbx", "deep-dive", ...args], {
+    stdout: (s) => (stdout += s),
+    stderr: (s) => (stderr += s),
+    color: false,
+    env: { GITHUB_TOKEN: "t" },
+    now: () => new Date("2026-10-13T07:00:00Z"),
+    provider: provider as unknown as Provider,
+    ...extra,
+  });
+  return { code, stdout, stderr, provider };
+}
+
+describe("kbx deep-dive", () => {
+  test("--no-llm merges the seeded duplicates on a branch and opens one PR", async () => {
+    const { dir, git } = kbRepo();
+    const { code, stdout, provider } = await run(["--dir", dir, "--no-llm"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain(`${KEEP}: merged (absorbed retry-helper-for-all-outbound-http)`);
+    expect(stdout).toContain(`${DUP}: retired-duplicate (merged into outbound-http-retry-helper)`);
+
+    const branch = "kbx/deep-dive-2026-10-13";
+    expect(parseEntry(git("show", `${branch}:${DUP}`)).entry?.frontmatter.status).toBe("retired");
+    expect(parseEntry(git("show", `${branch}:${KEEP}`)).entry?.frontmatter.supersedes).toBe(
+      "retry-helper-for-all-outbound-http",
+    );
+    expect(git("status", "--porcelain")).toBe("");
+
+    expect(provider.opened).toHaveLength(1);
+    expect(provider.opened[0]?.title).toBe("kbx: weekly deep dive (2 entries changed)");
+    expect(provider.opened[0]?.body).toContain(
+      "| outbound-http-retry-helper | merged | absorbed retry-helper-for-all-outbound-http |",
+    );
+  });
+
+  test("uses the injected merger and judge when not --no-llm", async () => {
+    const { dir } = kbRepo();
+    let merged = 0;
+    let judged = 0;
+    const merger: Merger = {
+      merge: async (keep: Entry) => {
+        merged++;
+        return { title: keep.frontmatter.title, rule: "Merged rule.", why: "Merged why." };
+      },
+    };
+    const judge: ConflictJudge = {
+      conflicts: async () => {
+        judged++;
+        return [];
+      },
+    };
+    await run(["--dir", dir, "--dry-run"], { merger, judge });
+    expect(merged).toBe(1);
+    expect(judged).toBeGreaterThan(0);
+  });
+
+  test("--dry-run reports without committing", async () => {
+    const { dir, git } = kbRepo();
+    const { stdout, provider } = await run(["--dir", dir, "--no-llm", "--dry-run"]);
+    expect(stdout).toContain("dry run: nothing committed");
+    expect(git("branch", "--list")).not.toContain("deep-dive");
+    expect(provider.opened).toEqual([]);
+  });
+
+  test("nothing to do is said plainly", async () => {
+    const { dir, git } = kbRepo();
+    git("rm", "-q", DUP);
+    git("commit", "-qm", "drop dup");
+    const { code, stdout } = await run(["--dir", dir, "--no-llm"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("nothing to change");
+  });
+});

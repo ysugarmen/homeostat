@@ -1,5 +1,6 @@
 export { type BodySections, parseBody, RULE_MAX_WORDS, WHY_MAX_WORDS } from "./body.ts";
 export { type CheckContext, CORE_AREA, checkEntry } from "./check.ts";
+export { askClaude, type ClaudeClient, type ClaudeOptions, type Effort } from "./claude.ts";
 export { CODEOWNERS_FILE, generateCodeowners } from "./codeowners.ts";
 export {
   CONFIG_FILE,
@@ -29,10 +30,8 @@ export {
 } from "./curator/curate.ts";
 export {
   ClaudeDrafter,
-  type ClaudeDrafterOptions,
   DRAFT_SYSTEM,
   type Draft,
-  type DraftClient,
   type DraftContext,
   type Drafter,
   draftPrompt,
@@ -46,6 +45,23 @@ export {
   commentKeyOf,
   parseCommentUrl,
 } from "./curator/urls.ts";
+export {
+  ClaudeConflictJudge,
+  ClaudeMerger,
+  type ConflictJudge,
+  type DeepDiveAction,
+  type DeepDiveChange,
+  DeepDiveError,
+  type DeepDiveInput,
+  type DeepDiveResult,
+  deepDive,
+  JUDGE_SYSTEM,
+  judgePrompt,
+  MERGE_SYSTEM,
+  type Merger,
+  mergePrompt,
+  type RuleText,
+} from "./deepdive.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
 export { applyFixes } from "./fix.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";

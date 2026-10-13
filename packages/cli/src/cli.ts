@@ -1,8 +1,9 @@
 import { createInterface } from "node:readline/promises";
-import type { Drafter, Provider } from "@kbx/core";
+import type { ConflictJudge, Drafter, Merger, Provider } from "@kbx/core";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
+import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
 import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
@@ -31,6 +32,8 @@ export interface Io {
   /** Test seams for the agents: a git-host provider and a drafter instead of the real ones. */
   provider?: Provider;
   drafter?: Drafter;
+  merger?: Merger;
+  judge?: ConflictJudge;
 }
 
 async function readStdin(): Promise<string> {
@@ -132,6 +135,18 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--dry-run", "draft and report, but commit and open nothing")
     .action(async (opts: CurateOptions) => {
       exitCode = await runCurate(opts, io);
+    });
+
+  program
+    .command("deep-dive")
+    .description(
+      "Merge near-duplicates, mark contradictions, retire stale entries; opens a PR (run in CI).",
+    )
+    .option("--dir <dir>", "knowledge base checkout", ".")
+    .option("--dry-run", "report the changes, but commit and open nothing")
+    .option("--no-llm", "skip Claude: no merged text and no conflict check")
+    .action(async (opts: DeepDiveOptions) => {
+      exitCode = await runDeepDive(opts, io);
     });
 
   program

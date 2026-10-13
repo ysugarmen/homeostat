@@ -36,14 +36,14 @@ const weightsSchema = z.strictObject(
 /** The Claude model the agents draft with; any model id the Messages API accepts. */
 export const DEFAULT_AGENT_MODEL = "claude-opus-5-5";
 
-const agentSchema = (schedule: string) =>
+const agentSchema = (schedule: string, lookbackHours: number) =>
   z.strictObject({
     enabled: z.boolean().default(true),
     schedule: cron.default(schedule),
     model: z.string().min(1).default(DEFAULT_AGENT_MODEL),
     effort: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
     /** How far back each run looks; a little over the schedule so runs overlap. */
-    lookbackHours: z.int().positive().default(26),
+    lookbackHours: z.int().positive().default(lookbackHours),
   });
 
 /** `owner/name`: a Bitbucket workspace/repo or a GitHub owner/repo. */
@@ -83,8 +83,13 @@ export const configSchema = z.strictObject({
     .prefault({}),
   agents: z
     .strictObject({
-      curator: agentSchema("0 6 * * *").prefault({}),
-      deepDive: agentSchema("0 7 * * 1").prefault({}),
+      curator: agentSchema("0 6 * * *", 26).prefault({}),
+      deepDive: agentSchema("0 7 * * 1", 7 * 24)
+        .extend({
+          /** Accepted entries not confirmed for this long are retired. */
+          staleAfterDays: z.int().positive().default(180),
+        })
+        .prefault({}),
       /** Session handoff notes, asked for by the plugin's Stop hook. Runs in sessions, not on a schedule. */
       handoff: z
         .strictObject({
