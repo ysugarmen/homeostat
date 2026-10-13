@@ -1,11 +1,10 @@
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseEntry, validate } from "@homeostat/core";
+import { parseEntry, readKbFiles, validate } from "@homeostat/core";
 import { replayFetch } from "@homeostat/core/testing";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
-import { readKbFiles } from "../src/files.ts";
 
 const examples = new URL("../../../examples/", import.meta.url).pathname;
 const NOW = new Date("2026-10-13T12:00:00Z");

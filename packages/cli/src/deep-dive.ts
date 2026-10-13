@@ -6,12 +6,13 @@ import {
   type DeepDiveChange,
   DeepDiveError,
   deepDive,
+  logEvent,
+  logFailure,
+  readKbFiles,
   validate,
 } from "@homeostat/core";
 import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
-import { logEvent, logFailure } from "./events.ts";
-import { readKbFiles } from "./files.ts";
 import { plural } from "./format.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { publish } from "./publish.ts";

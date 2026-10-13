@@ -1,8 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { CODEOWNERS_FILE, generateCodeowners, validate } from "@homeostat/core";
+import {
+  CODEOWNERS_FILE,
+  generateCodeowners,
+  readKbFiles,
+  validate,
+  writeKbFile,
+} from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { readKbFiles, writeKbFile } from "./files.ts";
 import { formatIssues } from "./format.ts";
 
 /** `homeostat codeowners [dir]`: writes CODEOWNERS, or with `--check` only reports whether it is stale. */

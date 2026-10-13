@@ -1,9 +1,8 @@
 import { resolve } from "node:path";
-import { type AgentName, dueAgents, validate } from "@homeostat/core";
+import { type AgentName, dueAgents, readKbFiles, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { runCurate } from "./curate.ts";
 import { runDeepDive } from "./deep-dive.ts";
-import { readKbFiles } from "./files.ts";
 import { git } from "./git.ts";
 
 export interface UpOptions {

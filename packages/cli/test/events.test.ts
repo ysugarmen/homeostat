@@ -2,9 +2,9 @@ import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { formatEvent, LEGACY_EVENTS, logEvent, readEvents } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { runCli } from "../src/cli.ts";
-import { formatEvent, LEGACY_EVENTS, logEvent, readEvents } from "../src/events.ts";
 
 const repo = new URL("../../../", import.meta.url).pathname;
 const kb = () => {

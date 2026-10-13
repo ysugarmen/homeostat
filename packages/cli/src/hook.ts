@@ -5,13 +5,13 @@ import {
   CONFIG_FILE,
   CORE_AREA,
   type Config,
+  logEvent,
+  readKbFiles,
   renderContext,
   selectEntries,
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { logEvent } from "./events.ts";
-import { readKbFiles } from "./files.ts";
 import { git } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { touchedPaths } from "./touched.ts";

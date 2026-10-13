@@ -1,7 +1,6 @@
+import { logEvent, readEvents, readKbFiles } from "@homeostat/core";
 import { type LearnInput, type McpDeps, serveStdio } from "@homeostat/mcp";
 import type { Io } from "./cli.ts";
-import { logEvent, readEvents } from "./events.ts";
-import { readKbFiles } from "./files.ts";
 import { runFlag } from "./flag.ts";
 import { git } from "./git.ts";
 import { findKb } from "./hook.ts";

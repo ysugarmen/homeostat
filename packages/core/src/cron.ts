@@ -51,3 +51,15 @@ export function dueAgents(config: Config, date: Date): AgentName[] {
     (name) => config.agents[name].enabled && cronMatches(config.agents[name].schedule, date),
   );
 }
+
+/** The next minute at or after `from` (UTC) that `expr` matches, within `withinDays`; else undefined. */
+export function nextRun(expr: string, from: Date, withinDays = 31): Date | undefined {
+  const t = new Date(from);
+  t.setUTCSeconds(0, 0);
+  if (t < from) t.setUTCMinutes(t.getUTCMinutes() + 1);
+  for (let i = 0; i < withinDays * 24 * 60; i++) {
+    if (cronMatches(expr, t)) return t;
+    t.setUTCMinutes(t.getUTCMinutes() + 1);
+  }
+  return undefined;
+}

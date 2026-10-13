@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { CONFIG_FILE } from "./config.ts";
 
 // node:sqlite prints an ExperimentalWarning on some Node versions; hooks must stay quiet.
 const emitWarning = process.emitWarning;
@@ -126,13 +127,6 @@ export function formatEvent(e: Event): string {
 /** Records a failed agent run, when `dir` is a KB (so liveness shows the failure). */
 export function logFailure(dir: string, agent: string, reason: string) {
   const root = resolve(dir);
-  if (!existsSync(join(root, "homeostat.yaml"))) return;
+  if (!existsSync(join(root, CONFIG_FILE))) return;
   logEvent(root, { type: "agent-run", agent, ok: false, summary: reason });
-}
-
-export interface EventsOptions {
-  dir?: string;
-  since?: string;
-  type?: string[];
-  json?: boolean;
 }

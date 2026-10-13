@@ -5,14 +5,15 @@ import {
   CurateError,
   type CurateResult,
   curate,
+  logEvent,
+  logFailure,
   type Provider,
   type RepoRef,
+  readKbFiles,
   validate,
 } from "@homeostat/core";
 import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
-import { logEvent, logFailure } from "./events.ts";
-import { readKbFiles } from "./files.ts";
 import { plural } from "./format.ts";
 import { git } from "./git.ts";
 import { CliError, providerFor } from "./provider.ts";

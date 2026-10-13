@@ -1,7 +1,13 @@
 import { resolve } from "node:path";
-import { applyFixes, type Fix, type ValidateResult, validate } from "@homeostat/core";
+import {
+  applyFixes,
+  type Fix,
+  readKbFiles,
+  type ValidateResult,
+  validate,
+  writeKbFile,
+} from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { readKbFiles, writeKbFile } from "./files.ts";
 import { formatIssues, painter, plural } from "./format.ts";
 
 export interface ValidateOptions {

@@ -2,10 +2,9 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validate } from "@homeostat/core";
+import { readKbFiles, validate } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { runCli } from "../src/cli.ts";
-import { readKbFiles } from "../src/files.ts";
 
 async function run(...args: string[]) {
   let stdout = "";

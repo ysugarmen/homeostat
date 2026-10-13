@@ -1,9 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { flagEntry, validate } from "@homeostat/core";
+import { flagEntry, logEvent, readKbFiles, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { logEvent } from "./events.ts";
-import { readKbFiles } from "./files.ts";
 import { commitFile, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { CliError } from "./provider.ts";

@@ -35,7 +35,7 @@ export {
   TITLE_SIMILARITY,
   titleSimilarity,
 } from "./conflicts.ts";
-export { type AgentName, cronMatches, dueAgents } from "./cron.ts";
+export { type AgentName, cronMatches, dueAgents, nextRun } from "./cron.ts";
 export {
   type CuratedEntry,
   CurateError,
@@ -81,6 +81,16 @@ export {
 export { explainEntry, hitLine, kbReport } from "./describe.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
 export {
+  EVENTS_DB,
+  type Event,
+  type EventQuery,
+  formatEvent,
+  LEGACY_EVENTS,
+  logEvent,
+  logFailure,
+  readEvents,
+} from "./events.ts";
+export {
   BLOCK_FILES,
   type ExportOutput,
   type ExportTarget,
@@ -88,6 +98,7 @@ export {
   OWNED_DIRS,
 } from "./export.ts";
 export { BLOCK_END, BLOCK_START, removeBlock, replaceBlock } from "./export-block.ts";
+export { readKbFiles, writeKbFile } from "./files.ts";
 export { applyFixes } from "./fix.ts";
 export { type Flag, flagEntry } from "./flag.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";

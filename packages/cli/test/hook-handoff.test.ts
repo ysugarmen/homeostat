@@ -2,9 +2,9 @@ import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readEvents } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
-import { readEvents } from "../src/events.ts";
 
 const examples = new URL("../../../examples/", import.meta.url).pathname;
 

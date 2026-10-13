@@ -1,8 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { CONFIG_FILE, ID_PATTERN, slugify, validate } from "@homeostat/core";
+import { CONFIG_FILE, ID_PATTERN, readKbFiles, slugify, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { readKbFiles } from "./files.ts";
 import { formatIssues, painter } from "./format.ts";
 import { git } from "./git.ts";
 

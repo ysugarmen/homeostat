@@ -48,3 +48,19 @@ agents:
     expect(dueAgents(config, at("2026-10-12T06:05:00Z"))).toEqual([]);
   });
 });
+
+describe("nextRun", () => {
+  test("finds the next matching minute", async () => {
+    const { nextRun } = await import("../src/cron.ts");
+    expect(nextRun("0 6 * * *", new Date("2026-10-13T06:00:30Z"))?.toISOString()).toBe(
+      "2026-10-14T06:00:00.000Z",
+    );
+    expect(nextRun("0 7 * * 1", new Date("2026-10-13T08:00:00Z"))?.toISOString()).toBe(
+      "2026-10-19T07:00:00.000Z",
+    );
+    expect(nextRun("0 6 * * *", new Date("2026-10-13T05:59:00Z"))?.toISOString()).toBe(
+      "2026-10-13T06:00:00.000Z",
+    );
+    expect(nextRun("bad", new Date())).toBeUndefined();
+  });
+});

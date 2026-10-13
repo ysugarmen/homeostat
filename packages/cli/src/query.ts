@@ -4,6 +4,8 @@ import {
   explainEntry,
   hitLine,
   kbReport,
+  readEvents,
+  readKbFiles,
   type SearchHit,
   STATUSES,
   type Status,
@@ -11,8 +13,6 @@ import {
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { readEvents } from "./events.ts";
-import { readKbFiles } from "./files.ts";
 import { findKb } from "./hook.ts";
 import { CliError } from "./provider.ts";
 

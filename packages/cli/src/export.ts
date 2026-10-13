@@ -4,12 +4,12 @@ import {
   EXPORT_TARGETS,
   type ExportTarget,
   exportRules,
+  readKbFiles,
   removeBlock,
   replaceBlock,
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { readKbFiles } from "./files.ts";
 import { CliError } from "./provider.ts";
 
 export interface ExportOptions {

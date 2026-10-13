@@ -1,6 +1,14 @@
 import { resolve } from "node:path";
 import type { Io } from "./cli.ts";
-import { type EventsOptions, formatEvent, readEvents } from "./events.ts";
+
+export interface EventsOptions {
+  dir?: string;
+  since?: string;
+  type?: string[];
+  json?: boolean;
+}
+
+import { formatEvent, readEvents } from "@homeostat/core";
 import { findKb } from "./hook.ts";
 
 /** `homeostat events`: the KB's local event log, one readable line per event. */
