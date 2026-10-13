@@ -55,8 +55,10 @@ export class GitHubProvider implements Provider {
   readonly kind = "github";
   private readonly fetch: typeof fetch;
   private readonly baseUrl: string;
+  private readonly token: string;
 
-  constructor(private readonly opts: ProviderOptions) {
+  constructor(opts: ProviderOptions) {
+    this.token = opts.token;
     this.fetch = opts.fetch ?? globalThis.fetch;
     this.baseUrl = opts.baseUrl ?? "https://api.github.com";
   }
@@ -144,7 +146,7 @@ export class GitHubProvider implements Provider {
 
   private headers() {
     return {
-      Authorization: `Bearer ${this.opts.token}`,
+      Authorization: `Bearer ${this.token}`,
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
     };

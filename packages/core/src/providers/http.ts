@@ -1,12 +1,14 @@
 export class ProviderError extends Error {
-  constructor(
-    readonly provider: string,
-    readonly status: number,
-    readonly url: string,
-    detail: string,
-  ) {
+  readonly provider: string;
+  readonly status: number;
+  readonly url: string;
+
+  constructor(provider: string, status: number, url: string, detail: string) {
     super(`${provider} API ${status} for ${url}${detail ? `: ${detail}` : ""}`);
     this.name = "ProviderError";
+    this.provider = provider;
+    this.status = status;
+    this.url = url;
   }
 }
 

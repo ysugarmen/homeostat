@@ -59,8 +59,10 @@ export class BitbucketProvider implements Provider {
   readonly kind = "bitbucket";
   private readonly fetch: typeof fetch;
   private readonly baseUrl: string;
+  private readonly token: string;
 
-  constructor(private readonly opts: ProviderOptions) {
+  constructor(opts: ProviderOptions) {
+    this.token = opts.token;
     this.fetch = opts.fetch ?? globalThis.fetch;
     this.baseUrl = opts.baseUrl ?? "https://api.bitbucket.org/2.0";
   }
@@ -147,7 +149,7 @@ export class BitbucketProvider implements Provider {
   }
 
   private headers() {
-    return { Authorization: `Bearer ${this.opts.token}`, Accept: "application/json" };
+    return { Authorization: `Bearer ${this.token}`, Accept: "application/json" };
   }
 
   private async paginate<T>(url: string): Promise<T[]> {
