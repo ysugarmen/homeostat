@@ -10,3 +10,15 @@ test("the kbx binary runs under plain Node", () => {
   const out = execFileSync(process.execPath, [bin, "validate", starter], { encoding: "utf8" });
   expect(out).toContain("3 entries, no problems");
 });
+
+test("piping into a reader that closes early is not a crash", () => {
+  const out = execFileSync(
+    "sh",
+    ["-c", `"${process.execPath}" "${bin}" --help | head -1; echo "status=$?"`],
+    {
+      encoding: "utf8",
+    },
+  );
+  expect(out).toContain("Usage: kbx");
+  expect(out).not.toContain("EPIPE");
+});
