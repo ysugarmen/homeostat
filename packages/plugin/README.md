@@ -10,7 +10,7 @@ Skills for working with a kbx knowledge base from inside Claude Code:
 
 The skills find the KB from `$KBX_DIR`, then the current repo if it has a `kbx.yaml`, and otherwise ask. They run `kbx` from the PATH, falling back to `npx --yes kbx@0`. Nothing is committed or pushed unless you ask.
 
-Hooks (session-start injection, handoff notes) and the MCP server come in later steps.
+Hooks: SessionStart injects the entries relevant to the files you are touching (step 2.3); Stop asks once per session for a handoff note after real edits (step 2.4). Point the plugin at your KB checkout with its `kb_dir` setting. The MCP server comes in Phase 3.
 
 ## Try it from a checkout
 
