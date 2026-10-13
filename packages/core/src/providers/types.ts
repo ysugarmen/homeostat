@@ -1,0 +1,70 @@
+/** A repository on a git host. On Bitbucket `owner` is the workspace and `name` the repo slug. */
+export interface RepoRef {
+  owner: string;
+  name: string;
+}
+
+/** A git-host account. `id` is the stable handle (Bitbucket nickname, GitHub login). */
+export interface Person {
+  id: string;
+  name?: string;
+}
+
+export interface PullRequest {
+  id: number;
+  title: string;
+  url: string;
+  author: Person;
+  /** ISO timestamp. Bitbucket has no merge time, so there it is the PR's last update. */
+  mergedAt: string;
+  sourceBranch: string;
+  targetBranch: string;
+}
+
+export interface ReviewComment {
+  id: number;
+  body: string;
+  author: Person;
+  createdAt: string;
+  url: string;
+  /** Set for inline comments on a file. */
+  path?: string;
+  line?: number;
+  /** Id of the comment this replies to. */
+  inReplyTo?: number;
+}
+
+export interface Commit {
+  sha: string;
+  date: string;
+  message: string;
+  author?: Person;
+}
+
+export interface NewPullRequest {
+  title: string;
+  body: string;
+  sourceBranch: string;
+  targetBranch: string;
+}
+
+/**
+ * What the agents need from a git host. Reads span every configured code repo; the only write,
+ * `openPullRequest`, targets the KB repo. Branch content is pushed with git, not through here.
+ */
+export interface Provider {
+  readonly kind: "bitbucket" | "github";
+  listMergedPullRequests(repo: RepoRef, since: Date): Promise<PullRequest[]>;
+  listReviewComments(repo: RepoRef, pullRequestId: number): Promise<ReviewComment[]>;
+  listCommits(repo: RepoRef, pullRequestId: number): Promise<Commit[]>;
+  openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }>;
+}
+
+export interface ProviderOptions {
+  /** Access token owned by the team (see the permissions model in the execution plan). */
+  token: string;
+  /** Injected for tests; defaults to the global fetch. */
+  fetch?: typeof fetch;
+  /** API base URL, for self-hosted or proxied instances. */
+  baseUrl?: string;
+}

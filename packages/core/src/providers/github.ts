@@ -1,0 +1,167 @@
+import { requestJson } from "./http.ts";
+import type {
+  Commit,
+  NewPullRequest,
+  Provider,
+  ProviderOptions,
+  PullRequest,
+  RepoRef,
+  ReviewComment,
+} from "./types.ts";
+
+interface GhUser {
+  login: string;
+}
+
+interface GhPullRequest {
+  number: number;
+  title: string;
+  html_url: string;
+  user: GhUser;
+  updated_at: string;
+  merged_at: string | null;
+  head: { ref: string };
+  base: { ref: string };
+}
+
+interface GhReviewComment {
+  id: number;
+  body: string;
+  user: GhUser;
+  path: string;
+  line: number | null;
+  original_line?: number | null;
+  in_reply_to_id?: number;
+  created_at: string;
+  html_url: string;
+}
+
+interface GhCommit {
+  sha: string;
+  commit: { message: string; author: { name: string; date: string } | null };
+  author: GhUser | null;
+}
+
+/** Finds the `rel="next"` URL in a GitHub `Link` header. */
+function nextLink(header: string | null): string | undefined {
+  return header?.match(/<([^>]+)>;\s*rel="next"/)?.[1];
+}
+
+/**
+ * GitHub REST API. Auth is the workflow's `GITHUB_TOKEN` for the same repo, or a fine-grained
+ * PAT / GitHub App token when reading other repos in the org.
+ */
+export class GitHubProvider implements Provider {
+  readonly kind = "github";
+  private readonly fetch: typeof fetch;
+  private readonly baseUrl: string;
+
+  constructor(private readonly opts: ProviderOptions) {
+    this.fetch = opts.fetch ?? globalThis.fetch;
+    this.baseUrl = opts.baseUrl ?? "https://api.github.com";
+  }
+
+  /** Walks closed PRs newest-updated first and stops at the first page older than `since`. */
+  async listMergedPullRequests(repo: RepoRef, since: Date): Promise<PullRequest[]> {
+    const merged: PullRequest[] = [];
+    let next: string | undefined =
+      `${this.repoUrl(repo)}/pulls?state=closed&sort=updated&direction=desc&per_page=100`;
+    while (next) {
+      const { body, headers } = await this.get(next);
+      const page = body as GhPullRequest[];
+      for (const pr of page) {
+        if (pr.merged_at && new Date(pr.merged_at) >= since) {
+          merged.push({
+            id: pr.number,
+            title: pr.title,
+            url: pr.html_url,
+            author: { id: pr.user.login },
+            mergedAt: pr.merged_at,
+            sourceBranch: pr.head.ref,
+            targetBranch: pr.base.ref,
+          });
+        }
+      }
+      const oldest = page.at(-1);
+      next =
+        oldest && new Date(oldest.updated_at) >= since ? nextLink(headers.get("link")) : undefined;
+    }
+    return merged;
+  }
+
+  /** Inline review comments. Outdated comments have no `line`, so the original line is used. */
+  async listReviewComments(repo: RepoRef, pullRequestId: number): Promise<ReviewComment[]> {
+    const comments = await this.paginate<GhReviewComment>(
+      `${this.repoUrl(repo)}/pulls/${pullRequestId}/comments?per_page=100`,
+    );
+    return comments.map((c) => {
+      const line = c.line ?? c.original_line ?? undefined;
+      return {
+        id: c.id,
+        body: c.body,
+        author: { id: c.user.login },
+        createdAt: c.created_at,
+        url: c.html_url,
+        path: c.path,
+        ...(line != null ? { line } : {}),
+        ...(c.in_reply_to_id !== undefined ? { inReplyTo: c.in_reply_to_id } : {}),
+      };
+    });
+  }
+
+  async listCommits(repo: RepoRef, pullRequestId: number): Promise<Commit[]> {
+    const commits = await this.paginate<GhCommit>(
+      `${this.repoUrl(repo)}/pulls/${pullRequestId}/commits?per_page=100`,
+    );
+    return commits.map((c) => ({
+      sha: c.sha,
+      date: c.commit.author?.date ?? "",
+      message: c.commit.message.trimEnd(),
+      ...(c.author
+        ? {
+            author: {
+              id: c.author.login,
+              ...(c.commit.author ? { name: c.commit.author.name } : {}),
+            },
+          }
+        : {}),
+    }));
+  }
+
+  async openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }> {
+    const { body } = await requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls`, {
+      method: "POST",
+      headers: this.headers(),
+      body: { title: pr.title, body: pr.body, head: pr.sourceBranch, base: pr.targetBranch },
+    });
+    const created = body as { number: number; html_url: string };
+    return { id: created.number, url: created.html_url };
+  }
+
+  private repoUrl(repo: RepoRef) {
+    return `${this.baseUrl}/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`;
+  }
+
+  private headers() {
+    return {
+      Authorization: `Bearer ${this.opts.token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    };
+  }
+
+  private get(url: string) {
+    return requestJson("GitHub", this.fetch, url, { headers: this.headers() });
+  }
+
+  private async paginate<T>(url: string): Promise<T[]> {
+    const all: T[] = [];
+    let next: string | undefined = url;
+    while (next) {
+      const { body, headers } = await this.get(next);
+      all.push(...(body as T[]));
+      next = nextLink(headers.get("link"));
+    }
+    return all;
+  }
+}

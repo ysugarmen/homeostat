@@ -1,0 +1,166 @@
+{
+  "note": "GitHub REST (2022-11-28) exchanges for org 'acme'. Hand-written from the API reference (response shapes trimmed to realistic fields); re-record against a sandbox org before relying on edge cases.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/web-app/pulls?state=closed&sort=updated&direction=desc&per_page=100"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "link": "<https://api.github.com/repos/acme/web-app/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=2>; rel=\"next\", <https://api.github.com/repos/acme/web-app/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=3>; rel=\"last\""
+        },
+        "body": [
+          {
+            "number": 120,
+            "title": "Use design tokens in the booking widget",
+            "state": "closed",
+            "html_url": "https://github.com/acme/web-app/pull/120",
+            "user": { "login": "lee", "type": "User" },
+            "created_at": "2026-10-08T10:00:00Z",
+            "updated_at": "2026-10-10T12:00:00Z",
+            "closed_at": "2026-10-10T11:59:00Z",
+            "merged_at": "2026-10-10T11:59:00Z",
+            "head": { "ref": "feature/tokens", "sha": "aaa111" },
+            "base": { "ref": "main", "sha": "bbb222" }
+          },
+          {
+            "number": 118,
+            "title": "Experiment: inline styles",
+            "state": "closed",
+            "html_url": "https://github.com/acme/web-app/pull/118",
+            "user": { "login": "sam", "type": "User" },
+            "created_at": "2026-10-07T10:00:00Z",
+            "updated_at": "2026-10-09T09:00:00Z",
+            "closed_at": "2026-10-09T09:00:00Z",
+            "merged_at": null,
+            "head": { "ref": "spike/inline", "sha": "ccc333" },
+            "base": { "ref": "main", "sha": "bbb222" }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/web-app/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=2"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "link": "<https://api.github.com/repos/acme/web-app/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=3>; rel=\"next\", <https://api.github.com/repos/acme/web-app/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=1>; rel=\"first\""
+        },
+        "body": [
+          {
+            "number": 110,
+            "title": "Fix dark-mode contrast on buttons",
+            "state": "closed",
+            "html_url": "https://github.com/acme/web-app/pull/110",
+            "user": { "login": "lee", "type": "User" },
+            "created_at": "2026-10-06T10:00:00Z",
+            "updated_at": "2026-10-07T08:00:00Z",
+            "closed_at": "2026-10-07T07:59:00Z",
+            "merged_at": "2026-10-07T07:59:00Z",
+            "head": { "ref": "fix/contrast", "sha": "ddd444" },
+            "base": { "ref": "main", "sha": "bbb222" }
+          },
+          {
+            "number": 95,
+            "title": "Old merged PR",
+            "state": "closed",
+            "html_url": "https://github.com/acme/web-app/pull/95",
+            "user": { "login": "dana", "type": "User" },
+            "created_at": "2026-09-18T10:00:00Z",
+            "updated_at": "2026-09-21T08:00:00Z",
+            "closed_at": "2026-09-20T08:00:00Z",
+            "merged_at": "2026-09-20T08:00:00Z",
+            "head": { "ref": "old", "sha": "eee555" },
+            "base": { "ref": "main", "sha": "bbb222" }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/web-app/pulls/120/comments?per_page=100"
+      },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "id": 9001,
+            "body": "Please use `var(--color-primary)` here instead of the hex value; it breaks dark mode.",
+            "user": { "login": "sam", "type": "User" },
+            "path": "apps/web/src/BookingWidget.css",
+            "line": 14,
+            "original_line": 14,
+            "created_at": "2026-10-08T15:00:00Z",
+            "updated_at": "2026-10-08T15:00:00Z",
+            "html_url": "https://github.com/acme/web-app/pull/120#discussion_r9001"
+          },
+          {
+            "id": 9002,
+            "body": "Fixed.",
+            "user": { "login": "lee", "type": "User" },
+            "path": "apps/web/src/BookingWidget.css",
+            "line": null,
+            "original_line": 14,
+            "in_reply_to_id": 9001,
+            "created_at": "2026-10-09T09:00:00Z",
+            "updated_at": "2026-10-09T09:00:00Z",
+            "html_url": "https://github.com/acme/web-app/pull/120#discussion_r9002"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/web-app/pulls/120/commits?per_page=100"
+      },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "sha": "aaa000",
+            "commit": { "message": "Booking widget styles", "author": { "name": "Lee Park", "email": "lee@example.com", "date": "2026-10-08T10:00:00Z" } },
+            "author": { "login": "lee", "type": "User" }
+          },
+          {
+            "sha": "aaa111",
+            "commit": { "message": "Use colour tokens", "author": { "name": "Lee Park", "email": "lee@example.com", "date": "2026-10-09T08:55:00Z" } },
+            "author": null
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/acme/team-kb/pulls",
+        "body": {
+          "title": "kbx: 2 knowledge candidates",
+          "body": "Drafted by the curator.",
+          "head": "kbx/curator-2026-10-13",
+          "base": "main"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": { "number": 7, "state": "open", "html_url": "https://github.com/acme/team-kb/pull/7" }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/private-repo/pulls/1/commits?per_page=100"
+      },
+      "response": {
+        "status": 404,
+        "body": { "message": "Not Found", "documentation_url": "https://docs.github.com/rest/pulls/pulls#list-commits-on-a-pull-request", "status": "404" }
+      }
+    }
+  ]
+}

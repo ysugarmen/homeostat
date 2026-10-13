@@ -1,0 +1,197 @@
+{
+  "note": "Bitbucket Cloud REST 2.0 exchanges for workspace 'acme'. Hand-written from the API reference (response shapes trimmed to realistic fields); re-record against a sandbox workspace before relying on edge cases.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests?state=MERGED&q=updated_on >= 2026-10-06T00:00:00.000Z&sort=-updated_on&pagelen=50"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 50,
+          "page": 1,
+          "size": 3,
+          "next": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests?state=MERGED&q=updated_on >= 2026-10-06T00:00:00.000Z&sort=-updated_on&pagelen=50&page=2",
+          "values": [
+            {
+              "type": "pullrequest",
+              "id": 815,
+              "title": "Add timeout to partner availability call",
+              "state": "MERGED",
+              "author": { "type": "user", "display_name": "Lee Park", "nickname": "lee", "account_id": "557058:aaaa" },
+              "source": { "branch": { "name": "feature/availability-timeout" }, "commit": { "hash": "1a2b3c4d" } },
+              "destination": { "branch": { "name": "main" }, "commit": { "hash": "9f8e7d6c" } },
+              "merge_commit": { "hash": "abcdef12" },
+              "created_on": "2026-10-08T09:12:44.120000+00:00",
+              "updated_on": "2026-10-09T15:01:02.554000+00:00",
+              "links": { "html": { "href": "https://bitbucket.org/acme/integrations-api/pull-requests/815" } }
+            },
+            {
+              "type": "pullrequest",
+              "id": 812,
+              "title": "Retry partner calls through the http client",
+              "state": "MERGED",
+              "author": { "type": "user", "display_name": "Sam Ortiz", "nickname": "sam", "account_id": "557058:bbbb" },
+              "source": { "branch": { "name": "feature/partner-retry" }, "commit": { "hash": "2b3c4d5e" } },
+              "destination": { "branch": { "name": "main" }, "commit": { "hash": "8e7d6c5b" } },
+              "merge_commit": { "hash": "bcdef123" },
+              "created_on": "2026-10-05T11:00:00.000000+00:00",
+              "updated_on": "2026-10-07T10:20:30.000000+00:00",
+              "links": { "html": { "href": "https://bitbucket.org/acme/integrations-api/pull-requests/812" } }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests?state=MERGED&q=updated_on >= 2026-10-06T00:00:00.000Z&sort=-updated_on&pagelen=50&page=2"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 50,
+          "page": 2,
+          "size": 3,
+          "values": [
+            {
+              "type": "pullrequest",
+              "id": 801,
+              "title": "Bump http client",
+              "state": "MERGED",
+              "author": { "type": "user", "display_name": "Dana Reyes", "nickname": "dana", "account_id": "557058:cccc" },
+              "source": { "branch": { "name": "chore/bump-http" }, "commit": { "hash": "3c4d5e6f" } },
+              "destination": { "branch": { "name": "main" }, "commit": { "hash": "7d6c5b4a" } },
+              "merge_commit": { "hash": "cdef1234" },
+              "created_on": "2026-10-06T08:00:00.000000+00:00",
+              "updated_on": "2026-10-06T08:30:00.000000+00:00",
+              "links": { "html": { "href": "https://bitbucket.org/acme/integrations-api/pull-requests/801" } }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests/812/comments?pagelen=100"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 100,
+          "page": 1,
+          "size": 4,
+          "values": [
+            {
+              "type": "pullrequest_comment",
+              "id": 33,
+              "content": { "type": "rendered", "raw": "Please use `withRetry()` from the http client instead of this loop; it adds the request-id header.", "markup": "markdown" },
+              "user": { "type": "user", "display_name": "Dana Reyes", "nickname": "dana", "account_id": "557058:cccc" },
+              "created_on": "2026-10-05T14:02:11.000000+00:00",
+              "updated_on": "2026-10-05T14:02:11.000000+00:00",
+              "deleted": false,
+              "inline": { "path": "services/integrations/partner.ts", "from": null, "to": 42 },
+              "links": { "html": { "href": "https://bitbucket.org/acme/integrations-api/pull-requests/812/_/diff#comment-33" } }
+            },
+            {
+              "type": "pullrequest_comment",
+              "id": 34,
+              "content": { "type": "rendered", "raw": "Done, switched to withRetry.", "markup": "markdown" },
+              "user": { "type": "user", "display_name": "Sam Ortiz", "nickname": "sam", "account_id": "557058:bbbb" },
+              "created_on": "2026-10-06T09:10:00.000000+00:00",
+              "updated_on": "2026-10-06T09:10:00.000000+00:00",
+              "deleted": false,
+              "parent": { "id": 33 },
+              "inline": { "path": "services/integrations/partner.ts", "from": null, "to": 42 },
+              "links": { "html": { "href": "https://bitbucket.org/acme/integrations-api/pull-requests/812/_/diff#comment-34" } }
+            },
+            {
+              "type": "pullrequest_comment",
+              "id": 35,
+              "content": { "type": "rendered", "raw": "", "markup": "markdown" },
+              "user": { "type": "user", "display_name": "Lee Park", "nickname": "lee", "account_id": "557058:aaaa" },
+              "created_on": "2026-10-06T10:00:00.000000+00:00",
+              "updated_on": "2026-10-06T10:05:00.000000+00:00",
+              "deleted": true,
+              "links": { "html": { "href": "https://bitbucket.org/acme/integrations-api/pull-requests/812/_/diff#comment-35" } }
+            },
+            {
+              "type": "pullrequest_comment",
+              "id": 36,
+              "content": { "type": "rendered", "raw": "LGTM", "markup": "markdown" },
+              "user": { "type": "user", "display_name": "Dana Reyes", "nickname": "dana", "account_id": "557058:cccc" },
+              "created_on": "2026-10-07T10:00:00.000000+00:00",
+              "updated_on": "2026-10-07T10:00:00.000000+00:00",
+              "deleted": false,
+              "links": { "html": { "href": "https://bitbucket.org/acme/integrations-api/pull-requests/812/_/overview#comment-36" } }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests/812/commits?pagelen=100"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 100,
+          "values": [
+            {
+              "type": "commit",
+              "hash": "2b3c4d5e6f7a8b9c",
+              "date": "2026-10-06T09:05:00+00:00",
+              "message": "Use withRetry for partner calls\n",
+              "author": { "type": "author", "raw": "Sam Ortiz <sam@example.com>", "user": { "display_name": "Sam Ortiz", "nickname": "sam", "account_id": "557058:bbbb" } }
+            },
+            {
+              "type": "commit",
+              "hash": "1f2e3d4c5b6a7980",
+              "date": "2026-10-05T11:00:00+00:00",
+              "message": "Retry partner calls\n",
+              "author": { "type": "author", "raw": "Sam Ortiz <sam@example.com>" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests",
+        "body": {
+          "title": "kbx: 2 knowledge candidates",
+          "description": "Drafted by the curator.",
+          "source": { "branch": { "name": "kbx/curator-2026-10-13" } },
+          "destination": { "branch": { "name": "main" } },
+          "close_source_branch": true
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "type": "pullrequest",
+          "id": 41,
+          "title": "kbx: 2 knowledge candidates",
+          "state": "OPEN",
+          "links": { "html": { "href": "https://bitbucket.org/acme/team-kb/pull-requests/41" } }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/private-repo/pullrequests/1/commits?pagelen=100"
+      },
+      "response": {
+        "status": 403,
+        "body": { "type": "error", "error": { "message": "Your credentials lack one or more required privilege scopes.", "detail": { "required": ["pullrequest"], "granted": ["repository"] } } }
+      }
+    }
+  ]
+}
