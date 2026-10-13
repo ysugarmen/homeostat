@@ -1,0 +1,14 @@
+{
+  "name": "kbx",
+  "description": "The kbx Claude Code plugin, installable from this repository.",
+  "owner": {
+    "name": "kbx contributors"
+  },
+  "plugins": [
+    {
+      "name": "kbx",
+      "source": "./packages/plugin",
+      "description": "Capture, explain and review your team's knowledge base entries from inside Claude Code."
+    }
+  ]
+}

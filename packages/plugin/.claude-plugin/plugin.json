@@ -1,0 +1,9 @@
+{
+  "name": "kbx",
+  "displayName": "kbx",
+  "version": "0.0.0",
+  "description": "Capture, explain and review your team's knowledge base entries from inside Claude Code.",
+  "author": { "name": "kbx contributors" },
+  "license": "Apache-2.0",
+  "keywords": ["knowledge-base", "code-review", "team", "rules"]
+}
