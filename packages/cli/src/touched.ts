@@ -1,4 +1,4 @@
-import { git } from "./init.ts";
+import { git } from "./git.ts";
 
 const MAX_PATHS = 500;
 const RECENT_COMMITS = 10;

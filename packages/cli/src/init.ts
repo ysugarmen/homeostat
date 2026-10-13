@@ -1,10 +1,10 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { CONFIG_FILE, ID_PATTERN, validate } from "@kbx/core";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { formatIssues, painter } from "./format.ts";
+import { git } from "./git.ts";
 
 export type Host = "github" | "bitbucket";
 export const HOSTS: readonly Host[] = ["github", "bitbucket"];
@@ -17,17 +17,6 @@ export function detectHost(remoteUrl: string): Host | undefined {
   if (host === "github.com") return "github";
   if (host === "bitbucket.org") return "bitbucket";
   return undefined;
-}
-
-export function git(dir: string, ...args: string[]): string | undefined {
-  try {
-    return execFileSync("git", ["-C", dir, ...args], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trimEnd();
-  } catch {
-    return undefined;
-  }
 }
 
 export function memberIdFrom(name: string | undefined): string {

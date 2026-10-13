@@ -72,6 +72,14 @@ export const configSchema = z.strictObject({
     .strictObject({
       curator: agentSchema("0 6 * * *").prefault({}),
       deepDive: agentSchema("0 7 * * 1").prefault({}),
+      /** Session handoff notes, asked for by the plugin's Stop hook. Runs in sessions, not on a schedule. */
+      handoff: z
+        .strictObject({
+          enabled: z.boolean().default(true),
+          /** File edits in a session before the agent is asked for a note. */
+          minEdits: z.int().positive().default(5),
+        })
+        .prefault({}),
     })
     .prefault({}),
   distribution: z

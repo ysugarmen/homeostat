@@ -19,7 +19,8 @@ import {
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { formatIssues } from "./format.ts";
-import { git, memberIdFrom } from "./init.ts";
+import { commitFile, existsOnRef, git, pushBranch } from "./git.ts";
+import { memberIdFrom } from "./init.ts";
 
 export interface LearnOptions {
   dir: string;
@@ -33,7 +34,14 @@ export interface LearnOptions {
   id?: string;
   tag?: string[];
   exampleFile?: string;
+  /** `manual` (default) or `agent-handoff`; a comment URL always means `pr-feedback`. */
+  source?: string;
+  /** Commit the entry to this branch of the KB repo instead of writing it to the working tree. */
+  branch?: string;
+  push?: boolean;
 }
+
+const HAND_SOURCES = ["manual", "agent-handoff"] as const;
 
 export interface CommentRef {
   host: "bitbucket" | "github";
@@ -131,7 +139,18 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   const files = readKbFiles(root);
   const config = loadConfig(files);
 
-  let source: Frontmatter["source"] = { type: "manual", author: "" };
+  if (opts.push && !opts.branch) throw new LearnError("--push needs --branch");
+  if (opts.source !== undefined) {
+    if (url) throw new LearnError("a comment URL sets the source itself; drop --source");
+    if (!HAND_SOURCES.includes(opts.source as (typeof HAND_SOURCES)[number])) {
+      throw new LearnError(`--source must be ${HAND_SOURCES.join(" or ")}`);
+    }
+  }
+
+  let source: Frontmatter["source"] = {
+    type: (opts.source as (typeof HAND_SOURCES)[number] | undefined) ?? "manual",
+    author: "",
+  };
   let author = opts.author;
   if (url) {
     const ref = parseCommentUrl(url);
@@ -170,7 +189,11 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   const id = opts.id ?? slugify(fields.title ?? "");
   if (!ID_PATTERN.test(id)) throw new LearnError(`cannot derive an id from the title; pass --id`);
   const path = `knowledge/${area}/${id}.md`;
-  if (existsSync(join(root, path))) throw new LearnError(`${path} already exists; pass --id`);
+  if (opts.branch ? existsOnRef(root, opts.branch, path) : existsSync(join(root, path))) {
+    throw new LearnError(
+      `${path} already exists${opts.branch ? ` on ${opts.branch}` : ""}; pass --id`,
+    );
+  }
 
   const example = opts.exampleFile ? readFileSync(opts.exampleFile, "utf8").trim() : undefined;
   const body = [
@@ -205,11 +228,26 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     return 1;
   }
 
+  const summary = `(candidate, score ${frontmatter.score})`;
+  if (opts.branch) {
+    try {
+      commitFile(root, opts.branch, path, text, `kbx: candidate ${id}`);
+      io.stdout(`committed ${path} to ${opts.branch} ${summary}\n`);
+      if (opts.push) {
+        pushBranch(root, opts.branch);
+        io.stdout(`pushed ${opts.branch} to origin\n`);
+      }
+    } catch (e) {
+      throw new LearnError((e as Error).message);
+    }
+    return 0;
+  }
+
   const full = join(root, ...path.split("/"));
   mkdirSync(dirname(full), { recursive: true });
   writeFileSync(full, text);
   io.stdout(
-    `created ${path} (candidate, score ${frontmatter.score})\n` +
+    `created ${path} ${summary}\n` +
       "Commit it on a branch and open a PR to the KB repo; a reviewer accepts it there.\n",
   );
   return 0;

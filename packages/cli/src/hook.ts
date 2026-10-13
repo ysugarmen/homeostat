@@ -1,8 +1,17 @@
-import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { CONFIG_FILE, renderContext, selectEntries, validate } from "@kbx/core";
+import {
+  CONFIG_FILE,
+  CORE_AREA,
+  type Config,
+  renderContext,
+  selectEntries,
+  validate,
+} from "@kbx/core";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
+import { git } from "./git.ts";
+import { memberIdFrom } from "./init.ts";
 import { touchedPaths } from "./touched.ts";
 
 /** Claude Code's limit on SessionStart `additionalContext`. */
@@ -67,8 +76,104 @@ async function sessionStart(input: HookInput, io: Io) {
   );
 }
 
+/** Tools whose use means the session changed files. */
+const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+
+/** Counts file-changing tool uses in a Claude Code transcript (JSONL); unreadable lines are skipped. */
+export function countEdits(transcriptPath: string | undefined): number {
+  if (!transcriptPath || !existsSync(transcriptPath)) return 0;
+  let edits = 0;
+  for (const line of readFileSync(transcriptPath, "utf8").split("\n")) {
+    try {
+      const content = JSON.parse(line)?.message?.content;
+      if (!Array.isArray(content)) continue;
+      edits += content.filter((c) => c?.type === "tool_use" && EDIT_TOOLS.has(c.name)).length;
+    } catch {
+      // Not JSON; transcripts can end mid-line while being written.
+    }
+  }
+  return edits;
+}
+
+interface HandoffState {
+  asked?: boolean;
+  /** Set by PreCompact: a long session, so ask at the next stop whatever the edit count. */
+  compacted?: boolean;
+}
+
+const statePath = (kbRoot: string, session: string) =>
+  join(kbRoot, ".kbx/handoff", `${session.replace(/[^\w.-]/g, "_")}.json`);
+
+function readState(kbRoot: string, session: string): HandoffState {
+  try {
+    return JSON.parse(readFileSync(statePath(kbRoot, session), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeState(kbRoot: string, session: string, state: HandoffState) {
+  mkdirSync(join(kbRoot, ".kbx/handoff"), { recursive: true });
+  writeFileSync(statePath(kbRoot, session), JSON.stringify(state));
+}
+
+/** How the agent should invoke this same kbx: the running bin when known, else `kbx`. */
+function kbxCommand(): string {
+  const bin = process.argv[1];
+  return bin && /[\\/]kbx(\.js)?$/.test(bin) ? `node "${bin}"` : "kbx";
+}
+
+function handoffInstructions(kbRoot: string, config: Config, member: string): string {
+  const push = git(kbRoot, "remote", "get-url", "origin") ? " --push" : "";
+  const areas = [CORE_AREA, ...Object.keys(config.areas)].join(", ");
+  return `kbx: before you finish, decide whether this session produced a lesson worth a handoff note for teammates' agents: a decision that was made, and what was tried and rejected. If not, reply only "No handoff note." and stop.
+
+If yes, save exactly one note, without asking the user:
+
+${kbxCommand()} learn --dir "${kbRoot}" --source agent-handoff --branch candidates/${member}${push} --author ${member} --area <area> --title "<imperative title, at most 80 characters>" --rule "<what to do next time, at most 60 words>" --why "<what was tried and rejected, and why, at most 100 words>"
+
+Areas: ${areas}. Then reply with one line saying the note was saved for review.`;
+}
+
+async function stop(input: HookInput, io: Io) {
+  const cwd = input.cwd ?? process.cwd();
+  const kbRoot = findKb(io.env, cwd);
+  if (!kbRoot || !input.session_id) return;
+  const { config } = validate(readKbFiles(kbRoot));
+  if (!config?.agents.handoff.enabled) return;
+
+  const state = readState(kbRoot, input.session_id);
+  if (state.asked) return;
+  const edits = countEdits(input.transcript_path);
+  if (edits < config.agents.handoff.minEdits && !state.compacted) return;
+
+  const member = memberIdFrom(git(cwd, "config", "user.name"));
+  if (!config.team.members.some((m) => m.id === member)) return;
+
+  writeState(kbRoot, input.session_id, { ...state, asked: true });
+  logEvent(kbRoot, {
+    ts: (io.now?.() ?? new Date()).toISOString(),
+    type: "handoff-requested",
+    session: input.session_id,
+    member,
+    edits,
+    compacted: state.compacted === true,
+  });
+  io.stdout(
+    `${JSON.stringify({ decision: "block", reason: handoffInstructions(kbRoot, config, member) })}\n`,
+  );
+}
+
+async function preCompact(input: HookInput, io: Io) {
+  const kbRoot = findKb(io.env, input.cwd ?? process.cwd());
+  if (!kbRoot || !input.session_id) return;
+  writeState(kbRoot, input.session_id, { ...readState(kbRoot, input.session_id), compacted: true });
+}
+
 const HANDLERS: Record<string, (input: HookInput, io: Io) => Promise<void>> = {
   "session-start": sessionStart,
+  stop,
+  "pre-compact": preCompact,
 };
 
 export const HOOK_EVENTS = Object.keys(HANDLERS);
