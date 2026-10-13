@@ -44,7 +44,7 @@ Goal: a public-safe core with a defined data model, separated from anything spec
 - [x] **1.3 Config file.** `kbx.yaml` at the KB repo root: `team` (members with id, role senior|member, areas), `areas` (name → path globs), `scoring` (the +3/+2/+1/−2 rules as editable weights, auto-merge threshold, review cadence), `agents` (curator schedule, deep-dive schedule, enabled flags), `distribution` (which rules files to export, token budget per session), `notifications` (Slack webhook, digest day). *Done when:* an example config exists and `validate` rejects a malformed one with a clear message.
 - [x] **1.4 Scoring and validation as a library.** Port the Bitbucket pipeline logic into `packages/core`: `score(entry, context)`, `detectConflicts(entries)`, `validate(repo)`. Pure functions, no I/O, unit-tested, because the CLI and the CI job both call them. *Done when:* tests cover each scoring rule and the conflict case, and `validate` runs green on `examples/starter-kb`.
 - [ ] **1.5 CODEOWNERS generation.** Port the auto-generator from `team.json` to the new config. *Done when:* running it on the example produces a correct CODEOWNERS.
-- [ ] **1.6 Scrub.** *Done when:* a search for the employer's name across the public repo returns nothing, and no real person or customer name appears in examples.
+- [x] **1.6 Scrub.** *Done when:* a search for the employer's name across the public repo returns nothing, and no real person or customer name appears in examples.
 
 ## Phase 2 — CLI and Claude Code plugin (weeks 3–5)
 
