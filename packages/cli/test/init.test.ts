@@ -152,7 +152,6 @@ describe("kbx init", () => {
 
 describe("planned commands", () => {
   test.each([
-    ["learn", "2.1"],
     ["export", "2.7"],
     ["up", "2.5"],
     ["status", "4.3"],

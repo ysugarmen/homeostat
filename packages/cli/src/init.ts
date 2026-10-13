@@ -19,7 +19,7 @@ export function detectHost(remoteUrl: string): Host | undefined {
   return undefined;
 }
 
-function git(dir: string, ...args: string[]): string | undefined {
+export function git(dir: string, ...args: string[]): string | undefined {
   try {
     return execFileSync("git", ["-C", dir, ...args], {
       encoding: "utf8",

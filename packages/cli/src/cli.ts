@@ -1,26 +1,45 @@
+import { createInterface } from "node:readline/promises";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
+import { type LearnOptions, runLearn } from "./learn.ts";
 import { runValidate } from "./validate.ts";
 
 /** Commands from the execution plan that exist in the CLI but are not built yet. */
 const PLANNED: readonly [name: string, description: string, step: string][] = [
-  ["learn", "Capture an entry interactively or from a PR comment URL", "2.1"],
   ["export", "Write accepted entries to agent rules files", "2.7"],
   ["up", "Start the agents and dashboard", "2.5"],
   ["status", "Show agent and knowledge-base health", "4.3"],
 ];
 
+/** Everything the commands touch outside the file system, so tests can supply their own. */
 export interface Io {
   stdout: (text: string) => void;
   stderr: (text: string) => void;
   color: boolean;
+  /** Prompts for one line; absent when there is no terminal to ask. */
+  ask?: (question: string) => Promise<string>;
+  /** Environment variables, for tokens. Defaults to none, so tests never see real tokens. */
+  env?: Readonly<Record<string, string | undefined>>;
+  fetch?: typeof fetch;
+  now?: () => Date;
+}
+
+async function askTerminal(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(`${question}: `);
+  } finally {
+    rl.close();
+  }
 }
 
 export const processIo: Io = {
   stdout: (t) => process.stdout.write(t),
   stderr: (t) => process.stderr.write(t),
   color: process.stdout.isTTY === true && !process.env.NO_COLOR,
+  ...(process.stdin.isTTY ? { ask: askTerminal } : {}),
+  env: process.env,
 };
 
 /** Runs the CLI with `argv` (as in `process.argv`) and returns the exit code. */
@@ -60,6 +79,26 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--force", "overwrite an existing kbx.yaml")
     .action((dir: string, opts: InitOptions) => {
       exitCode = runInit(dir, opts, io);
+    });
+
+  const collect = (value: string, previous: string[] = []) => [...previous, value];
+  program
+    .command("learn")
+    .description("Write a candidate entry from flags, prompts, or a PR review comment URL.")
+    .argument("[url]", "Bitbucket or GitHub PR review comment link")
+    .option("--dir <dir>", "knowledge base root", ".")
+    .option("--title <text>", "imperative one-line title")
+    .option("--rule <text>", "the rule, one paragraph of at most 60 words")
+    .option("--why <text>", "why the rule exists, at most 100 words")
+    .option("--area <area>", "area from kbx.yaml (default: core)")
+    .option("--scope <glob>", "path glob the rule applies to; repeatable", collect)
+    .option("--author <id>", "member who originated it (default: comment author or git user)")
+    .option("--owner <id>", "member who answers for it (default: author)")
+    .option("--id <id>", "entry id (default: from the title)")
+    .option("--tag <tag>", "search tag; repeatable", collect)
+    .option("--example-file <path>", "markdown to use as the Example section")
+    .action(async (url: string | undefined, opts: LearnOptions) => {
+      exitCode = await runLearn(url, opts, io);
     });
 
   for (const [name, description, step] of PLANNED) {

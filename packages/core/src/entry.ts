@@ -1,4 +1,4 @@
-import { parseDocument } from "yaml";
+import { parseDocument, stringify } from "yaml";
 import { type BodySections, parseBody } from "./body.ts";
 import { error, type Issue } from "./issues.ts";
 import { type Frontmatter, frontmatterSchema } from "./schema.ts";
@@ -92,4 +92,9 @@ export function parseEntry(text: string): { entry?: Entry; issues: Issue[] } {
 
   issues.unshift(...crossFieldIssues(parsed.data));
   return { entry: { frontmatter: parsed.data, body, sections }, issues };
+}
+
+/** Serializes an entry to its file form; `parseEntry(formatEntry(fm, body))` round-trips. */
+export function formatEntry(frontmatter: Frontmatter, body: string): string {
+  return `---\n${stringify(frontmatter)}---\n\n${body.trim()}\n`;
 }

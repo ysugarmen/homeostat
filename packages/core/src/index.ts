@@ -18,7 +18,7 @@ export {
   TITLE_SIMILARITY,
   titleSimilarity,
 } from "./conflicts.ts";
-export { type Entry, parseEntry } from "./entry.ts";
+export { type Entry, formatEntry, parseEntry } from "./entry.ts";
 export { applyFixes } from "./fix.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export * from "./providers/index.ts";

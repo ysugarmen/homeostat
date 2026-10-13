@@ -5,7 +5,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./test/providers/replay.ts"
   },
   "dependencies": {
     "js-tiktoken": "^1.0.21",

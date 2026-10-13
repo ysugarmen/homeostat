@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseEntry } from "../src/entry.ts";
+import { formatEntry, parseEntry } from "../src/entry.ts";
 import { entryFile, validFrontmatter } from "./helpers.ts";
 
 const codes = (text: string) => parseEntry(text).issues.map((i) => i.code);
@@ -142,5 +142,15 @@ describe("parseEntry", () => {
   test("body issues are reported alongside frontmatter issues", () => {
     const text = entryFile({ ...validFrontmatter(), score: "high" }, "## Rule\nA.\n");
     expect(codes(text)).toEqual(expect.arrayContaining(["schema", "body.why.missing"]));
+  });
+});
+
+describe("formatEntry", () => {
+  test("round-trips through parseEntry", () => {
+    const { entry } = parseEntry(entryFile());
+    if (!entry) throw new Error("fixture should parse");
+    const again = parseEntry(formatEntry(entry.frontmatter, entry.body));
+    expect(again.issues).toEqual([]);
+    expect(again.entry).toEqual(entry);
   });
 });
