@@ -98,10 +98,10 @@ cd ../kbx-demo-kb
 GITHUB_TOKEN=$(gh auth token) kbx curate
 ```
 
-Expect: `+ knowledge/frontend/....md (accepted, score 4)` and `opened https://github.com/.../pull/1`. Open that PR, read the entry, and merge it:
+Expect: `+ knowledge/frontend/....md (accepted, score 4)` and `opened https://github.com/.../pull/1`. Open that PR, read the entry, and merge it. Until kbx is published on npm, the KB repo's own validate check fails with `E404`; run `kbx validate` on the branch instead and merge with `--admin`:
 
 ```sh
-gh pr merge --squash --delete-branch && git pull
+gh pr merge --squash --delete-branch --admin && git pull
 ```
 
 ## 6. Start a session and see the rule applied (3 min)
