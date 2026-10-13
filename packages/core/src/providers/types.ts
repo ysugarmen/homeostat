@@ -21,6 +21,8 @@ export interface PullRequest {
   targetBranch: string;
 }
 
+export type OpenPullRequest = Omit<PullRequest, "mergedAt">;
+
 export interface ReviewComment {
   id: number;
   body: string;
@@ -55,6 +57,7 @@ export interface NewPullRequest {
 export interface Provider {
   readonly kind: "bitbucket" | "github";
   listMergedPullRequests(repo: RepoRef, since: Date): Promise<PullRequest[]>;
+  listOpenPullRequests(repo: RepoRef): Promise<OpenPullRequest[]>;
   listReviewComments(repo: RepoRef, pullRequestId: number): Promise<ReviewComment[]>;
   listCommits(repo: RepoRef, pullRequestId: number): Promise<Commit[]>;
   openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }>;

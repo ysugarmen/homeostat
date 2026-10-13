@@ -1,18 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {
-  BitbucketProvider,
   CORE_AREA,
+  type CommentRef,
+  CommentUrlError,
   type Config,
   countTokens,
   type Frontmatter,
   formatEntry,
-  GitHubProvider,
   ID_PATTERN,
-  type Provider,
+  parseCommentUrl,
   type RepoRef,
   type ReviewComment,
   score,
+  slugify,
   validate,
 } from "@kbx/core";
 
@@ -21,6 +22,7 @@ import { readKbFiles } from "./files.ts";
 import { formatIssues } from "./format.ts";
 import { commitFile, existsOnRef, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
+import { CliError, providerFor } from "./provider.ts";
 
 export interface LearnOptions {
   dir: string;
@@ -43,53 +45,7 @@ export interface LearnOptions {
 
 const HAND_SOURCES = ["manual", "agent-handoff"] as const;
 
-export interface CommentRef {
-  host: "bitbucket" | "github";
-  repo: RepoRef;
-  pullRequest: number;
-  comment: number;
-}
-
-class LearnError extends Error {}
-
-/** Parses a Bitbucket `#comment-N` or GitHub `#discussion_rN` PR comment link. */
-export function parseCommentUrl(url: string): CommentRef {
-  const bb =
-    /^https:\/\/bitbucket\.org\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)[^#]*#comment-(\d+)$/.exec(
-      url,
-    );
-  if (bb) {
-    const [, owner = "", name = "", pr = "", comment = ""] = bb;
-    return { host: "bitbucket", repo: { owner, name }, pullRequest: +pr, comment: +comment };
-  }
-  const gh =
-    /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)[^#]*#(discussion_r|issuecomment-)(\d+)$/.exec(
-      url,
-    );
-  if (gh) {
-    const [, owner = "", name = "", pr = "", kind, comment = ""] = gh;
-    if (kind === "issuecomment-") {
-      throw new LearnError(
-        "only review comments (on a line of the diff) are supported; this is a general PR comment",
-      );
-    }
-    return { host: "github", repo: { owner, name }, pullRequest: +pr, comment: +comment };
-  }
-  throw new LearnError(`not a Bitbucket or GitHub PR comment URL: ${url}`);
-}
-
-const TOKEN_VARS = {
-  bitbucket: ["KBX_BITBUCKET_TOKEN"],
-  github: ["KBX_GITHUB_TOKEN", "GITHUB_TOKEN"],
-};
-
-function providerFor(ref: CommentRef, io: Io): Provider {
-  const vars = TOKEN_VARS[ref.host];
-  const token = vars.map((v) => io.env?.[v]).find(Boolean);
-  if (!token) throw new LearnError(`set ${vars.join(" or ")} to read ${ref.host} comments`);
-  const opts = { token, ...(io.fetch ? { fetch: io.fetch } : {}) };
-  return ref.host === "bitbucket" ? new BitbucketProvider(opts) : new GitHubProvider(opts);
-}
+class LearnError extends CliError {}
 
 interface FetchedComment {
   comment: ReviewComment;
@@ -98,7 +54,7 @@ interface FetchedComment {
 }
 
 async function fetchComment(ref: CommentRef, io: Io): Promise<FetchedComment> {
-  const provider = providerFor(ref, io);
+  const provider = providerFor(ref.host, io, `read ${ref.host} comments`);
   const comments = await provider.listReviewComments(ref.repo, ref.pullRequest);
   const comment = comments.find((c) => c.id === ref.comment);
   if (!comment) throw new LearnError(`comment ${ref.comment} not found on PR ${ref.pullRequest}`);
@@ -106,8 +62,6 @@ async function fetchComment(ref: CommentRef, io: Io): Promise<FetchedComment> {
   const at = Date.parse(comment.createdAt);
   return { comment, changedCode: commits.some((c) => Date.parse(c.date) > at) };
 }
-
-export const slugify = (text: string) => memberIdFrom(text).slice(0, 60).replace(/-+$/, "");
 
 function loadConfig(files: Record<string, string>): Config {
   const result = validate(files);
@@ -126,7 +80,7 @@ export async function runLearn(
   try {
     return await learn(url, opts, io);
   } catch (e) {
-    if (e instanceof LearnError) {
+    if (e instanceof CliError) {
       io.stderr(`${e.message}\n`);
       return 1;
     }
@@ -153,7 +107,13 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   };
   let author = opts.author;
   if (url) {
-    const ref = parseCommentUrl(url);
+    let ref: CommentRef;
+    try {
+      ref = parseCommentUrl(url);
+    } catch (e) {
+      if (e instanceof CommentUrlError) throw new LearnError(e.message);
+      throw e;
+    }
     const { comment, changedCode } = await fetchComment(ref, io);
     io.stdout(`${comment.author.name ?? comment.author.id} on ${comment.path ?? "the PR"}:\n`);
     io.stdout(`${comment.body.replace(/^/gm, "> ")}\n\n`);
@@ -186,7 +146,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   }
   area ??= CORE_AREA;
 
-  const id = opts.id ?? slugify(fields.title ?? "");
+  const id = opts.id ?? slugify(fields.title) ?? "";
   if (!ID_PATTERN.test(id)) throw new LearnError(`cannot derive an id from the title; pass --id`);
   const path = `knowledge/${area}/${id}.md`;
   if (opts.branch ? existsOnRef(root, opts.branch, path) : existsSync(join(root, path))) {

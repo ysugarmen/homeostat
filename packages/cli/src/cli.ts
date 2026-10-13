@@ -1,6 +1,8 @@
 import { createInterface } from "node:readline/promises";
+import type { Drafter, Provider } from "@kbx/core";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
+import { type CurateOptions, runCurate } from "./curate.ts";
 import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
@@ -26,6 +28,9 @@ export interface Io {
   now?: () => Date;
   /** Reads all of stdin; hooks receive their event JSON this way. */
   stdin?: () => Promise<string>;
+  /** Test seams for the agents: a git-host provider and a drafter instead of the real ones. */
+  provider?: Provider;
+  drafter?: Drafter;
 }
 
 async function readStdin(): Promise<string> {
@@ -112,6 +117,21 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--push", "push --branch to origin after committing")
     .action(async (url: string | undefined, opts: LearnOptions) => {
       exitCode = await runLearn(url, opts, io);
+    });
+
+  program
+    .command("curate")
+    .description(
+      "Draft entries from merged review feedback and open a PR on the KB repo (run in CI).",
+    )
+    .option("--dir <dir>", "knowledge base checkout", ".")
+    .option(
+      "--since <date>",
+      "look at PRs merged since this date (default: agents.curator.lookbackHours ago)",
+    )
+    .option("--dry-run", "draft and report, but commit and open nothing")
+    .action(async (opts: CurateOptions) => {
+      exitCode = await runCurate(opts, io);
     });
 
   program

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { CONFIG_FILE, ID_PATTERN, validate } from "@kbx/core";
+import { CONFIG_FILE, ID_PATTERN, slugify, validate } from "@kbx/core";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { formatIssues, painter } from "./format.ts";
@@ -20,12 +20,7 @@ export function detectHost(remoteUrl: string): Host | undefined {
 }
 
 export function memberIdFrom(name: string | undefined): string {
-  const slug = (name ?? "")
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return ID_PATTERN.test(slug) ? slug : "owner";
+  return slugify(name) ?? "owner";
 }
 
 function configTemplate(member: string, handle: string | undefined): string {
@@ -52,15 +47,61 @@ scoring:
 
 distribution:
   tokenBudget: 2000
+
+# Needed by the curator (kbx curate): the KB repo and the code repos it reads.
+# sources:
+#   host: github            # or bitbucket
+#   kbRepo: your-org/team-kb
+#   repos: [your-org/api, your-org/web]
 `;
 }
 
 const VALIDATE_STEP = "npx --yes kbx@0 validate";
+const CURATE_STEP = "npx --yes kbx@0 curate";
 
-const CI_FILES: Record<Host, { path: string; content: string; snippet: string }> = {
-  github: {
-    path: ".github/workflows/kbx.yml",
-    content: `name: kbx
+interface CiFile {
+  path: string;
+  content: string;
+  /** What to add by hand when the file already exists. */
+  snippet: string;
+}
+
+const GITHUB_CURATOR = `name: kbx curator
+
+# The daily curator: drafts entries from merged review feedback and opens one PR here.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: |
+          git config user.name "kbx curator"
+          git config user.email "kbx-curator@users.noreply.github.com"
+      - run: ${CURATE_STEP}
+        env:
+          GITHUB_TOKEN: \${{ secrets.KBX_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+`;
+
+const CI_FILES: Record<Host, CiFile[]> = {
+  github: [
+    {
+      path: ".github/workflows/kbx.yml",
+      content: `name: kbx
 
 on:
   pull_request:
@@ -80,11 +121,21 @@ jobs:
           node-version: 24
       - run: ${VALIDATE_STEP}
 `,
-    snippet: `      - run: ${VALIDATE_STEP}`,
-  },
-  bitbucket: {
-    path: "bitbucket-pipelines.yml",
-    content: `image: node:24
+      snippet: `      - run: ${VALIDATE_STEP}`,
+    },
+    {
+      path: ".github/workflows/kbx-curator.yml",
+      content: GITHUB_CURATOR,
+      snippet: GITHUB_CURATOR,
+    },
+  ],
+  bitbucket: [
+    {
+      path: "bitbucket-pipelines.yml",
+      content: `image: node:24
+
+clone:
+  depth: full
 
 definitions:
   steps:
@@ -100,23 +151,48 @@ pipelines:
   branches:
     main:
       - step: *kbx-validate
+  custom:
+    # Scheduled in Repository settings > Pipelines > Schedules (daily).
+    kbx-curator:
+      - step:
+          name: kbx curator
+          script:
+            - git config user.name "kbx curator"
+            - git config user.email "kbx-curator@noreply.invalid"
+            - ${CURATE_STEP}
 `,
-    snippet: `- step:\n    name: kbx validate\n    script:\n      - ${VALIDATE_STEP}`,
-  },
+      snippet: `pipelines:
+  pull-requests:
+    "**":
+      - step:
+          name: kbx validate
+          script:
+            - ${VALIDATE_STEP}
+  custom:
+    kbx-curator:
+      - step:
+          name: kbx curator
+          script:
+            - ${CURATE_STEP}`,
+    },
+  ],
 };
 
 const TOKEN_HELP: Record<Host, string> = {
-  bitbucket: `The scheduled agents (coming in a later release) read PRs and open one PR on this repo.
+  bitbucket: `The curator reads PRs from your code repos and opens one PR on this repo each day.
 Ask a workspace admin for a workspace access token with:
   code repos:  pullrequest:read, repository:read
   this repo:   pullrequest:write, repository:write
-Store it as the secured repository variable KBX_BITBUCKET_TOKEN.`,
-  github: `The scheduled agents (coming in a later release) read PRs and open one PR on this repo.
+Store it as the secured repository variable KBX_BITBUCKET_TOKEN, and your Claude API key as
+ANTHROPIC_API_KEY. Then schedule the kbx-curator pipeline daily under
+Repository settings > Pipelines > Schedules, and add a sources section to kbx.yaml.`,
+  github: `The curator reads PRs from your code repos and opens one PR on this repo each day.
 The workflow's GITHUB_TOKEN covers this repo. To read other repos, create a fine-grained
 token or GitHub App with:
   code repos:  Pull requests: read, Contents: read
   this repo:   Pull requests: write, Contents: write
-Store it as the Actions secret KBX_GITHUB_TOKEN.`,
+Store it as the Actions secret KBX_GITHUB_TOKEN, your Claude API key as ANTHROPIC_API_KEY,
+and add a sources section to kbx.yaml.`,
 };
 
 export interface InitOptions {
@@ -161,11 +237,12 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
   }
   const notes: string[] = [];
   if (host) {
-    const ci = CI_FILES[host];
-    if (existsSync(join(root, ci.path))) {
-      notes.push(`${ci.path} already exists; add this step to it:\n${ci.snippet}`);
-    } else {
-      writes[ci.path] = ci.content;
+    for (const ci of CI_FILES[host]) {
+      if (existsSync(join(root, ci.path))) {
+        notes.push(`${ci.path} already exists; add this to it:\n${ci.snippet}`);
+      } else {
+        writes[ci.path] = ci.content;
+      }
     }
   }
 

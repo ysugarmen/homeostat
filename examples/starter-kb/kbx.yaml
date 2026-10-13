@@ -43,3 +43,10 @@ notifications:
   # Name of the CI secret holding the webhook URL. Never put the URL here.
   slackWebhookEnv: KBX_SLACK_WEBHOOK
   digestDay: monday
+
+# Where the curator reads merged PRs and opens its daily PR (one git host per KB).
+sources:
+  host: bitbucket
+  kbRepo: acme/team-kb
+  baseBranch: main
+  repos: [acme/integrations-api, acme/web-app]

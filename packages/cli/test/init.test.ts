@@ -128,7 +128,7 @@ describe("kbx init", () => {
     const { code, stdout } = await run("init", dir, "--force");
     expect(code).toBe(0);
     expect(read(dir, "bitbucket-pipelines.yml")).toBe("image: node:24\n");
-    expect(stdout).toContain("bitbucket-pipelines.yml already exists; add this step");
+    expect(stdout).toContain("bitbucket-pipelines.yml already exists; add this to it");
   });
 
   test("an invalid handle writes nothing", async () => {
@@ -175,5 +175,27 @@ describe("kbx init .gitignore", () => {
     await run("init", dir);
     await run("init", dir, "--force");
     expect(read(dir, ".gitignore")).toBe("node_modules\n.kbx/\n");
+  });
+});
+
+describe("kbx init curator schedule", () => {
+  test("GitHub gets a scheduled curator workflow with write access", async () => {
+    const dir = repo("git@github.com:acme/team-kb.git");
+    await run("init", dir);
+    const workflow = read(dir, ".github/workflows/kbx-curator.yml");
+    expect(workflow).toContain('- cron: "0 6 * * *"');
+    expect(workflow).toContain("pull-requests: write");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("npx --yes kbx@0 curate");
+    expect(workflow).toContain("ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}");
+  });
+
+  test("Bitbucket gets a custom curator pipeline and is told where to schedule it", async () => {
+    const dir = repo("git@bitbucket.org:acme/team-kb.git");
+    const { stdout } = await run("init", dir);
+    const pipeline = read(dir, "bitbucket-pipelines.yml");
+    expect(pipeline).toContain("kbx-curator:");
+    expect(pipeline).toContain("depth: full");
+    expect(stdout).toContain("Repository settings > Pipelines > Schedules");
   });
 });

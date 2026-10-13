@@ -104,3 +104,19 @@ describe("GitHubProvider", () => {
     expect(err.message).toContain("Not Found");
   });
 });
+
+describe("GitHubProvider.listOpenPullRequests", () => {
+  test("lists open PRs with their branches", async () => {
+    const { gh } = provider();
+    expect(await gh.listOpenPullRequests({ owner: "acme", name: "team-kb" })).toEqual([
+      {
+        id: 6,
+        title: "kbx: candidates from lee",
+        url: "https://github.com/acme/team-kb/pull/6",
+        author: { id: "lee" },
+        sourceBranch: "candidates/lee",
+        targetBranch: "main",
+      },
+    ]);
+  });
+});

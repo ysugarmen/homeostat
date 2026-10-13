@@ -91,3 +91,19 @@ describe("BitbucketProvider", () => {
     expect(err.message).toContain("lack one or more required privilege scopes");
   });
 });
+
+describe("BitbucketProvider.listOpenPullRequests", () => {
+  test("lists open PRs with their branches", async () => {
+    const { bb } = provider();
+    expect(await bb.listOpenPullRequests({ owner: "acme", name: "team-kb" })).toEqual([
+      {
+        id: 40,
+        title: "kbx: candidates from lee",
+        url: "https://bitbucket.org/acme/team-kb/pull-requests/40",
+        author: { id: "lee", name: "Lee Park" },
+        sourceBranch: "candidates/lee",
+        targetBranch: "main",
+      },
+    ]);
+  });
+});

@@ -2,6 +2,7 @@ import { requestJson } from "./http.ts";
 import type {
   Commit,
   NewPullRequest,
+  OpenPullRequest,
   Person,
   Provider,
   ProviderOptions,
@@ -85,6 +86,20 @@ export class BitbucketProvider implements Provider {
       url: pr.links.html.href,
       author: person(pr.author),
       mergedAt: pr.updated_on,
+      sourceBranch: pr.source.branch.name,
+      targetBranch: pr.destination.branch.name,
+    }));
+  }
+
+  async listOpenPullRequests(repo: RepoRef): Promise<OpenPullRequest[]> {
+    const prs = await this.paginate<BbPullRequest>(
+      `${this.repoUrl(repo)}/pullrequests?state=OPEN&pagelen=50`,
+    );
+    return prs.map((pr) => ({
+      id: pr.id,
+      title: pr.title,
+      url: pr.links.html.href,
+      author: person(pr.author),
       sourceBranch: pr.source.branch.name,
       targetBranch: pr.destination.branch.name,
     }));

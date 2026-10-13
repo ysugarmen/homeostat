@@ -4,6 +4,7 @@ export { ProviderError } from "./http.ts";
 export type {
   Commit,
   NewPullRequest,
+  OpenPullRequest,
   Person,
   Provider,
   ProviderOptions,

@@ -2,6 +2,7 @@ import { requestJson } from "./http.ts";
 import type {
   Commit,
   NewPullRequest,
+  OpenPullRequest,
   Provider,
   ProviderOptions,
   PullRequest,
@@ -92,6 +93,20 @@ export class GitHubProvider implements Provider {
   }
 
   /** Inline review comments. Outdated comments have no `line`, so the original line is used. */
+  async listOpenPullRequests(repo: RepoRef): Promise<OpenPullRequest[]> {
+    const prs = await this.paginate<GhPullRequest>(
+      `${this.repoUrl(repo)}/pulls?state=open&per_page=100`,
+    );
+    return prs.map((pr) => ({
+      id: pr.number,
+      title: pr.title,
+      url: pr.html_url,
+      author: { id: pr.user.login },
+      sourceBranch: pr.head.ref,
+      targetBranch: pr.base.ref,
+    }));
+  }
+
   async listReviewComments(repo: RepoRef, pullRequestId: number): Promise<ReviewComment[]> {
     const comments = await this.paginate<GhReviewComment>(
       `${this.repoUrl(repo)}/pulls/${pullRequestId}/comments?per_page=100`,

@@ -33,8 +33,21 @@ const weightsSchema = z.strictObject(
   },
 );
 
+/** The Claude model the agents draft with; any model id the Messages API accepts. */
+export const DEFAULT_AGENT_MODEL = "claude-opus-5-5";
+
 const agentSchema = (schedule: string) =>
-  z.strictObject({ enabled: z.boolean().default(true), schedule: cron.default(schedule) });
+  z.strictObject({
+    enabled: z.boolean().default(true),
+    schedule: cron.default(schedule),
+    model: z.string().min(1).default(DEFAULT_AGENT_MODEL),
+    effort: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
+    /** How far back each run looks; a little over the schedule so runs overlap. */
+    lookbackHours: z.int().positive().default(26),
+  });
+
+/** `owner/name`: a Bitbucket workspace/repo or a GitHub owner/repo. */
+const repoRef = z.string().regex(/^[\w.-]+\/[\w.-]+$/, "must be owner/name");
 
 export const EXPORT_TARGETS = ["claude", "cursor", "agents-md", "copilot"] as const;
 
@@ -100,6 +113,17 @@ export const configSchema = z.strictObject({
         .default("monday"),
     })
     .prefault({}),
+  /** Where the agents read from and write to. Needed by `kbx curate`, not by validation. */
+  sources: z
+    .strictObject({
+      host: z.enum(["bitbucket", "github"]),
+      /** The KB repo itself: the only repo the agents write to, by branch and PR. */
+      kbRepo: repoRef,
+      baseBranch: z.string().min(1).default("main"),
+      /** Code repos whose merged PRs the curator reads. */
+      repos: z.array(repoRef).default([]),
+    })
+    .optional(),
 });
 
 export type Config = z.infer<typeof configSchema>;
