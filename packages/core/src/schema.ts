@@ -29,9 +29,11 @@ export const sourceSchema = z.strictObject({
  */
 export const frontmatterSchema = z.strictObject({
   id,
-  title: z.string().min(1).max(80),
+  title: z.string().min(1, "must not be empty").max(80, "must be at most 80 characters"),
   area: z.string().min(1),
-  scope: z.array(z.string().min(1)).min(1),
+  scope: z
+    .array(z.string().min(1))
+    .min(1, 'must list at least one path glob; use ["**"] for global'),
   status: z.enum(STATUSES),
   score: z.int(),
   owner: memberId,

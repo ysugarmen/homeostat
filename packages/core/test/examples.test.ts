@@ -42,7 +42,7 @@ describe("examples", () => {
 
   test("broken-kb fails with located messages", () => {
     expect(issuesFor("broken-kb").map((i) => i.message)).toEqual([
-      "title: Too big: expected string to have <=80 characters",
+      "title: must be at most 80 characters",
       "created: must be a real calendar date",
       'vertical: unknown key; did you mean "area"?',
       "text before the first section; start the body with ## Rule",

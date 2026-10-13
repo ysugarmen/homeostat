@@ -8,6 +8,7 @@
     "kbx": "./bin/kbx.js"
   },
   "dependencies": {
-    "@kbx/core": "workspace:*"
+    "@kbx/core": "workspace:*",
+    "commander": "^15.0.0"
   }
 }
