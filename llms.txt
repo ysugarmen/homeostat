@@ -1,0 +1,22 @@
+# Homeostat
+
+> Homeostat turns a team's accepted code-review feedback into short, scored coding rules that every coding agent follows. Rules live as Markdown files in a git repo (the knowledge base), arrive by pull request, and reach agents through a Claude Code plugin, an MCP server, and exported rules files for Cursor, Copilot and AGENTS.md.
+
+When working in a repo whose team uses Homeostat:
+
+- Before editing code, call the MCP tool `context` with the files you will touch, or run `homeostat search <topic>`, and follow the rules returned.
+- When the user teaches you a team convention, save it: MCP `learn`, or `homeostat learn --title ... --rule ... --why ...`. It becomes a candidate a teammate reviews.
+- If a rule is wrong or outdated, `flag` it with the reason (MCP `flag`, or `homeostat flag <id> --reason ...`).
+- `explain <id>` says why a rule exists: the review comment, score breakdown and owner.
+
+## Docs
+
+- [README](README.md): what it is, the loop, every command
+- [MCP server](packages/mcp/README.md): tools and client setup
+- [Claude Code plugin](packages/plugin/README.md): skills, hooks, settings
+- [End-to-end demo](docs/demo.md): from a review comment to a followed rule in five minutes
+- [Design](docs/design.md) and [execution plan](docs/execution-plan.md)
+
+## Entry format
+
+One file per rule at `knowledge/<area>/<id>.md`: YAML frontmatter (id, title, area, scope globs, status, score, owner, source, dates, tokens) then `## Rule` (at most 60 words), `## Why` (at most 100), optional `## Example`. Config is `homeostat.yaml` at the knowledge-base root.
