@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
+import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
 import { runValidate } from "./validate.ts";
@@ -23,6 +24,14 @@ export interface Io {
   env?: Readonly<Record<string, string | undefined>>;
   fetch?: typeof fetch;
   now?: () => Date;
+  /** Reads all of stdin; hooks receive their event JSON this way. */
+  stdin?: () => Promise<string>;
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 async function askTerminal(question: string): Promise<string> {
@@ -40,6 +49,7 @@ export const processIo: Io = {
   color: process.stdout.isTTY === true && !process.env.NO_COLOR,
   ...(process.stdin.isTTY ? { ask: askTerminal } : {}),
   env: process.env,
+  stdin: readStdin,
 };
 
 /** Runs the CLI with `argv` (as in `process.argv`) and returns the exit code. */
@@ -99,6 +109,14 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--example-file <path>", "markdown to use as the Example section")
     .action(async (url: string | undefined, opts: LearnOptions) => {
       exitCode = await runLearn(url, opts, io);
+    });
+
+  program
+    .command("hook", { hidden: true })
+    .description(`Handle a Claude Code hook event (${HOOK_EVENTS.join(", ")}); used by the plugin.`)
+    .argument("<event>")
+    .action(async (event: string) => {
+      exitCode = await runHook(event, io);
     });
 
   for (const [name, description, step] of PLANNED) {

@@ -15,9 +15,10 @@ Input: $ARGUMENTS
 
 Use the first that applies:
 
-1. The directory in the `KBX_DIR` environment variable.
-2. The current repository, if it has a `kbx.yaml` at its root.
-3. Otherwise ask the user for the path to their local checkout of the KB repo. Do not guess.
+1. The plugin setting `${user_config.kb_dir}`, if it is not empty.
+2. The directory in the `KBX_DIR` environment variable.
+3. The current repository, if it has a `kbx.yaml` at its root.
+4. Otherwise ask the user for the path to their local checkout of the KB repo. Do not guess.
 
 Read its `kbx.yaml` to learn the member ids under `team.members` and the area names under `areas` (`core` always exists).
 

@@ -12,7 +12,7 @@ Input: $ARGUMENTS (optional area to limit the queue)
 
 ## 1. Find the knowledge base
 
-Use the first that applies: the `KBX_DIR` environment variable; the current repository if it has a `kbx.yaml`; otherwise ask the user for the path to their KB checkout. Read `kbx.yaml` for the members and `scoring.autoMergeThreshold`.
+Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is not empty; the `KBX_DIR` environment variable; the current repository if it has a `kbx.yaml`; otherwise ask the user for the path to their KB checkout. Read `kbx.yaml` for the members and `scoring.autoMergeThreshold`.
 
 Ask which member the user is, if it is not obvious; only that id goes into `approvedBy`.
 

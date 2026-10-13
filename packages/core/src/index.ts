@@ -33,5 +33,13 @@ export {
   sourceSchema,
 } from "./schema.ts";
 export { type ScoreContext, type ScoreReason, type ScoreResult, score } from "./score.ts";
+export {
+  CONTEXT_HEADER,
+  renderContext,
+  type SelectedEntry,
+  type Selection,
+  type SelectOptions,
+  selectEntries,
+} from "./select.ts";
 export { countTokens } from "./tokens.ts";
 export { type KbFiles, type ValidatedEntry, type ValidateResult, validate } from "./validate.ts";

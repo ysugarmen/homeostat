@@ -161,3 +161,19 @@ describe("planned commands", () => {
     expect(stderr).toContain(`kbx ${command} is not built yet (execution plan step ${step})`);
   });
 });
+
+describe("kbx init .gitignore", () => {
+  test("ignores the local .kbx/ event log", async () => {
+    const dir = repo();
+    await run("init", dir);
+    expect(read(dir, ".gitignore")).toBe(".kbx/\n");
+  });
+
+  test("appends to an existing .gitignore once", async () => {
+    const dir = repo();
+    writeFileSync(join(dir, ".gitignore"), "node_modules");
+    await run("init", dir);
+    await run("init", dir, "--force");
+    expect(read(dir, ".gitignore")).toBe("node_modules\n.kbx/\n");
+  });
+});

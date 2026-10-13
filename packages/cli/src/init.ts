@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { CONFIG_FILE, ID_PATTERN, validate } from "@kbx/core";
 import type { Io } from "./cli.ts";
@@ -24,7 +24,7 @@ export function git(dir: string, ...args: string[]): string | undefined {
     return execFileSync("git", ["-C", dir, ...args], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
+    }).trimEnd();
   } catch {
     return undefined;
   }
@@ -162,6 +162,14 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
 
   const writes: Record<string, string> = { [CONFIG_FILE]: configTemplate(member, opts.handle) };
   if (!existsSync(join(root, "knowledge/core"))) writes["knowledge/core/.gitkeep"] = "";
+  // The hooks log local events under .kbx/; they never belong in the shared repo.
+  const gitignore = existsSync(join(root, ".gitignore"))
+    ? readFileSync(join(root, ".gitignore"), "utf8")
+    : "";
+  if (!/^\/?\.kbx\/?$/m.test(gitignore)) {
+    writes[".gitignore"] =
+      `${gitignore}${gitignore && !gitignore.endsWith("\n") ? "\n" : ""}.kbx/\n`;
+  }
   const notes: string[] = [];
   if (host) {
     const ci = CI_FILES[host];

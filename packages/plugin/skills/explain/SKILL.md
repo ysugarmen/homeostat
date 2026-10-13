@@ -11,7 +11,7 @@ Input: $ARGUMENTS
 
 ## 1. Find the knowledge base
 
-Use the first that applies: the `KBX_DIR` environment variable; the current repository if it has a `kbx.yaml`; otherwise ask the user for the path to their KB checkout.
+Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is not empty; the `KBX_DIR` environment variable; the current repository if it has a `kbx.yaml`; otherwise ask the user for the path to their KB checkout.
 
 Entries live at `knowledge/<area>/<id>.md`: YAML frontmatter, then `## Rule`, `## Why` and an optional `## Example`.
 
