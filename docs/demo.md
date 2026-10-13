@@ -6,7 +6,7 @@ This is the step 2.8 check and the launch demo. One person runs it by hand on Gi
 
 - Node 24+, `git`, and the GitHub CLI logged in (`gh auth status`).
 - `kbx` on your PATH. Until it is on npm: `pnpm install && pnpm --filter kbx link --global` in a checkout of this repo.
-- Claude Code logged in (`claude`). The agents use it through the default `claude-code` runtime, so a Claude subscription is enough; no API key is needed.
+- Claude Code logged in (`claude`). The demo runs the agents through it (`agents.runtime: claude-code`), so your own subscription is enough. That is fine for a personal sandbox; a team KB uses a Console API key instead (the default), because a personal subscription is for personal, non-commercial use only.
 - A **second GitHub account** for the reviewer. The curator only learns from feedback by someone other than the PR author.
 - Claude Code with the kbx plugin. From a checkout: `claude plugin marketplace add <path-to-kbx>` then `claude plugin install kbx@kbx`.
 
@@ -44,6 +44,10 @@ sources:
   host: github
   kbRepo: your-login/kbx-demo-kb
   repos: [your-login/kbx-demo-app]
+
+# Personal sandbox: draft through your own Claude Code login.
+agents:
+  runtime: claude-code
 ```
 
 ```sh
@@ -87,7 +91,7 @@ The commit after the comment is what tells the curator the feedback was accepted
 
 ## 5. Run the curator and accept the rule (2 min)
 
-In the scheduled setup this runs in CI (with a `claude setup-token` token as `CLAUDE_CODE_OAUTH_TOKEN`). For the demo, run it from the KB checkout; it drafts through your Claude Code login:
+In a team setup this runs in CI with a Console key. For the demo, run it from the KB checkout; it drafts through your Claude Code login:
 
 ```sh
 cd ../kbx-demo-kb

@@ -23,8 +23,13 @@ export type ClaudeClient = Pick<Anthropic, "beta">;
 export interface ApiAskerOptions {
   model: string;
   effort: Effort;
-  /** Defaults to a client reading ANTHROPIC_API_KEY (or the other standard credentials). */
+  /** Defaults to a client built from `env`. */
   client?: ClaudeClient;
+  /**
+   * Where to read ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN. When given, only these are used, so
+   * a caller's environment (or a test's empty one) is never bypassed. Defaults to the SDK's own.
+   */
+  env?: Readonly<Record<string, string | undefined>>;
 }
 
 // The SDK reports missing credentials with a plain Error, so match its message.
@@ -38,7 +43,12 @@ const isMissingCredentials = (e: unknown) =>
 export function apiAsker(opts: ApiAskerOptions): Asker {
   let client = opts.client;
   return async (system, user, schema) => {
-    client ??= new Anthropic();
+    client ??= opts.env
+      ? new Anthropic({
+          apiKey: opts.env.ANTHROPIC_API_KEY || null,
+          authToken: opts.env.ANTHROPIC_AUTH_TOKEN || null,
+        })
+      : new Anthropic();
     let response: Awaited<ReturnType<ClaudeClient["beta"]["messages"]["parse"]>>;
     try {
       response = await client.beta.messages.parse({

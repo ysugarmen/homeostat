@@ -51,5 +51,5 @@ describe("kbx up", () => {
 
 test("without a reachable Claude the agents stop with a clear message", async () => {
   const { stderr } = await up("2026-10-12T07:00:00Z", "--once");
-  expect(stderr).toContain("Claude Code (claude) is not installed");
+  expect(stderr).toContain("no usable Claude API credentials: set ANTHROPIC_API_KEY");
 });

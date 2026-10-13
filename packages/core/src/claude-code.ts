@@ -89,9 +89,11 @@ const resultSchema = z.object({
 });
 
 /**
- * The Claude Code runtime: runs `claude -p`, which uses whatever Claude Code is logged in with.
- * That can be a Claude subscription (an interactive login, or `claude setup-token` exported as
- * CLAUDE_CODE_OAUTH_TOKEN in CI) or an API key, so no Console credits are needed.
+ * The Claude Code runtime: runs `claude -p`, which uses whatever Claude Code is logged in with:
+ * an interactive login, a `claude setup-token` token as CLAUDE_CODE_OAUTH_TOKEN, or an API key.
+ * Anthropic's terms limit a personal Free/Pro/Max subscription to the subscriber's own,
+ * non-commercial use and forbid sharing its token, so a team KB should use the API runtime or a
+ * Team/Enterprise plan instead (see docs/execution-plan.md, decisions log).
  */
 export function claudeCodeAsker(opts: ClaudeCodeAskerOptions): Asker {
   const run = opts.run ?? spawnRunner;

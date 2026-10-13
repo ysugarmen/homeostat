@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
-import { ClaudeUnavailableError } from "../src/claude.ts";
+import { apiAsker, ClaudeUnavailableError } from "../src/claude.ts";
 import { AGENT_ENV, type CommandRunner, claudeCodeAsker } from "../src/claude-code.ts";
 
 const schema = z.object({ city: z.string() });
@@ -110,5 +110,21 @@ describe("claudeCodeAsker", () => {
       (e) => e,
     );
     expect(err.message).toBe("Claude Code failed (exit 2): boom real reason");
+  });
+});
+
+describe("apiAsker credentials", () => {
+  test("with an explicit env it ignores keys in the process environment", async () => {
+    const saved = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "sk-ant-from-process-env";
+    try {
+      const ask = apiAsker({ model: "claude-opus-5-5", effort: "low", env: {} });
+      const err = await ask("s", "u", schema).catch((e) => e);
+      expect(err).toBeInstanceOf(ClaudeUnavailableError);
+      expect(err.message).toContain("no usable Claude API credentials");
+    } finally {
+      if (saved === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = saved;
+    }
   });
 });

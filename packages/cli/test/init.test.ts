@@ -197,24 +197,24 @@ describe("kbx init curator schedule", () => {
 });
 
 describe("kbx init Claude runtime in CI", () => {
-  test("GitHub agent workflows install Claude Code and pass the subscription token", async () => {
+  test("GitHub agent workflows use a Console key; the subscription route is opt-in", async () => {
     const dir = repo("git@github.com:acme/team-kb.git");
     const { stdout } = await run("init", dir);
     for (const file of ["kbx-curator.yml", "kbx-deep-dive.yml"]) {
       const workflow = read(dir, `.github/workflows/${file}`);
-      expect(workflow).toContain("npm install -g @anthropic-ai/claude-code");
-      expect(workflow).toContain("CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}");
+      expect(workflow).toMatch(/^ {10}ANTHROPIC_API_KEY: \$\{\{ secrets.ANTHROPIC_API_KEY \}\}$/m);
+      expect(workflow).toContain("# CLAUDE_CODE_OAUTH_TOKEN:");
+      expect(workflow).toContain("# - run: npm install -g @anthropic-ai/claude-code");
     }
-    expect(stdout).toContain("claude setup-token");
+    expect(stdout).toContain("Claude Console API key as\nANTHROPIC_API_KEY");
+    expect(stdout).toContain("personal, non-commercial use only");
   });
 
-  test("Bitbucket agent pipelines install Claude Code", async () => {
+  test("Bitbucket agent pipelines do not install Claude Code by default", async () => {
     const dir = repo("git@bitbucket.org:acme/team-kb.git");
-    const { stdout } = await run("init", dir);
-    const installs = read(dir, "bitbucket-pipelines.yml").match(
-      /npm install -g @anthropic-ai\/claude-code/g,
-    );
-    expect(installs).toHaveLength(2);
-    expect(stdout).toContain("CLAUDE_CODE_OAUTH_TOKEN");
+    await run("init", dir);
+    const pipeline = read(dir, "bitbucket-pipelines.yml");
+    expect(pipeline).not.toMatch(/^\s+- npm install -g @anthropic-ai\/claude-code$/m);
+    expect(pipeline).toContain("# With agents.runtime: claude-code, also:");
   });
 });

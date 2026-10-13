@@ -84,10 +84,12 @@ export const configSchema = z.strictObject({
   agents: z
     .strictObject({
       /**
-       * How the agents reach Claude: `claude-code` runs `claude -p` with whatever Claude Code is
-       * logged in with (a subscription works); `api` calls the Messages API with ANTHROPIC_API_KEY.
+       * How the agents reach Claude. `api` (default) calls the Messages API with a Claude Console
+       * key in ANTHROPIC_API_KEY: the right choice for a team. `claude-code` runs `claude -p` with
+       * whatever Claude Code is logged in with; on a personal Free/Pro/Max subscription that is
+       * for personal, non-commercial use only, so teams use it only with a Team/Enterprise plan.
        */
-      runtime: z.enum(["claude-code", "api"]).default("claude-code"),
+      runtime: z.enum(["api", "claude-code"]).default("api"),
       curator: agentSchema("0 6 * * *", 26).prefault({}),
       deepDive: agentSchema("0 7 * * 1", 7 * 24)
         .extend({
