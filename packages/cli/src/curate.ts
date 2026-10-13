@@ -11,6 +11,7 @@ import {
 } from "@homeostat/core";
 import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
+import { logEvent, logFailure } from "./events.ts";
 import { readKbFiles } from "./files.ts";
 import { plural } from "./format.ts";
 import { git } from "./git.ts";
@@ -104,6 +105,7 @@ export async function runCurate(opts: CurateOptions, io: Io): Promise<number> {
     return await curateRun(opts, io);
   } catch (e) {
     if (e instanceof CliError || e instanceof CurateError || e instanceof ClaudeUnavailableError) {
+      logFailure(opts.dir, "curator", e.message);
       io.stderr(`${e.message}\n`);
       return 1;
     }
@@ -130,6 +132,15 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   const drafter = io.drafter ?? new ClaudeDrafter(askerFor(config, "curator", io));
 
   const result = await curate({ files, provider, drafter, since, today });
+  logEvent(root, {
+    ts: now.toISOString(),
+    type: "agent-run",
+    agent: "curator",
+    ok: true,
+    summary: `${result.entries.length} drafted, ${result.skipped.length} skipped`,
+    entries: result.entries.map((e) => e.frontmatter.id),
+    scanned: result.scanned,
+  });
   for (const s of result.scanned) {
     io.stdout(
       `${s.repo}: ${plural(s.pullRequests, "merged PR")}, ${plural(s.threads, "review thread")}\n`,

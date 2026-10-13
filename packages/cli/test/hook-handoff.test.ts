@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
+import { readEvents } from "../src/events.ts";
 
 const examples = new URL("../../../examples/", import.meta.url).pathname;
 
@@ -160,8 +161,8 @@ describe("homeostat hook stop", () => {
       { session_id: "s7", cwd: codeRepo(), transcript_path: transcript(2) },
       kbDir,
     );
-    const events = readFileSync(join(kbDir, ".homeostat/events.jsonl"), "utf8").trim().split("\n");
-    expect(JSON.parse(events.at(-1) ?? "")).toMatchObject({
+    const events = readEvents(kbDir);
+    expect(events.at(-1)).toMatchObject({
       type: "handoff-requested",
       session: "s7",
       member: "lee",

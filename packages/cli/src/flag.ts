@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { flagEntry, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
+import { logEvent } from "./events.ts";
 import { readKbFiles } from "./files.ts";
 import { commitFile, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
@@ -35,6 +36,13 @@ export function runFlag(id: string, opts: FlagOptions, io: Io): number {
     const date = (io.now?.() ?? new Date()).toISOString().slice(0, 10);
     const text = flagEntry(found.entry, { by, reason: opts.reason.trim(), date }, kb.config);
     const status = text.match(/^status: (\w+)$/m)?.[1];
+    logEvent(root, {
+      ts: (io.now?.() ?? new Date()).toISOString(),
+      type: "entry-flagged",
+      id,
+      by,
+      reason: opts.reason.trim(),
+    });
 
     if (opts.branch) {
       try {

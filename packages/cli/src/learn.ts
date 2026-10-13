@@ -18,6 +18,7 @@ import {
 } from "@homeostat/core";
 
 import type { Io } from "./cli.ts";
+import { logEvent } from "./events.ts";
 import { readKbFiles } from "./files.ts";
 import { formatIssues } from "./format.ts";
 import { commitFile, existsOnRef, git, pushBranch } from "./git.ts";
@@ -189,6 +190,15 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   }
 
   const summary = `(candidate, score ${frontmatter.score})`;
+  logEvent(root, {
+    ts: (io.now?.() ?? new Date()).toISOString(),
+    type: "entry-created",
+    id,
+    area,
+    author,
+    sourceType: frontmatter.source.type,
+    ...(opts.branch ? { branch: opts.branch } : {}),
+  });
   if (opts.branch) {
     try {
       commitFile(root, opts.branch, path, text, `homeostat: candidate ${id}`);

@@ -4,6 +4,7 @@ import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
+import { runEvents } from "./events-command.ts";
 import { type ExportOptions, runExport } from "./export.ts";
 import { type FlagOptions, runFlag } from "./flag.ts";
 import { HOOK_EVENTS, runHook } from "./hook.ts";
@@ -170,6 +171,18 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--days <n>", "window in days", "7")
     .action((opts) => {
       exitCode = runStatus(opts, io);
+    });
+
+  program
+    .command("events")
+    .aliases(["log"])
+    .description("The KB's local event log: injections, MCP calls, captures, agent runs.")
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--since <date>", "ISO date or time (default: the last 24 hours)")
+    .option("--type <type>", "only this event type; repeatable", collect)
+    .option("--json", "print JSON")
+    .action((opts) => {
+      exitCode = runEvents(opts, io);
     });
 
   program

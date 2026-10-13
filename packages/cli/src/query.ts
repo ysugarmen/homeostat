@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   type Entry,
   explainEntry,
@@ -12,8 +11,9 @@ import {
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
+import { readEvents } from "./events.ts";
 import { readKbFiles } from "./files.ts";
-import { EVENTS_FILE, findKb } from "./hook.ts";
+import { findKb } from "./hook.ts";
 import { CliError } from "./provider.ts";
 
 /** Read-only commands an agent or person reaches for first: search, explain, list, status. */
@@ -136,22 +136,12 @@ export function runList(opts: QueryOptions & { area?: string; status?: string },
 export function runStatus(opts: QueryOptions & { days?: string }, io: Io): number {
   return guard(io, () => {
     const { root, config, entries } = load(opts, io);
-    const path = join(root, EVENTS_FILE);
-    const events = existsSync(path)
-      ? readFileSync(path, "utf8")
-          .trim()
-          .split("\n")
-          .flatMap((l) => {
-            try {
-              return [JSON.parse(l)];
-            } catch {
-              return [];
-            }
-          })
-      : [];
-    io.stdout(
-      `${kbReport(entries, config, { days: opts.days ? Number(opts.days) : 7, now: io.now?.() ?? new Date(), events })}\n`,
-    );
+    const days = opts.days ? Number(opts.days) : 7;
+    const now = io.now?.() ?? new Date();
+    const events = readEvents(root, {
+      since: new Date(now.getTime() - days * 86_400_000).toISOString(),
+    });
+    io.stdout(`${kbReport(entries, config, { days, now, events })}\n`);
     return 0;
   });
 }

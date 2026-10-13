@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { countTokens, type Frontmatter, formatEntry } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
+import { readEvents } from "../src/events.ts";
 
 const examples = new URL("../../../examples/", import.meta.url).pathname;
 
@@ -112,7 +113,7 @@ describe("homeostat hook session-start", () => {
     expect(countTokens(contextOf(stdout))).toBeLessThanOrEqual(150);
   });
 
-  test("logs what was injected to .homeostat/events.jsonl in the KB", async () => {
+  test("logs what was injected to the KB's event store", async () => {
     const kbDir = kb();
     const cwd = codeRepo(["apps/web/src/App.tsx"]);
     await hook(
@@ -120,8 +121,8 @@ describe("homeostat hook session-start", () => {
       { session_id: "s9", cwd, source: "startup" },
       { HOMEOSTAT_DIR: kbDir },
     );
-    const [event] = readFileSync(join(kbDir, ".homeostat/events.jsonl"), "utf8").trim().split("\n");
-    expect(JSON.parse(event ?? "")).toMatchObject({
+    const [event] = readEvents(kbDir);
+    expect(event).toMatchObject({
       ts: "2026-10-13T12:00:00.000Z",
       type: "injection",
       session: "s9",

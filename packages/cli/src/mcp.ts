@@ -1,11 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { type LearnInput, type McpDeps, serveStdio } from "@homeostat/mcp";
 import type { Io } from "./cli.ts";
+import { logEvent, readEvents } from "./events.ts";
 import { readKbFiles } from "./files.ts";
 import { runFlag } from "./flag.ts";
 import { git } from "./git.ts";
-import { EVENTS_FILE, findKb, logEvent } from "./hook.ts";
+import { findKb } from "./hook.ts";
 import { memberIdFrom } from "./init.ts";
 import { runLearn } from "./learn.ts";
 
@@ -21,22 +20,6 @@ async function captured(run: (io: Io) => number | Promise<number>, base: Io): Pr
   });
   if (code !== 0) throw new Error((err || out).trim() || `exit ${code}`);
   return out.trim();
-}
-
-function readEvents(kbRoot: string): Record<string, unknown>[] {
-  const path = join(kbRoot, EVENTS_FILE);
-  if (!existsSync(path)) return [];
-  return readFileSync(path, "utf8")
-    .trim()
-    .split("\n")
-    .slice(-5000)
-    .flatMap((line) => {
-      try {
-        return [JSON.parse(line)];
-      } catch {
-        return [];
-      }
-    });
 }
 
 /**
@@ -86,7 +69,10 @@ export function mcpDeps(io: Io, cwd = process.cwd()): McpDeps {
     log: (event) => {
       if (kbRoot) logEvent(kbRoot, event);
     },
-    events: () => (kbRoot ? readEvents(kbRoot) : []),
+    events: () =>
+      kbRoot
+        ? readEvents(kbRoot, { since: new Date(Date.now() - 366 * 86_400_000).toISOString() })
+        : [],
     now: () => io.now?.() ?? new Date(),
   };
 }

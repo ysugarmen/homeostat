@@ -10,6 +10,7 @@ import {
 } from "@homeostat/core";
 import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
+import { logEvent, logFailure } from "./events.ts";
 import { readKbFiles } from "./files.ts";
 import { plural } from "./format.ts";
 import { CliError, providerFor } from "./provider.ts";
@@ -63,6 +64,14 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
       for (const a of c.actions) io.stdout(`${c.path}: ${a.action} (${a.note})\n`);
     }
     for (const n of notes) io.stdout(`note: ${n}\n`);
+    logEvent(root, {
+      ts: now.toISOString(),
+      type: "agent-run",
+      agent: "deepDive",
+      ok: true,
+      summary: `${changes.length} changed, ${notes.length} notes`,
+      entries: changes.map((c) => c.id),
+    });
     if (changes.length === 0) {
       io.stdout("nothing to change\n");
       return 0;
@@ -99,6 +108,7 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
       e instanceof DeepDiveError ||
       e instanceof ClaudeUnavailableError
     ) {
+      logFailure(opts.dir, "deepDive", e.message);
       io.stderr(`${e.message}\n`);
       return 1;
     }

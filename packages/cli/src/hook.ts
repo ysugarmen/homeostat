@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   AGENT_ENV,
@@ -10,6 +10,7 @@ import {
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
+import { logEvent } from "./events.ts";
 import { readKbFiles } from "./files.ts";
 import { git } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
@@ -17,8 +18,6 @@ import { touchedPaths } from "./touched.ts";
 
 /** Claude Code's limit on SessionStart `additionalContext`. */
 const MAX_CONTEXT_CHARS = 10_000;
-
-export const EVENTS_FILE = ".homeostat/events.jsonl";
 
 export interface HookInput {
   session_id?: string;
@@ -38,12 +37,6 @@ export function findKb(env: Io["env"], cwd: string): string | undefined {
   const configured = setting || env?.HOMEOSTAT_DIR;
   if (configured) return resolve(configured);
   return existsSync(join(cwd, CONFIG_FILE)) ? cwd : undefined;
-}
-
-/** Appends one event to the KB's git-ignored log; Phase 4 turns this into the dashboard's store. */
-export function logEvent(kbRoot: string, event: Record<string, unknown>) {
-  mkdirSync(join(kbRoot, ".homeostat"), { recursive: true });
-  appendFileSync(join(kbRoot, EVENTS_FILE), `${JSON.stringify(event)}\n`);
 }
 
 class HookSkip extends Error {}
