@@ -1,6 +1,15 @@
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
+import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { runValidate } from "./validate.ts";
+
+/** Commands from the execution plan that exist in the CLI but are not built yet. */
+const PLANNED: readonly [name: string, description: string, step: string][] = [
+  ["learn", "Capture an entry interactively or from a PR comment URL", "2.1"],
+  ["export", "Write accepted entries to agent rules files", "2.7"],
+  ["up", "Start the agents and dashboard", "2.5"],
+  ["status", "Show agent and knowledge-base health", "4.3"],
+];
 
 export interface Io {
   stdout: (text: string) => void;
@@ -40,6 +49,30 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .action((dir: string, opts: { check?: boolean }) => {
       exitCode = runCodeowners(dir, opts, io);
     });
+
+  program
+    .command("init")
+    .description("Scaffold kbx.yaml, knowledge/ and a validate CI file in a KB repo.")
+    .argument("[dir]", "knowledge base root", ".")
+    .option("--host <host>", `git host for the CI file: ${HOSTS.join(" or ")} (default: detect)`)
+    .option("--member <id>", "id of the first (senior) member (default: from git user.name)")
+    .option("--handle <handle>", "CODEOWNERS handle of the first member, e.g. @you")
+    .option("--force", "overwrite an existing kbx.yaml")
+    .action((dir: string, opts: InitOptions) => {
+      exitCode = runInit(dir, opts, io);
+    });
+
+  for (const [name, description, step] of PLANNED) {
+    program
+      .command(name)
+      .description(`${description} (not built yet)`)
+      .allowUnknownOption()
+      .allowExcessArguments()
+      .action(() => {
+        io.stderr(`kbx ${name} is not built yet (execution plan step ${step})\n`);
+        exitCode = 1;
+      });
+  }
 
   try {
     await program.parseAsync([...argv]);
