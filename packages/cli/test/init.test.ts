@@ -75,6 +75,7 @@ describe("homeostat init", () => {
       expect(code).toBe(0);
       const workflow = read(dir, ".github/workflows/homeostat.yml");
       expect(workflow).toContain("pull_request:");
+      expect(workflow).toMatch(/actions\/checkout@[0-9a-f]{40} # v/);
       expect(workflow).toContain("npx --yes homeostat@0 validate");
       expect(stdout).toContain("Git host: GitHub (from the origin remote)");
       expect(stdout).toContain("HOMEOSTAT_GITHUB_TOKEN");
