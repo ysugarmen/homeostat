@@ -1,8 +1,8 @@
 import { parseDocument } from "yaml";
-import type { z } from "zod";
 import { type BodySections, parseBody } from "./body.ts";
 import { error, type Issue } from "./issues.ts";
 import { type Frontmatter, frontmatterSchema } from "./schema.ts";
+import { fromZod } from "./zod-issues.ts";
 
 export interface Entry {
   frontmatter: Frontmatter;
@@ -12,23 +12,6 @@ export interface Entry {
 }
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/;
-
-const RENAMED_FIELDS: Record<string, string> = { vertical: "area" };
-
-function schemaIssues(error_: z.ZodError): Issue[] {
-  return error_.issues.flatMap((i): Issue[] => {
-    if (i.code === "unrecognized_keys") {
-      return i.keys.map((key) => {
-        const path = [...i.path, key].join(".");
-        const hint = RENAMED_FIELDS[key] ? `; did you mean "${RENAMED_FIELDS[key]}"?` : "";
-        return error("schema", `${path}: unknown field${hint}`, { path });
-      });
-    }
-    const path = i.path.join(".");
-    const missing = i.code === "invalid_type" && /received undefined/.test(i.message);
-    return [error("schema", `${path}: ${missing ? "is required" : i.message}`, { path })];
-  });
-}
 
 /** Rules that span several frontmatter fields but need no config. */
 function crossFieldIssues(fm: Frontmatter): Issue[] {
@@ -99,7 +82,12 @@ export function parseEntry(text: string): { entry?: Entry; issues: Issue[] } {
   const { sections, issues } = parseBody(body);
   const parsed = frontmatterSchema.safeParse(doc.toJS());
   if (!parsed.success) {
-    return { issues: [...schemaIssues(parsed.error), ...issues] };
+    return {
+      issues: [
+        ...fromZod(parsed.error, { code: "schema", renamed: { vertical: "area" } }),
+        ...issues,
+      ],
+    };
   }
 
   issues.unshift(...crossFieldIssues(parsed.data));

@@ -1,5 +1,14 @@
 export { type BodySections, parseBody, RULE_MAX_WORDS, WHY_MAX_WORDS } from "./body.ts";
 export { type CheckContext, CORE_AREA, checkEntry } from "./check.ts";
+export {
+  CONFIG_FILE,
+  type Config,
+  configSchema,
+  DEFAULT_WEIGHTS,
+  EXPORT_TARGETS,
+  parseConfig,
+  type Weights,
+} from "./config.ts";
 export { type Entry, parseEntry } from "./entry.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export {

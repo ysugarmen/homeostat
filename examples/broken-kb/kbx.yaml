@@ -1,0 +1,42 @@
+# kbx knowledge base config. Reference: docs/execution-plan.md, step 1.3.
+version: 1
+
+team:
+  members:
+    - id: dana
+      role: senior
+      areas: [integrations, core]
+    - id: lee
+      role: member
+      areas: [frontend]
+    - id: sam
+      role: senior
+      areas: [frontend, core]
+
+# Area name -> paths it covers. `core` is implicit and applies everywhere.
+areas:
+  integrations: ["services/integrations/**", "packages/http-client/**"]
+  frontend: ["apps/web/**", "packages/ui/**"]
+
+scoring:
+  autoMergeThreshold: 3
+  reviewCadence: weekly
+  # Any weight can be overridden; unset ones keep their defaults.
+  weights:
+    prFeedbackChangedCode: 3
+    manual: 2
+    seniorAuthor: 1
+    conflict: -2
+
+agents:
+  curator: { enabled: true, schedule: "0 6 * * *" }
+  deepDive: { enabled: true, schedule: "0 7 * * 1" }
+
+distribution:
+  exports: [claude, cursor, agents-md, copilot]
+  tokenBudget: 2000
+
+notifications:
+  # Name of the CI secret holding the webhook URL. Never put the URL here.
+  slackWebhookEnv: KBX_SLACK_WEBHOOK
+  digestDay: monday

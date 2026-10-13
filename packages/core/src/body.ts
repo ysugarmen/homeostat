@@ -55,7 +55,7 @@ export function parseBody(body: string): { sections: BodySections; issues: Issue
   }
 
   if (preamble.join("").trim()) {
-    issues.push(
+    issues.unshift(
       error("body.preamble", "text before the first section; start the body with ## Rule"),
     );
   }
