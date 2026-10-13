@@ -200,9 +200,9 @@
         "method": "POST",
         "url": "https://api.github.com/repos/acme/team-kb/pulls",
         "body": {
-          "title": "kbx: 2 knowledge candidates",
+          "title": "homeostat: 2 knowledge candidates",
           "body": "Drafted by the curator.",
-          "head": "kbx/curator-2026-10-13",
+          "head": "homeostat/curator-2026-10-13",
           "base": "main"
         }
       },
@@ -239,7 +239,7 @@
         "body": [
           {
             "number": 6,
-            "title": "kbx: candidates from lee",
+            "title": "homeostat: candidates from lee",
             "state": "open",
             "html_url": "https://github.com/acme/team-kb/pull/6",
             "user": {

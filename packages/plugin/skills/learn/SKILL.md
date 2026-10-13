@@ -1,13 +1,13 @@
 ---
 name: learn
-description: Capture a lesson from this session, or from a PR review comment, as a candidate entry in the team's kbx knowledge base. Use when the user corrects you on a team convention, says "remember this for the team", or passes a PR comment URL.
+description: Capture a lesson from this session, or from a PR review comment, as a candidate entry in the team's homeostat knowledge base. Use when the user corrects you on a team convention, says "remember this for the team", or passes a PR comment URL.
 argument-hint: "[lesson or PR comment URL]"
-allowed-tools: Bash(kbx learn:*), Bash(npx --yes kbx@0 learn:*), Read, Glob
+allowed-tools: Bash(homeostat learn:*), Bash(npx --yes homeostat@0 learn:*), Read, Glob
 ---
 
 # Capture a lesson for the team
 
-Turn one lesson into a candidate knowledge entry with `kbx learn`. A reviewer accepts it later through a PR; you never mark it accepted.
+Turn one lesson into a candidate knowledge entry with `homeostat learn`. A reviewer accepts it later through a PR; you never mark it accepted.
 
 Input: $ARGUMENTS
 
@@ -16,13 +16,13 @@ Input: $ARGUMENTS
 Use the first that applies:
 
 1. The plugin setting `${user_config.kb_dir}`, if it is not empty.
-2. The directory in the `KBX_DIR` environment variable.
-3. The current repository, if it has a `kbx.yaml` at its root.
+2. The directory in the `HOMEOSTAT_DIR` environment variable.
+3. The current repository, if it has a `homeostat.yaml` at its root.
 4. Otherwise ask the user for the path to their local checkout of the KB repo. Do not guess.
 
-Read its `kbx.yaml` to learn the member ids under `team.members` and the area names under `areas` (`core` always exists).
+Read its `homeostat.yaml` to learn the member ids under `team.members` and the area names under `areas` (`core` always exists).
 
-Run the CLI as `kbx` if it is on the PATH, otherwise as `npx --yes kbx@0`.
+Run the CLI as `homeostat` if it is on the PATH, otherwise as `npx --yes homeostat@0`.
 
 ## 2. Draft the entry
 
@@ -43,16 +43,16 @@ Show the draft to the user and wait for approval before writing it.
 From a PR review comment URL (Bitbucket `#comment-N`, GitHub `#discussion_rN`), pass the URL first; the CLI fetches the comment, sets the source and works out the author:
 
 ```sh
-kbx learn "<url>" --dir "<kb>" --title "<title>" --rule "<rule>" --why "<why>" --area <area>
+homeostat learn "<url>" --dir "<kb>" --title "<title>" --rule "<rule>" --why "<why>" --area <area>
 ```
 
 Otherwise:
 
 ```sh
-kbx learn --dir "<kb>" --title "<title>" --rule "<rule>" --why "<why>" --area <area> --author <member-id>
+homeostat learn --dir "<kb>" --title "<title>" --rule "<rule>" --why "<why>" --area <area> --author <member-id>
 ```
 
-Add `--scope "<glob>"` (repeatable) only when the rule applies to narrower paths than the area. A URL needs `KBX_BITBUCKET_TOKEN` or `KBX_GITHUB_TOKEN`; if the CLI says the token is missing, tell the user which variable to set rather than retrying.
+Add `--scope "<glob>"` (repeatable) only when the rule applies to narrower paths than the area. A URL needs `HOMEOSTAT_BITBUCKET_TOKEN` or `HOMEOSTAT_GITHUB_TOKEN`; if the CLI says the token is missing, tell the user which variable to set rather than retrying.
 
 If the CLI reports validation errors, fix the draft (usually length) and run it again. Nothing is written until it passes.
 

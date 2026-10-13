@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Runs `kbx hook <event>` with the hook's stdin, using the first kbx that exists:
-// $KBX_CLI (path to a kbx bin script, for development), `kbx` on the PATH, then npx.
+// Runs `homeostat hook <event>` with the hook's stdin, using the first homeostat that exists:
+// $HOMEOSTAT_CLI (path to a homeostat bin script, for development), `homeostat` on the PATH, then npx.
 // A hook must never break a session, so this always exits 0.
 import { spawn } from "node:child_process";
 
@@ -24,9 +24,11 @@ function run(command, args, input) {
 
 const input = await readStdin();
 const candidates = [
-  ...(process.env.KBX_CLI ? [[process.execPath, [process.env.KBX_CLI, "hook", event]]] : []),
-  ["kbx", ["hook", event]],
-  ["npx", ["--yes", "kbx@0", "hook", event]],
+  ...(process.env.HOMEOSTAT_CLI
+    ? [[process.execPath, [process.env.HOMEOSTAT_CLI, "hook", event]]]
+    : []),
+  ["homeostat", ["hook", event]],
+  ["npx", ["--yes", "homeostat@0", "hook", event]],
 ];
 for (const [command, args] of candidates) {
   if ((await run(command, args, input)) !== "missing") break;

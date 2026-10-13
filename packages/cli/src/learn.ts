@@ -15,7 +15,7 @@ import {
   score,
   slugify,
   validate,
-} from "@kbx/core";
+} from "@homeostat/core";
 
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
@@ -66,12 +66,12 @@ async function fetchComment(ref: CommentRef, io: Io): Promise<FetchedComment> {
 function loadConfig(files: Record<string, string>): Config {
   const result = validate(files);
   if (!result.config) {
-    throw new LearnError("kbx.yaml is missing or invalid; run kbx validate to see why");
+    throw new LearnError("homeostat.yaml is missing or invalid; run homeostat validate to see why");
   }
   return result.config;
 }
 
-/** `kbx learn [url]`: writes one candidate entry, from flags, prompts or a PR comment. */
+/** `homeostat learn [url]`: writes one candidate entry, from flags, prompts or a PR comment. */
 export async function runLearn(
   url: string | undefined,
   opts: LearnOptions,
@@ -191,7 +191,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   const summary = `(candidate, score ${frontmatter.score})`;
   if (opts.branch) {
     try {
-      commitFile(root, opts.branch, path, text, `kbx: candidate ${id}`);
+      commitFile(root, opts.branch, path, text, `homeostat: candidate ${id}`);
       io.stdout(`committed ${path} to ${opts.branch} ${summary}\n`);
       if (opts.push) {
         pushBranch(root, opts.branch);

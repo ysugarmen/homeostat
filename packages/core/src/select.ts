@@ -2,9 +2,9 @@ import { minimatch } from "minimatch";
 import type { Entry } from "./entry.ts";
 import { countTokens } from "./tokens.ts";
 
-export const CONTEXT_HEADER = `# Team knowledge (kbx)
+export const CONTEXT_HEADER = `# Team knowledge (homeostat)
 
-These rules come from your team's reviewed knowledge base and apply to the files in this session. Follow them; if one looks wrong for the case at hand, say so and suggest /kbx:explain <id>.`;
+These rules come from your team's reviewed knowledge base and apply to the files in this session. Follow them; if one looks wrong for the case at hand, say so and suggest /homeostat:explain <id>.`;
 
 export interface SelectOptions {
   /** Repo-relative paths the session is likely to touch. */

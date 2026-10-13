@@ -20,7 +20,7 @@ const validConfig = () => ({
     deepDive: { enabled: false, schedule: "0 7 * * 1" },
   },
   distribution: { exports: ["claude", "agents-md"], tokenBudget: 2000 },
-  notifications: { slackWebhookEnv: "KBX_SLACK_WEBHOOK", digestDay: "monday" },
+  notifications: { slackWebhookEnv: "HOMEOSTAT_SLACK_WEBHOOK", digestDay: "monday" },
 });
 
 const parse = (patch: (c: Record<string, any>) => void = () => {}) => {

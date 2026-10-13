@@ -72,7 +72,8 @@ interface Working {
 export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
   const kb = validate(input.files);
   const config = kb.config;
-  if (!config) throw new DeepDiveError("kbx.yaml is missing or invalid; run kbx validate");
+  if (!config)
+    throw new DeepDiveError("homeostat.yaml is missing or invalid; run homeostat validate");
   const settings = config.agents.deepDive;
 
   const work = new Map<string, Working>(

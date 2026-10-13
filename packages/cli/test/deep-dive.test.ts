@@ -12,7 +12,7 @@ import {
   type NewPullRequest,
   type Provider,
   parseEntry,
-} from "@kbx/core";
+} from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -22,11 +22,11 @@ const KEEP = "knowledge/integrations/outbound-http-retry-helper.md";
 
 /** The starter KB plus a seeded near-duplicate, as a git repo with a bare origin. */
 function kbRepo() {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-dd-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-dd-"));
   cpSync(join(examples, "starter-kb"), dir, { recursive: true });
   writeFileSync(
-    join(dir, "kbx.yaml"),
-    readFileSync(join(dir, "kbx.yaml"), "utf8").replace("host: bitbucket", "host: github"),
+    join(dir, "homeostat.yaml"),
+    readFileSync(join(dir, "homeostat.yaml"), "utf8").replace("host: bitbucket", "host: github"),
   );
   const body =
     "## Rule\nEvery outbound HTTP call goes through withRetry().\n\n## Why\nHand-rolled retries skipped the request-id header.";
@@ -46,7 +46,7 @@ function kbRepo() {
   writeFileSync(join(dir, DUP), formatEntry(fm, body));
   const git = (...args: string[]) =>
     execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim();
-  const origin = mkdtempSync(join(tmpdir(), "kbx-dd-origin-"));
+  const origin = mkdtempSync(join(tmpdir(), "homeostat-dd-origin-"));
   execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin]);
   git("init", "-q", "-b", "main");
   git("config", "user.name", "ci");
@@ -71,7 +71,7 @@ async function run(args: string[], extra: Partial<Io> = {}) {
   let stdout = "";
   let stderr = "";
   const provider = new RecordingProvider();
-  const code = await runCli(["node", "kbx", "deep-dive", ...args], {
+  const code = await runCli(["node", "homeostat", "deep-dive", ...args], {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
@@ -83,7 +83,7 @@ async function run(args: string[], extra: Partial<Io> = {}) {
   return { code, stdout, stderr, provider };
 }
 
-describe("kbx deep-dive", () => {
+describe("homeostat deep-dive", () => {
   test("--no-llm merges the seeded duplicates on a branch and opens one PR", async () => {
     const { dir, git } = kbRepo();
     const { code, stdout, provider } = await run(["--dir", dir, "--no-llm"]);
@@ -91,7 +91,7 @@ describe("kbx deep-dive", () => {
     expect(stdout).toContain(`${KEEP}: merged (absorbed retry-helper-for-all-outbound-http)`);
     expect(stdout).toContain(`${DUP}: retired-duplicate (merged into outbound-http-retry-helper)`);
 
-    const branch = "kbx/deep-dive-2026-10-13";
+    const branch = "homeostat/deep-dive-2026-10-13";
     expect(parseEntry(git("show", `${branch}:${DUP}`)).entry?.frontmatter.status).toBe("retired");
     expect(parseEntry(git("show", `${branch}:${KEEP}`)).entry?.frontmatter.supersedes).toBe(
       "retry-helper-for-all-outbound-http",
@@ -99,7 +99,7 @@ describe("kbx deep-dive", () => {
     expect(git("status", "--porcelain")).toBe("");
 
     expect(provider.opened).toHaveLength(1);
-    expect(provider.opened[0]?.title).toBe("kbx: weekly deep dive (2 entries changed)");
+    expect(provider.opened[0]?.title).toBe("homeostat: weekly deep dive (2 entries changed)");
     expect(provider.opened[0]?.body).toContain(
       "| outbound-http-retry-helper | merged | absorbed retry-helper-for-all-outbound-http |",
     );

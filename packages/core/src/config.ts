@@ -5,7 +5,7 @@ import { error, type Issue } from "./issues.ts";
 import { ID_PATTERN } from "./schema.ts";
 import { fromZod } from "./zod-issues.ts";
 
-export const CONFIG_FILE = "kbx.yaml";
+export const CONFIG_FILE = "homeostat.yaml";
 
 /** Point values for each scoring signal; see `score()`. */
 export const DEFAULT_WEIGHTS = {
@@ -125,7 +125,7 @@ export const configSchema = z.strictObject({
         .default("monday"),
     })
     .prefault({}),
-  /** Where the agents read from and write to. Needed by `kbx curate`, not by validation. */
+  /** Where the agents read from and write to. Needed by `homeostat curate`, not by validation. */
   sources: z
     .strictObject({
       host: z.enum(["bitbucket", "github"]),
@@ -142,7 +142,7 @@ export type Config = z.infer<typeof configSchema>;
 
 const RENAMED_KEYS = { verticals: "areas", slackWebhook: "slackWebhookEnv" };
 
-/** Parses and checks `kbx.yaml`. Returns `config` only when there are no errors. */
+/** Parses and checks `homeostat.yaml`. Returns `config` only when there are no errors. */
 export function parseConfig(text: string): { config?: Config; issues: Issue[] } {
   const file = CONFIG_FILE;
   const doc = parseDocument(text);

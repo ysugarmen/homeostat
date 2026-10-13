@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { error, type Issue } from "./issues.ts";
 
-/** Converts zod issues to kbx issues with readable, dotted-path messages. */
+/** Converts zod issues to homeostat issues with readable, dotted-path messages. */
 export function fromZod(
   zodError: z.ZodError,
   { code, file, renamed = {} }: { code: string; file?: string; renamed?: Record<string, string> },

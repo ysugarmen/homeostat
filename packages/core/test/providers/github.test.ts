@@ -87,9 +87,9 @@ describe("GitHubProvider", () => {
     const pr = await gh.openPullRequest(
       { owner: "acme", name: "team-kb" },
       {
-        title: "kbx: 2 knowledge candidates",
+        title: "homeostat: 2 knowledge candidates",
         body: "Drafted by the curator.",
-        sourceBranch: "kbx/curator-2026-10-13",
+        sourceBranch: "homeostat/curator-2026-10-13",
         targetBranch: "main",
       },
     );
@@ -111,7 +111,7 @@ describe("GitHubProvider.listOpenPullRequests", () => {
     expect(await gh.listOpenPullRequests({ owner: "acme", name: "team-kb" })).toEqual([
       {
         id: 6,
-        title: "kbx: candidates from lee",
+        title: "homeostat: candidates from lee",
         url: "https://github.com/acme/team-kb/pull/6",
         author: { id: "lee" },
         sourceBranch: "candidates/lee",

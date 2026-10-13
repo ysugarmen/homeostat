@@ -74,9 +74,9 @@ describe("BitbucketProvider", () => {
     const pr = await bb.openPullRequest(
       { owner: "acme", name: "team-kb" },
       {
-        title: "kbx: 2 knowledge candidates",
+        title: "homeostat: 2 knowledge candidates",
         body: "Drafted by the curator.",
-        sourceBranch: "kbx/curator-2026-10-13",
+        sourceBranch: "homeostat/curator-2026-10-13",
         targetBranch: "main",
       },
     );
@@ -98,7 +98,7 @@ describe("BitbucketProvider.listOpenPullRequests", () => {
     expect(await bb.listOpenPullRequests({ owner: "acme", name: "team-kb" })).toEqual([
       {
         id: 40,
-        title: "kbx: candidates from lee",
+        title: "homeostat: candidates from lee",
         url: "https://bitbucket.org/acme/team-kb/pull-requests/40",
         author: { id: "lee", name: "Lee Park" },
         sourceBranch: "candidates/lee",

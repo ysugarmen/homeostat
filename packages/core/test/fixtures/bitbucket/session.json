@@ -313,11 +313,11 @@
         "method": "POST",
         "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests",
         "body": {
-          "title": "kbx: 2 knowledge candidates",
+          "title": "homeostat: 2 knowledge candidates",
           "description": "Drafted by the curator.",
           "source": {
             "branch": {
-              "name": "kbx/curator-2026-10-13"
+              "name": "homeostat/curator-2026-10-13"
             }
           },
           "destination": {
@@ -333,7 +333,7 @@
         "body": {
           "type": "pullrequest",
           "id": 41,
-          "title": "kbx: 2 knowledge candidates",
+          "title": "homeostat: 2 knowledge candidates",
           "state": "OPEN",
           "links": {
             "html": {
@@ -471,7 +471,7 @@
             {
               "type": "pullrequest",
               "id": 40,
-              "title": "kbx: candidates from lee",
+              "title": "homeostat: candidates from lee",
               "state": "OPEN",
               "author": {
                 "type": "user",

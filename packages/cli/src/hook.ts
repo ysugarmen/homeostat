@@ -8,7 +8,7 @@ import {
   renderContext,
   selectEntries,
   validate,
-} from "@kbx/core";
+} from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { git } from "./git.ts";
@@ -18,7 +18,7 @@ import { touchedPaths } from "./touched.ts";
 /** Claude Code's limit on SessionStart `additionalContext`. */
 const MAX_CONTEXT_CHARS = 10_000;
 
-export const EVENTS_FILE = ".kbx/events.jsonl";
+export const EVENTS_FILE = ".homeostat/events.jsonl";
 
 export interface HookInput {
   session_id?: string;
@@ -28,16 +28,16 @@ export interface HookInput {
   trigger?: string;
 }
 
-/** The KB checkout: the plugin's kb_dir option, then $KBX_DIR, then the session dir itself. */
+/** The KB checkout: the plugin's kb_dir option, then $HOMEOSTAT_DIR, then the session dir itself. */
 export function findKb(env: Io["env"], cwd: string): string | undefined {
-  const configured = env?.CLAUDE_PLUGIN_OPTION_KB_DIR || env?.KBX_DIR;
+  const configured = env?.CLAUDE_PLUGIN_OPTION_KB_DIR || env?.HOMEOSTAT_DIR;
   if (configured) return resolve(configured);
   return existsSync(join(cwd, CONFIG_FILE)) ? cwd : undefined;
 }
 
 /** Appends one event to the KB's git-ignored log; Phase 4 turns this into the dashboard's store. */
 export function logEvent(kbRoot: string, event: Record<string, unknown>) {
-  mkdirSync(join(kbRoot, ".kbx"), { recursive: true });
+  mkdirSync(join(kbRoot, ".homeostat"), { recursive: true });
   appendFileSync(join(kbRoot, EVENTS_FILE), `${JSON.stringify(event)}\n`);
 }
 
@@ -49,7 +49,7 @@ async function sessionStart(input: HookInput, io: Io) {
   if (!kbRoot) return;
 
   const { config, entries } = validate(readKbFiles(kbRoot));
-  if (!config) throw new HookSkip("knowledge base config is invalid; run kbx validate");
+  if (!config) throw new HookSkip("knowledge base config is invalid; run homeostat validate");
 
   const paths = touchedPaths(cwd);
   const selection = selectEntries(
@@ -103,7 +103,7 @@ interface HandoffState {
 }
 
 const statePath = (kbRoot: string, session: string) =>
-  join(kbRoot, ".kbx/handoff", `${session.replace(/[^\w.-]/g, "_")}.json`);
+  join(kbRoot, ".homeostat/handoff", `${session.replace(/[^\w.-]/g, "_")}.json`);
 
 function readState(kbRoot: string, session: string): HandoffState {
   try {
@@ -114,24 +114,24 @@ function readState(kbRoot: string, session: string): HandoffState {
 }
 
 function writeState(kbRoot: string, session: string, state: HandoffState) {
-  mkdirSync(join(kbRoot, ".kbx/handoff"), { recursive: true });
+  mkdirSync(join(kbRoot, ".homeostat/handoff"), { recursive: true });
   writeFileSync(statePath(kbRoot, session), JSON.stringify(state));
 }
 
-/** How the agent should invoke this same kbx: the running bin when known, else `kbx`. */
-function kbxCommand(): string {
+/** How the agent should invoke this same homeostat: the running bin when known, else `homeostat`. */
+function homeostatCommand(): string {
   const bin = process.argv[1];
-  return bin && /[\\/]kbx(\.js)?$/.test(bin) ? `node "${bin}"` : "kbx";
+  return bin && /[\\/]homeostat(\.js)?$/.test(bin) ? `node "${bin}"` : "homeostat";
 }
 
 function handoffInstructions(kbRoot: string, config: Config, member: string): string {
   const push = git(kbRoot, "remote", "get-url", "origin") ? " --push" : "";
   const areas = [CORE_AREA, ...Object.keys(config.areas)].join(", ");
-  return `kbx: before you finish, decide whether this session produced a lesson worth a handoff note for teammates' agents: a decision that was made, and what was tried and rejected. If not, reply only "No handoff note." and stop.
+  return `homeostat: before you finish, decide whether this session produced a lesson worth a handoff note for teammates' agents: a decision that was made, and what was tried and rejected. If not, reply only "No handoff note." and stop.
 
 If yes, save exactly one note, without asking the user:
 
-${kbxCommand()} learn --dir "${kbRoot}" --source agent-handoff --branch candidates/${member}${push} --author ${member} --area <area> --title "<imperative title, at most 80 characters>" --rule "<what to do next time, at most 60 words>" --why "<what was tried and rejected, and why, at most 100 words>"
+${homeostatCommand()} learn --dir "${kbRoot}" --source agent-handoff --branch candidates/${member}${push} --author ${member} --area <area> --title "<imperative title, at most 80 characters>" --rule "<what to do next time, at most 60 words>" --why "<what was tried and rejected, and why, at most 100 words>"
 
 Areas: ${areas}. Then reply with one line saying the note was saved for review.`;
 }
@@ -180,7 +180,7 @@ const HANDLERS: Record<string, (input: HookInput, io: Io) => Promise<void>> = {
 export const HOOK_EVENTS = Object.keys(HANDLERS);
 
 /**
- * `kbx hook <event>`, called by the plugin's hooks with the event JSON on stdin. A hook must
+ * `homeostat hook <event>`, called by the plugin's hooks with the event JSON on stdin. A hook must
  * never break a session, so every failure is reported on stderr and the exit code is still 0.
  */
 export async function runHook(event: string, io: Io): Promise<number> {
@@ -198,7 +198,7 @@ export async function runHook(event: string, io: Io): Promise<number> {
     }
     await handler(input, io);
   } catch (e) {
-    io.stderr(`kbx: ${e instanceof Error ? e.message : String(e)}\n`);
+    io.stderr(`homeostat: ${e instanceof Error ? e.message : String(e)}\n`);
   }
   return 0;
 }

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { countTokens, type Frontmatter, formatEntry } from "@kbx/core";
+import { countTokens, type Frontmatter, formatEntry } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -10,7 +10,7 @@ const examples = new URL("../../../examples/", import.meta.url).pathname;
 
 /** The starter KB plus seven more accepted entries: ten in total, as in the 2.3 "done when". */
 function kb() {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-kb-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-kb-"));
   cpSync(join(examples, "starter-kb"), dir, { recursive: true });
   const extra: [string, string, string[], number][] = [
     ["api-timeouts", "integrations", ["services/integrations/**"], 4],
@@ -45,7 +45,7 @@ function kb() {
 }
 
 function codeRepo(changed: string[]) {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-code-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-code-"));
   execFileSync("git", ["-C", dir, "init", "-q"]);
   for (const path of changed) {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
@@ -65,14 +65,14 @@ async function hook(event: string, input: object, env: Record<string, string>) {
     stdin: async () => JSON.stringify(input),
     now: () => new Date("2026-10-13T12:00:00Z"),
   };
-  const code = await runCli(["node", "kbx", "hook", event], io);
+  const code = await runCli(["node", "homeostat", "hook", event], io);
   return { code, stdout, stderr };
 }
 
 const contextOf = (stdout: string): string =>
   JSON.parse(stdout).hookSpecificOutput.additionalContext;
 
-describe("kbx hook session-start", () => {
+describe("homeostat hook session-start", () => {
   test("injects only the entries relevant to the touched files, best first", async () => {
     const kbDir = kb();
     const cwd = codeRepo(["services/integrations/queue/worker.ts"]);
@@ -96,7 +96,7 @@ describe("kbx hook session-start", () => {
 
   test("stays under the configured token budget", async () => {
     const kbDir = kb();
-    const config = join(kbDir, "kbx.yaml");
+    const config = join(kbDir, "homeostat.yaml");
     writeFileSync(
       config,
       readFileSync(config, "utf8").replace("tokenBudget: 2000", "tokenBudget: 150"),
@@ -112,11 +112,15 @@ describe("kbx hook session-start", () => {
     expect(countTokens(contextOf(stdout))).toBeLessThanOrEqual(150);
   });
 
-  test("logs what was injected to .kbx/events.jsonl in the KB", async () => {
+  test("logs what was injected to .homeostat/events.jsonl in the KB", async () => {
     const kbDir = kb();
     const cwd = codeRepo(["apps/web/src/App.tsx"]);
-    await hook("session-start", { session_id: "s9", cwd, source: "startup" }, { KBX_DIR: kbDir });
-    const [event] = readFileSync(join(kbDir, ".kbx/events.jsonl"), "utf8").trim().split("\n");
+    await hook(
+      "session-start",
+      { session_id: "s9", cwd, source: "startup" },
+      { HOMEOSTAT_DIR: kbDir },
+    );
+    const [event] = readFileSync(join(kbDir, ".homeostat/events.jsonl"), "utf8").trim().split("\n");
     expect(JSON.parse(event ?? "")).toMatchObject({
       ts: "2026-10-13T12:00:00.000Z",
       type: "injection",
@@ -136,29 +140,29 @@ describe("kbx hook session-start", () => {
 
   test("a broken KB never fails the session", async () => {
     const kbDir = kb();
-    writeFileSync(join(kbDir, "kbx.yaml"), "version: [");
+    writeFileSync(join(kbDir, "homeostat.yaml"), "version: [");
     const { code, stdout, stderr } = await hook(
       "session-start",
       { cwd: codeRepo([]) },
       {
-        KBX_DIR: kbDir,
+        HOMEOSTAT_DIR: kbDir,
       },
     );
     expect(code).toBe(0);
     expect(stdout).toBe("");
-    expect(stderr).toContain("kbx: knowledge base config is invalid");
+    expect(stderr).toContain("homeostat: knowledge base config is invalid");
   });
 
   test("malformed hook input never fails the session", async () => {
     let stderr = "";
-    const code = await runCli(["node", "kbx", "hook", "session-start"], {
+    const code = await runCli(["node", "homeostat", "hook", "session-start"], {
       stdout: () => {},
       stderr: (s) => (stderr += s),
       color: false,
       stdin: async () => "not json",
     });
     expect(code).toBe(0);
-    expect(stderr).toContain("kbx:");
+    expect(stderr).toContain("homeostat:");
   });
 });
 
@@ -169,8 +173,8 @@ test("inside an agent's own claude -p call the hooks do nothing", async () => {
     "session-start",
     { session_id: "a", cwd },
     {
-      KBX_DIR: kbDir,
-      KBX_AGENT: "1",
+      HOMEOSTAT_DIR: kbDir,
+      HOMEOSTAT_AGENT: "1",
     },
   );
   expect(code).toBe(0);

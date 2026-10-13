@@ -1,6 +1,6 @@
 ---
 name: explain
-description: Explain which kbx knowledge base rules apply to a file and why each exists, with its source PR, score and owner. Use when the user asks why a team rule exists or what rules cover a file.
+description: Explain which homeostat knowledge base rules apply to a file and why each exists, with its source PR, score and owner. Use when the user asks why a team rule exists or what rules cover a file.
 argument-hint: "<file path or entry id>"
 allowed-tools: Read, Glob, Grep
 ---
@@ -11,7 +11,7 @@ Input: $ARGUMENTS
 
 ## 1. Find the knowledge base
 
-Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is not empty; the `KBX_DIR` environment variable; the current repository if it has a `kbx.yaml`; otherwise ask the user for the path to their KB checkout.
+Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is not empty; the `HOMEOSTAT_DIR` environment variable; the current repository if it has a `homeostat.yaml`; otherwise ask the user for the path to their KB checkout.
 
 Entries live at `knowledge/<area>/<id>.md`: YAML frontmatter, then `## Rule`, `## Why` and an optional `## Example`.
 

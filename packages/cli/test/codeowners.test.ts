@@ -9,7 +9,7 @@ const examples = new URL("../../../examples/", import.meta.url).pathname;
 async function run(...args: string[]) {
   let stdout = "";
   let stderr = "";
-  const code = await runCli(["node", "kbx", ...args], {
+  const code = await runCli(["node", "homeostat", ...args], {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
@@ -18,12 +18,12 @@ async function run(...args: string[]) {
 }
 
 function copyKb(name: string) {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-"));
   cpSync(join(examples, name), dir, { recursive: true });
   return dir;
 }
 
-describe("kbx codeowners", () => {
+describe("homeostat codeowners", () => {
   test("the committed starter-kb CODEOWNERS is up to date", async () => {
     const { code, stdout } = await run("codeowners", join(examples, "starter-kb"), "--check");
     expect(stdout).toBe("CODEOWNERS is up to date\n");
@@ -46,7 +46,7 @@ describe("kbx codeowners", () => {
     writeFileSync(join(dir, "CODEOWNERS"), "stale\n");
     const stale = await run("codeowners", dir, "--check");
     expect(stale.code).toBe(1);
-    expect(stale.stdout).toBe("CODEOWNERS is out of date; run kbx codeowners\n");
+    expect(stale.stdout).toBe("CODEOWNERS is out of date; run homeostat codeowners\n");
     expect(readFileSync(join(dir, "CODEOWNERS"), "utf8")).toBe("stale\n");
   });
 
@@ -58,9 +58,9 @@ describe("kbx codeowners", () => {
     expect(existsSync(join(dir, "CODEOWNERS"))).toBe(false);
   });
 
-  test("a member without a handle is reported against kbx.yaml", async () => {
+  test("a member without a handle is reported against homeostat.yaml", async () => {
     const dir = copyKb("starter-kb");
-    const config = join(dir, "kbx.yaml");
+    const config = join(dir, "homeostat.yaml");
     writeFileSync(config, readFileSync(config, "utf8").replace(/\n\s+handle: "@lee"/, ""));
     const { code, stdout } = await run("codeowners", dir);
     expect(code).toBe(1);

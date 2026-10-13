@@ -20,7 +20,8 @@ function kbFiles({ withExisting = false } = {}) {
   for (const f of readdirSync(starter, { recursive: true, encoding: "utf8" })) {
     if (f.endsWith(".md") || f.endsWith(".yaml")) files[f] = readFileSync(join(starter, f), "utf8");
   }
-  files["kbx.yaml"] = `${(files["kbx.yaml"] ?? "").replace(/\n# Where the curator[\s\S]*$/, "")}
+  files["homeostat.yaml"] =
+    `${(files["homeostat.yaml"] ?? "").replace(/\n# Where the curator[\s\S]*$/, "")}
 sources:
   host: bitbucket
   kbRepo: acme/team-kb
@@ -247,7 +248,7 @@ describe("curate", () => {
     expect(result.skipped).toEqual([
       {
         url: "https://bitbucket.org/acme/integrations-api/pull-requests/815/_/diff#comment-51",
-        reason: "reviewer rae has no member handle in kbx.yaml",
+        reason: "reviewer rae has no member handle in homeostat.yaml",
       },
       {
         url: "https://bitbucket.org/acme/integrations-api/pull-requests/812/_/overview#comment-36",
@@ -294,7 +295,7 @@ describe("curate", () => {
 
   test("a KB without sources is refused clearly", async () => {
     const files = kbFiles();
-    files["kbx.yaml"] = (files["kbx.yaml"] ?? "").replace(/\nsources:[\s\S]*$/, "\n");
+    files["homeostat.yaml"] = (files["homeostat.yaml"] ?? "").replace(/\nsources:[\s\S]*$/, "\n");
     await expect(run(new FakeDrafter(), files)).rejects.toThrow("no sources section");
   });
 });

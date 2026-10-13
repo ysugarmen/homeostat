@@ -8,7 +8,7 @@ import {
   type Provider,
   type RepoRef,
   validate,
-} from "@kbx/core";
+} from "@homeostat/core";
 import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
@@ -35,7 +35,7 @@ function prBody(result: CurateResult, since: Date, threshold: number): string {
   });
   const skipped = result.skipped.map((s) => `- ${s.url}: ${s.reason}`);
   return [
-    `Drafted by the kbx curator from review feedback merged since ${since.toISOString().slice(0, 10)}.`,
+    `Drafted by the homeostat curator from review feedback merged since ${since.toISOString().slice(0, 10)}.`,
     "",
     "| Entry | Area | Status | Score | Source |",
     "| --- | --- | --- | --- | --- |",
@@ -89,7 +89,7 @@ async function openCandidatePrs(
     }
     const member = branch.slice("candidates/".length);
     const pr = await provider.openPullRequest(kbRepo, {
-      title: `kbx: candidates from ${member}`,
+      title: `homeostat: candidates from ${member}`,
       body: `Handoff notes and lessons captured in ${member}'s sessions (${plural(ahead, "commit")}). Review each entry: accept by setting \`status: accepted\` and \`approvedBy\`, or retire it.`,
       sourceBranch: branch,
       targetBranch: base,
@@ -98,7 +98,7 @@ async function openCandidatePrs(
   }
 }
 
-/** `kbx curate`: the daily curator run, meant for the KB repo's scheduled CI job. */
+/** `homeostat curate`: the daily curator run, meant for the KB repo's scheduled CI job. */
 export async function runCurate(opts: CurateOptions, io: Io): Promise<number> {
   try {
     return await curateRun(opts, io);
@@ -115,9 +115,9 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   const root = resolve(opts.dir);
   const files = readKbFiles(root);
   const config = validate(files).config;
-  if (!config) throw new CliError("kbx.yaml is missing or invalid; run kbx validate");
+  if (!config) throw new CliError("homeostat.yaml is missing or invalid; run homeostat validate");
   const sources = config.sources;
-  if (!sources) throw new CliError("kbx.yaml has no sources section; the curator needs one");
+  if (!sources) throw new CliError("homeostat.yaml has no sources section; the curator needs one");
 
   const now = io.now?.() ?? new Date();
   const since = opts.since
@@ -151,16 +151,16 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   } else {
     await publish({
       root,
-      branch: `kbx/curator-${today}`,
+      branch: `homeostat/curator-${today}`,
       changes: result.entries.map((e) => ({
         path: e.path,
         text: e.text,
-        message: `kbx: ${e.frontmatter.status} ${e.frontmatter.id}`,
+        message: `homeostat: ${e.frontmatter.status} ${e.frontmatter.id}`,
       })),
       provider,
       kbRepo,
       base: sources.baseBranch,
-      title: `kbx: ${plural(result.entries.length, "knowledge entry", "knowledge entries")} from review feedback`,
+      title: `homeostat: ${plural(result.entries.length, "knowledge entry", "knowledge entries")} from review feedback`,
       body: prBody(result, since, config.scoring.autoMergeThreshold),
       io,
     });

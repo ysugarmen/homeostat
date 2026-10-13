@@ -1,3 +1,3 @@
 # Starter knowledge base
 
-Example KB used by tests and `kbx init`. Filled in by step 1.3.
+Example KB used by tests and `homeostat init`. Filled in by step 1.3.

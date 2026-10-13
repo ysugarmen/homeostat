@@ -1,5 +1,5 @@
 import { styleText } from "node:util";
-import type { Issue } from "@kbx/core";
+import type { Issue } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

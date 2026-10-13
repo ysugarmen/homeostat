@@ -1,8 +1,8 @@
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseEntry, validate } from "@kbx/core";
-import { replayFetch } from "@kbx/core/testing";
+import { parseEntry, validate } from "@homeostat/core";
+import { replayFetch } from "@homeostat/core/testing";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 import { readKbFiles } from "../src/files.ts";
@@ -11,7 +11,7 @@ const examples = new URL("../../../examples/", import.meta.url).pathname;
 const NOW = new Date("2026-10-13T12:00:00Z");
 
 function kb() {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-learn-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-learn-"));
   cpSync(join(examples, "starter-kb"), dir, { recursive: true });
   return dir;
 }
@@ -19,7 +19,7 @@ function kb() {
 async function run(args: string[], deps: Partial<Io> = {}) {
   let stdout = "";
   let stderr = "";
-  const code = await runCli(["node", "kbx", ...args], {
+  const code = await runCli(["node", "homeostat", ...args], {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
@@ -47,7 +47,7 @@ const basic = [
   "lee",
 ];
 
-describe("kbx learn with flags", () => {
+describe("homeostat learn with flags", () => {
   test("writes a candidate entry that keeps the KB valid", async () => {
     const dir = kb();
     const { code, stdout } = await run(["learn", "--dir", dir, ...basic]);
@@ -162,7 +162,7 @@ describe("kbx learn with flags", () => {
   });
 });
 
-describe("kbx learn interactively", () => {
+describe("homeostat learn interactively", () => {
   test("asks for what the flags did not give", async () => {
     const dir = kb();
     const answers = [
@@ -185,7 +185,7 @@ describe("kbx learn interactively", () => {
   });
 });
 
-describe("kbx learn <PR comment URL>", () => {
+describe("homeostat learn <PR comment URL>", () => {
   const ruleArgs = [
     "--rule",
     "Use withRetry() for partner calls.",
@@ -209,7 +209,7 @@ describe("kbx learn <PR comment URL>", () => {
         "--area",
         "integrations",
       ],
-      { fetch, env: { KBX_BITBUCKET_TOKEN: "t" } },
+      { fetch, env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" } },
     );
     expect(code).toBe(0);
     expect(stdout).toContain("> Please use `withRetry()`");
@@ -229,7 +229,7 @@ describe("kbx learn <PR comment URL>", () => {
     const url = "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-36";
     await run(["learn", url, "--dir", dir, "--id", "lgtm", "--title", "t", ...ruleArgs], {
       fetch,
-      env: { KBX_BITBUCKET_TOKEN: "t" },
+      env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" },
     });
     expect(entryAt(dir, "knowledge/core/lgtm.md").frontmatter.source.changedCode).toBe(false);
   });
@@ -264,7 +264,7 @@ describe("kbx learn <PR comment URL>", () => {
 
   test("a comment author who is not a member asks for --author", async () => {
     const dir = kb();
-    const config = join(dir, "kbx.yaml");
+    const config = join(dir, "homeostat.yaml");
     writeFileSync(
       config,
       readFileSync(config, "utf8").replace('handle: "@dana"', 'handle: "@dana-r"'),
@@ -273,7 +273,7 @@ describe("kbx learn <PR comment URL>", () => {
     const url = "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33";
     const { code, stderr } = await run(["learn", url, "--dir", dir, "--title", "t", ...ruleArgs], {
       fetch,
-      env: { KBX_BITBUCKET_TOKEN: "t" },
+      env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" },
     });
     expect(code).toBe(1);
     expect(stderr).toContain('no member has handle "@dana"; pass --author');
@@ -283,7 +283,7 @@ describe("kbx learn <PR comment URL>", () => {
     const url = "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33";
     const { code, stderr } = await run(["learn", url, "--dir", kb(), ...ruleArgs]);
     expect(code).toBe(1);
-    expect(stderr).toContain("set KBX_BITBUCKET_TOKEN");
+    expect(stderr).toContain("set HOMEOSTAT_BITBUCKET_TOKEN");
   });
 
   test.each([

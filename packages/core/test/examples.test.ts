@@ -9,7 +9,7 @@ const examples = new URL("../../../examples/", import.meta.url).pathname;
 
 function loadKb(name: string) {
   const root = join(examples, name);
-  const { config, issues } = parseConfig(readFileSync(join(root, "kbx.yaml"), "utf8"));
+  const { config, issues } = parseConfig(readFileSync(join(root, "homeostat.yaml"), "utf8"));
   if (!config) throw new Error(JSON.stringify(issues));
   const files = readdirSync(join(root, "knowledge"), { recursive: true, encoding: "utf8" })
     .filter((f) => f.endsWith(".md"))

@@ -9,7 +9,7 @@ const examples = new URL("../../../examples/", import.meta.url).pathname;
 async function run(...args: string[]) {
   let stdout = "";
   let stderr = "";
-  const code = await runCli(["node", "kbx", ...args], {
+  const code = await runCli(["node", "homeostat", ...args], {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
@@ -18,12 +18,12 @@ async function run(...args: string[]) {
 }
 
 function copyKb(name: string) {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-"));
   cpSync(join(examples, name), dir, { recursive: true });
   return dir;
 }
 
-describe("kbx validate", () => {
+describe("homeostat validate", () => {
   test("exits 0 on a valid KB", async () => {
     const { code, stdout } = await run("validate", join(examples, "starter-kb"));
     expect(code).toBe(0);
@@ -57,11 +57,11 @@ describe("kbx validate", () => {
     }
   });
 
-  test("a directory with no kbx.yaml says so", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "kbx-"));
+  test("a directory with no homeostat.yaml says so", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "homeostat-"));
     const { code, stdout } = await run("validate", dir);
     expect(code).toBe(1);
-    expect(stdout).toContain("no kbx.yaml at the KB root");
+    expect(stdout).toContain("no homeostat.yaml at the KB root");
   });
 
   test("warnings do not fail, and point at --fix", async () => {
@@ -71,7 +71,7 @@ describe("kbx validate", () => {
     const { code, stdout } = await run("validate", dir);
     expect(code).toBe(0);
     expect(stdout).toContain("warning  score is 9, computed 4");
-    expect(stdout).toContain("1 fixable; run kbx validate --fix");
+    expect(stdout).toContain("1 fixable; run homeostat validate --fix");
   });
 
   test("--fix rewrites stale score and tokens, then re-validates", async () => {

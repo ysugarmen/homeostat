@@ -8,9 +8,9 @@ import { type Io, runCli } from "../src/cli.ts";
 const examples = new URL("../../../examples/", import.meta.url).pathname;
 
 function kb(minEdits = 2) {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-hkb-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-hkb-"));
   cpSync(join(examples, "starter-kb"), dir, { recursive: true });
-  const config = join(dir, "kbx.yaml");
+  const config = join(dir, "homeostat.yaml");
   writeFileSync(
     config,
     readFileSync(config, "utf8").replace(
@@ -23,7 +23,7 @@ function kb(minEdits = 2) {
 
 /** A code repo whose git user is the member "lee". */
 function codeRepo(name = "Lee") {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-hcode-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-hcode-"));
   execFileSync("git", ["-C", dir, "init", "-q"]);
   execFileSync("git", ["-C", dir, "config", "user.name", name]);
   return dir;
@@ -31,7 +31,7 @@ function codeRepo(name = "Lee") {
 
 /** A transcript with `edits` file-changing tool uses and some reads. */
 function transcript(edits: number) {
-  const path = join(mkdtempSync(join(tmpdir(), "kbx-tr-")), "t.jsonl");
+  const path = join(mkdtempSync(join(tmpdir(), "homeostat-tr-")), "t.jsonl");
   const line = (name: string) =>
     JSON.stringify({
       type: "assistant",
@@ -63,15 +63,15 @@ async function hook(event: string, input: object, kbDir: string) {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
-    env: { KBX_DIR: kbDir },
+    env: { HOMEOSTAT_DIR: kbDir },
     stdin: async () => JSON.stringify(input),
     now: () => new Date("2026-10-13T12:00:00Z"),
   };
-  const code = await runCli(["node", "kbx", "hook", event], io);
+  const code = await runCli(["node", "homeostat", "hook", event], io);
   return { code, stdout, stderr };
 }
 
-describe("kbx hook stop", () => {
+describe("homeostat hook stop", () => {
   test("after enough edits it asks once for a handoff note, with the exact command", async () => {
     const kbDir = kb();
     const input = { session_id: "s1", cwd: codeRepo(), transcript_path: transcript(2) };
@@ -135,9 +135,9 @@ describe("kbx hook stop", () => {
     expect(stdout).toBe("");
   });
 
-  test("disabled in kbx.yaml means never asked", async () => {
+  test("disabled in homeostat.yaml means never asked", async () => {
     const kbDir = kb();
-    const config = join(kbDir, "kbx.yaml");
+    const config = join(kbDir, "homeostat.yaml");
     writeFileSync(
       config,
       readFileSync(config, "utf8").replace("enabled: true, minEdits", "enabled: false, minEdits"),
@@ -160,7 +160,7 @@ describe("kbx hook stop", () => {
       { session_id: "s7", cwd: codeRepo(), transcript_path: transcript(2) },
       kbDir,
     );
-    const events = readFileSync(join(kbDir, ".kbx/events.jsonl"), "utf8").trim().split("\n");
+    const events = readFileSync(join(kbDir, ".homeostat/events.jsonl"), "utf8").trim().split("\n");
     expect(JSON.parse(events.at(-1) ?? "")).toMatchObject({
       type: "handoff-requested",
       session: "s7",

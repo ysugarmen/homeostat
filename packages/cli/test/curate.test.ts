@@ -12,7 +12,7 @@ import {
   parseEntry,
   type RepoRef,
   type ReviewThread,
-} from "@kbx/core";
+} from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -21,11 +21,11 @@ const NOW = new Date("2026-10-13T06:00:00Z");
 
 /** The starter KB with sources, as a git repo on main with a bare origin. */
 function kbRepo() {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-cur-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-cur-"));
   cpSync(join(examples, "starter-kb"), dir, { recursive: true });
   writeFileSync(
-    join(dir, "kbx.yaml"),
-    `${readFileSync(join(dir, "kbx.yaml"), "utf8").replace(/\n# Where the curator[\s\S]*$/, "")}
+    join(dir, "homeostat.yaml"),
+    `${readFileSync(join(dir, "homeostat.yaml"), "utf8").replace(/\n# Where the curator[\s\S]*$/, "")}
 sources:
   host: github
   kbRepo: acme/team-kb
@@ -34,7 +34,7 @@ sources:
   );
   const git = (...args: string[]) =>
     execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim();
-  const origin = mkdtempSync(join(tmpdir(), "kbx-origin-"));
+  const origin = mkdtempSync(join(tmpdir(), "homeostat-origin-"));
   execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin]);
   git("init", "-q", "-b", "main");
   git("config", "user.name", "ci");
@@ -112,13 +112,13 @@ async function run(args: string[], provider: Provider, env: Record<string, strin
     provider,
     drafter: new FakeDrafter(),
   };
-  const code = await runCli(["node", "kbx", "curate", ...args], io);
+  const code = await runCli(["node", "homeostat", "curate", ...args], io);
   return { code, stdout, stderr };
 }
 
 const PATH = "knowledge/frontend/use-colour-tokens-instead-of-hex-values.md";
 
-describe("kbx curate", () => {
+describe("homeostat curate", () => {
   test("commits drafted entries to a dated branch, pushes it and opens one PR", async () => {
     const { dir, git, origin } = kbRepo();
     const provider = new FakeProvider();
@@ -128,20 +128,20 @@ describe("kbx curate", () => {
     expect(stdout).toContain(`+ ${PATH} (accepted, score 4)`);
 
     expect(git("status", "--porcelain")).toBe("");
-    const entry = git("show", `kbx/curator-2026-10-13:${PATH}`);
+    const entry = git("show", `homeostat/curator-2026-10-13:${PATH}`);
     expect(parseEntry(entry).entry?.frontmatter.source.author).toBe("sam");
     expect(
-      execFileSync("git", ["-C", origin, "branch", "--list", "kbx/curator-2026-10-13"], {
+      execFileSync("git", ["-C", origin, "branch", "--list", "homeostat/curator-2026-10-13"], {
         encoding: "utf8",
       }),
-    ).toContain("kbx/curator-2026-10-13");
+    ).toContain("homeostat/curator-2026-10-13");
 
     expect(provider.opened).toHaveLength(1);
     const [opened] = provider.opened;
     expect(opened?.repo).toBe("acme/team-kb");
     expect(opened?.pr).toMatchObject({
-      title: "kbx: 1 knowledge entry from review feedback",
-      sourceBranch: "kbx/curator-2026-10-13",
+      title: "homeostat: 1 knowledge entry from review feedback",
+      sourceBranch: "homeostat/curator-2026-10-13",
       targetBranch: "main",
     });
     expect(opened?.pr.body).toContain(
@@ -158,16 +158,16 @@ describe("kbx curate", () => {
     expect(code).toBe(0);
     expect(stdout).toContain(`+ ${PATH}`);
     expect(stdout).toContain("dry run: nothing committed");
-    expect(git("branch", "--list")).not.toContain("kbx/curator");
+    expect(git("branch", "--list")).not.toContain("homeostat/curator");
     expect(provider.opened).toEqual([]);
   });
 
   test("a second run the same day uses a new branch", async () => {
     const { dir, git } = kbRepo();
-    git("branch", "kbx/curator-2026-10-13");
+    git("branch", "homeostat/curator-2026-10-13");
     await run(["--dir", dir], new FakeProvider());
-    expect(git("branch", "--list", "kbx/curator-2026-10-13-2")).toContain(
-      "kbx/curator-2026-10-13-2",
+    expect(git("branch", "--list", "homeostat/curator-2026-10-13-2")).toContain(
+      "homeostat/curator-2026-10-13-2",
     );
   });
 
@@ -185,7 +185,7 @@ describe("kbx curate", () => {
     provider.open = [
       {
         id: 40,
-        title: "kbx: candidates from lee",
+        title: "homeostat: candidates from lee",
         url: "u",
         author: { id: "lee" },
         sourceBranch: "candidates/lee",
@@ -195,7 +195,7 @@ describe("kbx curate", () => {
     const { stdout } = await run(["--dir", dir], provider);
     const candidatePrs = provider.opened.filter((o) => o.pr.sourceBranch.startsWith("candidates/"));
     expect(candidatePrs.map((o) => o.pr.sourceBranch)).toEqual(["candidates/dana"]);
-    expect(candidatePrs[0]?.pr.title).toBe("kbx: candidates from dana");
+    expect(candidatePrs[0]?.pr.title).toBe("homeostat: candidates from dana");
     expect(stdout).toContain("candidates/lee already has a PR");
   });
 
@@ -206,7 +206,7 @@ describe("kbx curate", () => {
     const { code, stdout } = await run(["--dir", dir], provider);
     expect(code).toBe(0);
     expect(stdout).toContain("no new entries");
-    expect(git("branch", "--list")).not.toContain("kbx/curator");
+    expect(git("branch", "--list")).not.toContain("homeostat/curator");
   });
 
   test("--since overrides the lookback window", async () => {
@@ -226,7 +226,7 @@ describe("kbx curate", () => {
   test("a missing token says which variable to set", async () => {
     const { dir } = kbRepo();
     let stderr = "";
-    const code = await runCli(["node", "kbx", "curate", "--dir", dir], {
+    const code = await runCli(["node", "homeostat", "curate", "--dir", dir], {
       stdout: () => {},
       stderr: (s) => (stderr += s),
       color: false,
@@ -234,6 +234,6 @@ describe("kbx curate", () => {
       drafter: new FakeDrafter(),
     });
     expect(code).toBe(1);
-    expect(stderr).toContain("set KBX_GITHUB_TOKEN or GITHUB_TOKEN");
+    expect(stderr).toContain("set HOMEOSTAT_GITHUB_TOKEN or GITHUB_TOKEN");
   });
 });

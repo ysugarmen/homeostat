@@ -1,14 +1,14 @@
 {
-  "name": "kbx",
+  "name": "homeostat",
   "version": "0.0.0",
-  "description": "Command-line interface for kbx knowledge bases.",
+  "description": "Command-line interface for homeostat knowledge bases.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "kbx": "./bin/kbx.js"
+    "homeostat": "./bin/homeostat.js"
   },
   "dependencies": {
-    "@kbx/core": "workspace:*",
+    "@homeostat/core": "workspace:*",
     "commander": "^15.0.0"
   }
 }

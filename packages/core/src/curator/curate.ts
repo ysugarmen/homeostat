@@ -50,9 +50,11 @@ export class CurateError extends Error {}
 export async function curate(input: CurateInput): Promise<CurateResult> {
   const kb = validate(input.files);
   const config = kb.config;
-  if (!config) throw new CurateError("kbx.yaml is missing or invalid; run kbx validate");
+  if (!config)
+    throw new CurateError("homeostat.yaml is missing or invalid; run homeostat validate");
   const sources = config.sources;
-  if (!sources) throw new CurateError("kbx.yaml has no sources section; the curator needs one");
+  if (!sources)
+    throw new CurateError("homeostat.yaml has no sources section; the curator needs one");
 
   const known = new Set(
     kb.entries.flatMap(({ entry }) => commentKeyOf(entry.frontmatter.source.url) ?? []),
@@ -105,7 +107,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         }
         const reviewer = config.team.members.find((m) => m.handle === `@${thread.root.author.id}`);
         if (!reviewer) {
-          skip(`reviewer ${thread.root.author.id} has no member handle in kbx.yaml`);
+          skip(`reviewer ${thread.root.author.id} has no member handle in homeostat.yaml`);
           continue;
         }
 

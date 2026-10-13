@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import type { ConflictJudge, Drafter, Merger, Provider } from "@kbx/core";
+import type { ConflictJudge, Drafter, Merger, Provider } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
@@ -63,14 +63,14 @@ export const processIo: Io = {
 /** Runs the CLI with `argv` (as in `process.argv`) and returns the exit code. */
 export async function runCli(argv: readonly string[], io: Io = processIo): Promise<number> {
   let exitCode = 0;
-  const program = new Command("kbx")
+  const program = new Command("homeostat")
     .description("Team knowledge base for coding agents.")
     .exitOverride()
     .configureOutput({ writeOut: io.stdout, writeErr: io.stderr });
 
   program
     .command("validate")
-    .description("Check kbx.yaml and every entry under knowledge/.")
+    .description("Check homeostat.yaml and every entry under knowledge/.")
     .argument("[dir]", "knowledge base root", ".")
     .option("--fix", "rewrite stale score and tokens values")
     .option("--json", "print the result as JSON")
@@ -80,7 +80,7 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
 
   program
     .command("codeowners")
-    .description("Generate CODEOWNERS from kbx.yaml and entry owners.")
+    .description("Generate CODEOWNERS from homeostat.yaml and entry owners.")
     .argument("[dir]", "knowledge base root", ".")
     .option("--check", "exit 1 if CODEOWNERS is stale, without writing it")
     .action((dir: string, opts: { check?: boolean }) => {
@@ -89,12 +89,12 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
 
   program
     .command("init")
-    .description("Scaffold kbx.yaml, knowledge/ and a validate CI file in a KB repo.")
+    .description("Scaffold homeostat.yaml, knowledge/ and a validate CI file in a KB repo.")
     .argument("[dir]", "knowledge base root", ".")
     .option("--host <host>", `git host for the CI file: ${HOSTS.join(" or ")} (default: detect)`)
     .option("--member <id>", "id of the first (senior) member (default: from git user.name)")
     .option("--handle <handle>", "CODEOWNERS handle of the first member, e.g. @you")
-    .option("--force", "overwrite an existing kbx.yaml")
+    .option("--force", "overwrite an existing homeostat.yaml")
     .action((dir: string, opts: InitOptions) => {
       exitCode = runInit(dir, opts, io);
     });
@@ -108,7 +108,7 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--title <text>", "imperative one-line title")
     .option("--rule <text>", "the rule, one paragraph of at most 60 words")
     .option("--why <text>", "why the rule exists, at most 100 words")
-    .option("--area <area>", "area from kbx.yaml (default: core)")
+    .option("--area <area>", "area from homeostat.yaml (default: core)")
     .option("--scope <glob>", "path glob the rule applies to; repeatable", collect)
     .option("--author <id>", "member who originated it (default: comment author or git user)")
     .option("--owner <id>", "member who answers for it (default: author)")
@@ -127,11 +127,11 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .description(
       "Write accepted entries into a code repo as Claude, Cursor, Copilot and AGENTS.md rules.",
     )
-    .option("--kb <dir>", "knowledge base checkout (default: $KBX_DIR, else the current dir)")
+    .option("--kb <dir>", "knowledge base checkout (default: $HOMEOSTAT_DIR, else the current dir)")
     .option("--out <dir>", "code repo to write into", ".")
     .option(
       "--target <target>",
-      "claude, cursor, agents-md or copilot; repeatable (default: kbx.yaml)",
+      "claude, cursor, agents-md or copilot; repeatable (default: homeostat.yaml)",
       collect,
     )
     .option("--check", "exit 1 if the exported files are out of date, without writing")
@@ -193,7 +193,7 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
       .allowUnknownOption()
       .allowExcessArguments()
       .action(() => {
-        io.stderr(`kbx ${name} is not built yet (execution plan step ${step})\n`);
+        io.stderr(`homeostat ${name} is not built yet (execution plan step ${step})\n`);
         exitCode = 1;
       });
   }

@@ -7,11 +7,11 @@ import { runCli } from "../src/cli.ts";
 const starter = new URL("../../../examples/starter-kb", import.meta.url).pathname;
 
 async function up(now: string, ...args: string[]) {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-up-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-up-"));
   cpSync(starter, dir, { recursive: true });
   let stdout = "";
   let stderr = "";
-  const code = await runCli(["node", "kbx", "up", "--dir", dir, ...args], {
+  const code = await runCli(["node", "homeostat", "up", "--dir", dir, ...args], {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
@@ -21,12 +21,12 @@ async function up(now: string, ...args: string[]) {
   return { code, stdout, stderr };
 }
 
-describe("kbx up", () => {
+describe("homeostat up", () => {
   test("--once runs the curator at its scheduled minute", async () => {
     const { stdout, stderr } = await up("2026-10-13T06:00:00Z", "--once");
     expect(stdout).toContain("running curator");
     // No token in the test env: proves the curator itself ran.
-    expect(stderr).toContain("set KBX_BITBUCKET_TOKEN");
+    expect(stderr).toContain("set HOMEOSTAT_BITBUCKET_TOKEN");
   });
 
   test("--once outside any schedule runs nothing", async () => {

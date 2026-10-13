@@ -45,8 +45,8 @@ export interface ClaudeCodeAskerOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-/** Set on the child so the kbx plugin's own hooks never fire inside an agent call. */
-export const AGENT_ENV = "KBX_AGENT";
+/** Set on the child so the homeostat plugin's own hooks never fire inside an agent call. */
+export const AGENT_ENV = "HOMEOSTAT_AGENT";
 
 /**
  * Flags for a bare structured call: our system prompt instead of Claude Code's, no tools, no MCP

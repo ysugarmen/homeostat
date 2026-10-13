@@ -1,7 +1,7 @@
 {
-  "name": "@kbx/core",
+  "name": "@homeostat/core",
   "version": "0.0.0",
-  "description": "Entry schema, scoring, conflict detection and validation for kbx knowledge bases.",
+  "description": "Entry schema, scoring, conflict detection and validation for homeostat knowledge bases.",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {

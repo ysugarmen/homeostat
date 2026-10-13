@@ -6,7 +6,7 @@ import { expect, test } from "vitest";
 import { touchedPaths } from "../src/touched.ts";
 
 function repo() {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-touched-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-touched-"));
   const git = (...args: string[]) => execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
   const write = (path: string, text = "x") => {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
@@ -45,5 +45,5 @@ test("renames report the new path", () => {
 });
 
 test("outside a git repo there is nothing to report", () => {
-  expect(touchedPaths(mkdtempSync(join(tmpdir(), "kbx-nogit-")))).toEqual([]);
+  expect(touchedPaths(mkdtempSync(join(tmpdir(), "homeostat-nogit-")))).toEqual([]);
 });

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, sep } from "node:path";
-import { CONFIG_FILE, type KbFiles } from "@kbx/core";
+import { CONFIG_FILE, type KbFiles } from "@homeostat/core";
 
 /** Reads the parts of a KB that `validate()` looks at: the config and everything under knowledge/. */
 export function readKbFiles(root: string): KbFiles {

@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { type AgentName, dueAgents, validate } from "@kbx/core";
+import { type AgentName, dueAgents, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { runCurate } from "./curate.ts";
 import { runDeepDive } from "./deep-dive.ts";
@@ -23,12 +23,12 @@ const RUNNERS: Record<AgentName, (dir: string, io: Io) => Promise<number>> = {
 async function tick(root: string, io: Io, now: Date, all: boolean): Promise<number> {
   if (git(root, "remote", "get-url", "origin") !== undefined) {
     if (git(root, "pull", "--ff-only", "--quiet") === undefined) {
-      io.stderr("kbx up: git pull failed; running on the current checkout\n");
+      io.stderr("homeostat up: git pull failed; running on the current checkout\n");
     }
   }
   const config = validate(readKbFiles(root)).config;
   if (!config) {
-    io.stderr("kbx up: kbx.yaml is missing or invalid; nothing run\n");
+    io.stderr("homeostat up: homeostat.yaml is missing or invalid; nothing run\n");
     return 1;
   }
   const due = all
@@ -43,7 +43,7 @@ async function tick(root: string, io: Io, now: Date, all: boolean): Promise<numb
 }
 
 /**
- * `kbx up`: the central scheduler for a shared box, the alternative to the CI schedule. Checks the
+ * `homeostat up`: the central scheduler for a shared box, the alternative to the CI schedule. Checks the
  * agents' cron schedules (UTC) every minute. The dashboard joins it in Phase 4.
  */
 export async function runUp(opts: UpOptions, io: Io): Promise<number> {
@@ -55,7 +55,7 @@ export async function runUp(opts: UpOptions, io: Io): Promise<number> {
     return code;
   }
 
-  io.stdout(`kbx up: scheduling agents for ${root} (UTC); Ctrl-C to stop\n`);
+  io.stdout(`homeostat up: scheduling agents for ${root} (UTC); Ctrl-C to stop\n`);
   let last = "";
   let running = false;
   await new Promise<void>((done) => {
@@ -67,7 +67,7 @@ export async function runUp(opts: UpOptions, io: Io): Promise<number> {
       try {
         await tick(root, io, now(), false);
       } catch (e) {
-        io.stderr(`kbx up: ${(e as Error).message}\n`);
+        io.stderr(`homeostat up: ${(e as Error).message}\n`);
       } finally {
         running = false;
       }

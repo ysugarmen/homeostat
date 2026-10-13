@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseEntry } from "@kbx/core";
+import { parseEntry } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { runCli } from "../src/cli.ts";
 
@@ -10,7 +10,7 @@ const examples = new URL("../../../examples/", import.meta.url).pathname;
 
 /** The starter KB as a git repo with one commit on main. */
 function kbRepo() {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-branch-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-branch-"));
   cpSync(join(examples, "starter-kb"), dir, { recursive: true });
   const git = (...args: string[]) =>
     execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim();
@@ -23,7 +23,7 @@ function kbRepo() {
 async function run(...args: string[]) {
   let stdout = "";
   let stderr = "";
-  const code = await runCli(["node", "kbx", ...args], {
+  const code = await runCli(["node", "homeostat", ...args], {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
@@ -47,7 +47,7 @@ const note = [
 ];
 const PATH = "knowledge/core/queue-consumers-ack-only-after-the-write-commits.md";
 
-describe("kbx learn --source", () => {
+describe("homeostat learn --source", () => {
   test("agent-handoff entries are candidates with the handoff base score", async () => {
     const { dir } = kbRepo();
     const { code, stdout } = await run("learn", "--dir", dir, ...note);
@@ -72,7 +72,7 @@ describe("kbx learn --source", () => {
   });
 });
 
-describe("kbx learn --branch", () => {
+describe("homeostat learn --branch", () => {
   test("commits the entry to the branch without touching the working tree or index", async () => {
     const { dir, git } = kbRepo();
     const head = git("rev-parse", "HEAD");
@@ -92,7 +92,7 @@ describe("kbx learn --branch", () => {
     expect(git("rev-parse", "HEAD")).toBe(head);
 
     expect(git("log", "-1", "--format=%s", "candidates/lee")).toBe(
-      "kbx: candidate queue-consumers-ack-only-after-the-write-commits",
+      "homeostat: candidate queue-consumers-ack-only-after-the-write-commits",
     );
     expect(git("rev-parse", "candidates/lee~1")).toBe(head);
     const committed = git("show", `candidates/lee:${PATH}`);
@@ -126,7 +126,7 @@ describe("kbx learn --branch", () => {
 
   test("--push pushes the branch to origin", async () => {
     const { dir, git } = kbRepo();
-    const remote = mkdtempSync(join(tmpdir(), "kbx-remote-"));
+    const remote = mkdtempSync(join(tmpdir(), "homeostat-remote-"));
     execFileSync("git", ["init", "-q", "--bare", remote]);
     git("remote", "add", "origin", remote);
     const { code, stdout } = await run(

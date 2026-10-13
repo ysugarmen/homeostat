@@ -1,11 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { CODEOWNERS_FILE, generateCodeowners, validate } from "@kbx/core";
+import { CODEOWNERS_FILE, generateCodeowners, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { readKbFiles, writeKbFile } from "./files.ts";
 import { formatIssues } from "./format.ts";
 
-/** `kbx codeowners [dir]`: writes CODEOWNERS, or with `--check` only reports whether it is stale. */
+/** `homeostat codeowners [dir]`: writes CODEOWNERS, or with `--check` only reports whether it is stale. */
 export function runCodeowners(dir: string, opts: { check?: boolean }, io: Io): number {
   const root = resolve(dir);
   const result = validate(readKbFiles(root));
@@ -33,7 +33,7 @@ export function runCodeowners(dir: string, opts: { check?: boolean }, io: Io): n
     io.stdout(
       fresh
         ? `${CODEOWNERS_FILE} is up to date\n`
-        : `${CODEOWNERS_FILE} is out of date; run kbx codeowners\n`,
+        : `${CODEOWNERS_FILE} is out of date; run homeostat codeowners\n`,
     );
     return fresh ? 0 : 1;
   }

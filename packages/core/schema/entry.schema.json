@@ -108,6 +108,6 @@
     "tokens"
   ],
   "additionalProperties": false,
-  "title": "kbx knowledge entry frontmatter",
-  "description": "Shape only. Cross-field rules (pr-feedback needs source.url, conflictsWith forces disputed) and config rules are enforced by `kbx validate`."
+  "title": "homeostat knowledge entry frontmatter",
+  "description": "Shape only. Cross-field rules (pr-feedback needs source.url, conflictsWith forces disputed) and config rules are enforced by `homeostat validate`."
 }

@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { applyFixes, type Fix, type ValidateResult, validate } from "@kbx/core";
+import { applyFixes, type Fix, type ValidateResult, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { readKbFiles, writeKbFile } from "./files.ts";
 import { formatIssues, painter, plural } from "./format.ts";
@@ -9,7 +9,7 @@ export interface ValidateOptions {
   json?: boolean;
 }
 
-/** `kbx validate [dir]`. Returns the process exit code: 1 when there are errors. */
+/** `homeostat validate [dir]`. Returns the process exit code: 1 when there are errors. */
 export function runValidate(dir: string, opts: ValidateOptions, io: Io): number {
   const root = resolve(dir);
   let files = readKbFiles(root);
@@ -51,6 +51,6 @@ function format(result: ValidateResult, io: Io): string {
   const warnings = result.issues.length - errors;
   const fixable = result.issues.filter((i) => i.fix).length;
   let out = `${text}${plural(errors, "error")}, ${plural(warnings, "warning")} in ${plural(files, "file")} (${entries} parsed)`;
-  if (fixable > 0) out += `; ${fixable} fixable; run kbx validate --fix`;
+  if (fixable > 0) out += `; ${fixable} fixable; run homeostat validate --fix`;
   return `${out}\n`;
 }

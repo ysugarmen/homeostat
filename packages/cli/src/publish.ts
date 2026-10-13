@@ -1,4 +1,4 @@
-import type { Provider, RepoRef } from "@kbx/core";
+import type { Provider, RepoRef } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
 import { commitFile, git, pushBranch } from "./git.ts";

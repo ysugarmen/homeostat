@@ -1,4 +1,4 @@
-# kbx knowledge base config. Reference: docs/execution-plan.md, step 1.3.
+# homeostat knowledge base config. Reference: docs/execution-plan.md, step 1.3.
 version: 1
 
 team:
@@ -41,7 +41,7 @@ distribution:
 
 notifications:
   # Name of the CI secret holding the webhook URL. Never put the URL here.
-  slackWebhookEnv: KBX_SLACK_WEBHOOK
+  slackWebhookEnv: HOMEOSTAT_SLACK_WEBHOOK
   digestDay: monday
 
 # Where the curator reads merged PRs and opens its daily PR (one git host per KB).

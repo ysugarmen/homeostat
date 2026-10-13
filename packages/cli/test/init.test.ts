@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validate } from "@kbx/core";
+import { validate } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { runCli } from "../src/cli.ts";
 import { readKbFiles } from "../src/files.ts";
@@ -10,7 +10,7 @@ import { readKbFiles } from "../src/files.ts";
 async function run(...args: string[]) {
   let stdout = "";
   let stderr = "";
-  const code = await runCli(["node", "kbx", ...args], {
+  const code = await runCli(["node", "homeostat", ...args], {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
@@ -20,7 +20,7 @@ async function run(...args: string[]) {
 
 /** An empty git repo, optionally with an origin remote. */
 function repo(remote?: string) {
-  const dir = mkdtempSync(join(tmpdir(), "kbx-init-"));
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-init-"));
   const git = (...args: string[]) => execFileSync("git", ["-C", dir, ...args]);
   git("init", "-q");
   git("config", "user.name", "Ada Lovelace");
@@ -30,12 +30,12 @@ function repo(remote?: string) {
 
 const read = (dir: string, path: string) => readFileSync(join(dir, path), "utf8");
 
-describe("kbx init", () => {
+describe("homeostat init", () => {
   test("on an empty repo leaves a valid KB behind", async () => {
     const dir = repo();
     const { code, stdout } = await run("init", dir);
     expect(code).toBe(0);
-    expect(existsSync(join(dir, "kbx.yaml"))).toBe(true);
+    expect(existsSync(join(dir, "homeostat.yaml"))).toBe(true);
     expect(existsSync(join(dir, "knowledge/core/.gitkeep"))).toBe(true);
     expect(validate(readKbFiles(dir)).ok).toBe(true);
     expect(stdout).toContain("✓ knowledge base is valid");
@@ -44,7 +44,7 @@ describe("kbx init", () => {
   test("seeds the first member from git user.name as a senior", async () => {
     const dir = repo();
     await run("init", dir);
-    const config = read(dir, "kbx.yaml");
+    const config = read(dir, "homeostat.yaml");
     expect(config).toContain("- id: ada-lovelace");
     expect(config).toContain("role: senior");
     expect(config).toContain('# handle: "@your-user"');
@@ -53,7 +53,7 @@ describe("kbx init", () => {
   test("--member and --handle override the seed member", async () => {
     const dir = repo();
     await run("init", dir, "--member", "ada", "--handle", "@ada");
-    const config = read(dir, "kbx.yaml");
+    const config = read(dir, "homeostat.yaml");
     expect(config).toContain("- id: ada");
     expect(config).toContain('handle: "@ada"');
   });
@@ -73,11 +73,11 @@ describe("kbx init", () => {
       const dir = repo(remote);
       const { code, stdout } = await run("init", dir);
       expect(code).toBe(0);
-      const workflow = read(dir, ".github/workflows/kbx.yml");
+      const workflow = read(dir, ".github/workflows/homeostat.yml");
       expect(workflow).toContain("pull_request:");
-      expect(workflow).toContain("npx --yes kbx@0 validate");
+      expect(workflow).toContain("npx --yes homeostat@0 validate");
       expect(stdout).toContain("Git host: GitHub (from the origin remote)");
-      expect(stdout).toContain("KBX_GITHUB_TOKEN");
+      expect(stdout).toContain("HOMEOSTAT_GITHUB_TOKEN");
     },
   );
 
@@ -90,10 +90,10 @@ describe("kbx init", () => {
     expect(code).toBe(0);
     const pipeline = read(dir, "bitbucket-pipelines.yml");
     expect(pipeline).toContain("pull-requests:");
-    expect(pipeline).toContain("npx --yes kbx@0 validate");
+    expect(pipeline).toContain("npx --yes homeostat@0 validate");
     expect(stdout).toContain("Git host: Bitbucket (from the origin remote)");
     expect(stdout).toContain("pullrequest:write");
-    expect(stdout).toContain("KBX_BITBUCKET_TOKEN");
+    expect(stdout).toContain("HOMEOSTAT_BITBUCKET_TOKEN");
   });
 
   test("--host overrides detection", async () => {
@@ -110,16 +110,16 @@ describe("kbx init", () => {
     expect(stderr).toContain("gitlab");
   });
 
-  test("refuses to overwrite an existing kbx.yaml without --force", async () => {
+  test("refuses to overwrite an existing homeostat.yaml without --force", async () => {
     const dir = repo();
-    writeFileSync(join(dir, "kbx.yaml"), "mine\n");
+    writeFileSync(join(dir, "homeostat.yaml"), "mine\n");
     const refused = await run("init", dir);
     expect(refused.code).toBe(1);
-    expect(refused.stdout).toContain("kbx.yaml already exists; use --force to overwrite");
-    expect(read(dir, "kbx.yaml")).toBe("mine\n");
+    expect(refused.stdout).toContain("homeostat.yaml already exists; use --force to overwrite");
+    expect(read(dir, "homeostat.yaml")).toBe("mine\n");
 
     expect((await run("init", dir, "--force")).code).toBe(0);
-    expect(read(dir, "kbx.yaml")).toContain("version: 1");
+    expect(read(dir, "homeostat.yaml")).toContain("version: 1");
   });
 
   test("never overwrites an existing CI file, and says what to add instead", async () => {
@@ -137,7 +137,7 @@ describe("kbx init", () => {
     expect(code).toBe(1);
     expect(stdout).toContain("handle must be @user, @org/team or an email");
     expect(stdout).toContain("nothing written");
-    expect(existsSync(join(dir, "kbx.yaml"))).toBe(false);
+    expect(existsSync(join(dir, "homeostat.yaml"))).toBe(false);
     expect(existsSync(join(dir, "knowledge"))).toBe(false);
   });
 
@@ -151,18 +151,23 @@ describe("kbx init", () => {
 });
 
 describe("planned commands", () => {
-  test.each([["status", "4.3"]])("kbx %s says which step builds it", async (command, step) => {
-    const { code, stderr } = await run(command);
-    expect(code).toBe(1);
-    expect(stderr).toContain(`kbx ${command} is not built yet (execution plan step ${step})`);
-  });
+  test.each([["status", "4.3"]])(
+    "homeostat %s says which step builds it",
+    async (command, step) => {
+      const { code, stderr } = await run(command);
+      expect(code).toBe(1);
+      expect(stderr).toContain(
+        `homeostat ${command} is not built yet (execution plan step ${step})`,
+      );
+    },
+  );
 });
 
-describe("kbx init .gitignore", () => {
-  test("ignores the local .kbx/ event log", async () => {
+describe("homeostat init .gitignore", () => {
+  test("ignores the local .homeostat/ event log", async () => {
     const dir = repo();
     await run("init", dir);
-    expect(read(dir, ".gitignore")).toBe(".kbx/\n");
+    expect(read(dir, ".gitignore")).toBe(".homeostat/\n");
   });
 
   test("appends to an existing .gitignore once", async () => {
@@ -170,19 +175,19 @@ describe("kbx init .gitignore", () => {
     writeFileSync(join(dir, ".gitignore"), "node_modules");
     await run("init", dir);
     await run("init", dir, "--force");
-    expect(read(dir, ".gitignore")).toBe("node_modules\n.kbx/\n");
+    expect(read(dir, ".gitignore")).toBe("node_modules\n.homeostat/\n");
   });
 });
 
-describe("kbx init curator schedule", () => {
+describe("homeostat init curator schedule", () => {
   test("GitHub gets a scheduled curator workflow with write access", async () => {
     const dir = repo("git@github.com:acme/team-kb.git");
     await run("init", dir);
-    const workflow = read(dir, ".github/workflows/kbx-curator.yml");
+    const workflow = read(dir, ".github/workflows/homeostat-curator.yml");
     expect(workflow).toContain('- cron: "0 6 * * *"');
     expect(workflow).toContain("pull-requests: write");
     expect(workflow).toContain("fetch-depth: 0");
-    expect(workflow).toContain("npx --yes kbx@0 curate");
+    expect(workflow).toContain("npx --yes homeostat@0 curate");
     expect(workflow).toContain("ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}");
   });
 
@@ -190,17 +195,17 @@ describe("kbx init curator schedule", () => {
     const dir = repo("git@bitbucket.org:acme/team-kb.git");
     const { stdout } = await run("init", dir);
     const pipeline = read(dir, "bitbucket-pipelines.yml");
-    expect(pipeline).toContain("kbx-curator:");
+    expect(pipeline).toContain("homeostat-curator:");
     expect(pipeline).toContain("depth: full");
     expect(stdout).toContain("Repository settings > Pipelines > Schedules");
   });
 });
 
-describe("kbx init Claude runtime in CI", () => {
+describe("homeostat init Claude runtime in CI", () => {
   test("GitHub agent workflows use a Console key; the subscription route is opt-in", async () => {
     const dir = repo("git@github.com:acme/team-kb.git");
     const { stdout } = await run("init", dir);
-    for (const file of ["kbx-curator.yml", "kbx-deep-dive.yml"]) {
+    for (const file of ["homeostat-curator.yml", "homeostat-deep-dive.yml"]) {
       const workflow = read(dir, `.github/workflows/${file}`);
       expect(workflow).toMatch(/^ {10}ANTHROPIC_API_KEY: \$\{\{ secrets.ANTHROPIC_API_KEY \}\}$/m);
       expect(workflow).toContain("# CLAUDE_CODE_OAUTH_TOKEN:");

@@ -11,7 +11,7 @@ const skill = (name: string) => readFileSync(join(plugin, "skills", name, "SKILL
 
 async function help(command: string) {
   let out = "";
-  await runCli(["node", "kbx", command, "--help"], {
+  await runCli(["node", "homeostat", command, "--help"], {
     stdout: (s) => (out += s),
     stderr: (s) => (out += s),
     color: false,
@@ -46,15 +46,15 @@ describe("Claude Code plugin", () => {
   test.each([
     ["learn", "learn"],
     ["validate", "review"],
-  ])("every kbx %s flag the %s skill uses exists", async (command, name) => {
+  ])("every homeostat %s flag the %s skill uses exists", async (command, name) => {
     const used = new Set(
-      [...skill(name).matchAll(new RegExp(`kbx(?:@0)? ${command}[^\\n\`)]*`, "g"))].flatMap((m) =>
-        [...m[0].matchAll(/--[a-z][a-z-]*/g)].map((f) => f[0]),
+      [...skill(name).matchAll(new RegExp(`homeostat(?:@0)? ${command}[^\\n\`)]*`, "g"))].flatMap(
+        (m) => [...m[0].matchAll(/--[a-z][a-z-]*/g)].map((f) => f[0]),
       ),
     );
     expect(used.size).toBeGreaterThan(0);
     const options = await help(command);
     for (const flag of used)
-      expect(options, `${flag} is not a kbx ${command} option`).toContain(flag);
+      expect(options, `${flag} is not a homeostat ${command} option`).toContain(flag);
   });
 });

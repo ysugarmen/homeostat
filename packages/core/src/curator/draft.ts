@@ -10,7 +10,7 @@ export interface Draft {
 }
 
 export interface DraftContext {
-  /** Area name → path globs, from kbx.yaml. `core` is always available. */
+  /** Area name → path globs, from homeostat.yaml. `core` is always available. */
   areas: Record<string, readonly string[]>;
 }
 

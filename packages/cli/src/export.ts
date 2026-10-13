@@ -7,7 +7,7 @@ import {
   removeBlock,
   replaceBlock,
   validate,
-} from "@kbx/core";
+} from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { CliError } from "./provider.ts";
@@ -35,14 +35,16 @@ function listFiles(root: string, dir: string): string[] {
 
 const readOr = (path: string) => (existsSync(path) ? readFileSync(path, "utf8") : undefined);
 
-/** `kbx export`: writes accepted entries into a code repo as each agent's native rules files. */
+/** `homeostat export`: writes accepted entries into a code repo as each agent's native rules files. */
 export function runExport(opts: ExportOptions, io: Io): number {
   try {
-    const kbRoot = resolve(opts.kb ?? io.env?.KBX_DIR ?? ".");
+    const kbRoot = resolve(opts.kb ?? io.env?.HOMEOSTAT_DIR ?? ".");
     const out = resolve(opts.out);
     const { config, entries } = validate(readKbFiles(kbRoot));
     if (!config) {
-      throw new CliError(`kbx.yaml is missing or invalid in ${kbRoot}; run kbx validate`);
+      throw new CliError(
+        `homeostat.yaml is missing or invalid in ${kbRoot}; run homeostat validate`,
+      );
     }
 
     for (const t of opts.target ?? []) {
@@ -81,7 +83,7 @@ export function runExport(opts: ExportOptions, io: Io): number {
     }
     if (opts.check) {
       for (const [path] of changed) io.stdout(`out of date: ${path}\n`);
-      io.stdout("run kbx export to update\n");
+      io.stdout("run homeostat export to update\n");
       return 1;
     }
     for (const [path, text] of changed) {

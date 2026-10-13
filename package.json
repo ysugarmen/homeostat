@@ -1,5 +1,5 @@
 {
-  "name": "kbx-monorepo",
+  "name": "homeostat-monorepo",
   "private": true,
   "type": "module",
   "license": "Apache-2.0",

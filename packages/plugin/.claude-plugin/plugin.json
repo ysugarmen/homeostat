@@ -1,10 +1,10 @@
 {
-  "name": "kbx",
-  "displayName": "kbx",
+  "name": "homeostat",
+  "displayName": "homeostat",
   "version": "0.0.0",
   "description": "Capture, explain and review your team's knowledge base entries from inside Claude Code.",
   "author": {
-    "name": "kbx contributors"
+    "name": "homeostat contributors"
   },
   "license": "Apache-2.0",
   "keywords": ["knowledge-base", "code-review", "team", "rules"],
@@ -12,7 +12,7 @@
     "kb_dir": {
       "type": "directory",
       "title": "Knowledge base checkout",
-      "description": "Path to your local clone of the team knowledge base repo (the folder with kbx.yaml).",
+      "description": "Path to your local clone of the team knowledge base repo (the folder with homeostat.yaml).",
       "required": false
     }
   }

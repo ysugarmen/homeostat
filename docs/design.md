@@ -1,8 +1,8 @@
-# kbx — Market Research & Design Doc
+# homeostat — Market Research & Design Doc
 
 Oct 13, 2026
 
-> `kbx` is a placeholder name until the public name is chosen (see *Naming*). Where this doc and [execution-plan.md](execution-plan.md) disagree, the execution plan wins.
+> The public name is **Homeostat** (see *Naming*). Where this doc and [execution-plan.md](execution-plan.md) disagree, the execution plan wins.
 
 ## Executive summary
 
@@ -14,11 +14,11 @@ The market is real, early, and thinly capitalised: the closest direct competitor
 2. **Nobody owns the feedback loop.** CodeRabbit captures learnings from review threads but tells teams to prune them manually every quarter and only feeds them back into its own reviewer. GitHub Copilot does not learn from feedback at all. Packmind distributes standards but does not mine PRs or score quality.
 3. **Enterprises are shifting to build-over-buy** for thin AI tooling (Yegge, Software Survival 3.0). The sustainable shape is open source first, with a paid governance layer only once real pull appears.
 
-**Recommendation:** ship kbx as an open-source Claude Code plugin (skills + hooks + MCP server) within 4–6 weeks, built for the pilot team's own daily use, then add cross-agent distribution (Cursor, Codex, Copilot) via MCP. Treat a company as a later option, not the starting point.
+**Recommendation:** ship homeostat as an open-source Claude Code plugin (skills + hooks + MCP server) within 4–6 weeks, built for the pilot team's own daily use, then add cross-agent distribution (Cursor, Codex, Copilot) via MCP. Treat a company as a later option, not the starting point.
 
 ## Competitive landscape
 
-No player covers the full chain of capture, scoring, governance and cross-tool distribution. Sorted by how close each is to kbx.
+No player covers the full chain of capture, scoring, governance and cross-tool distribution. Sorted by how close each is to homeostat.
 
 | Player | What it does | Captures from PR feedback | Scores / conflict-checks | Distributes to agents | Business model | Funding |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -38,7 +38,7 @@ Two adjacent signals worth watching: the official Claude marketplace already lis
 
 The wedge is the **feedback-to-knowledge loop**: the four capabilities below exist nowhere together, and the pilot deck already has a working version of each.
 
-| Gap | Who gets closest | Why they stop | kbx's answer (from the pilot) |
+| Gap | Who gets closest | Why they stop | homeostat's answer (from the pilot) |
 | --- | --- | --- | --- |
 | Mine *accepted* review feedback (comment + resulting code change) | CodeRabbit | Captures the comment, not whether the author acted on it | +3 score only when the PR code actually changed |
 | Quality scoring and auto-merge threshold | None | CodeRabbit asks humans to prune quarterly | Score ≥3 auto-merges, 1–2 weekly review, conflicts always flagged |
@@ -47,13 +47,13 @@ The wedge is the **feedback-to-knowledge loop**: the four capabilities below exi
 | Cross-tool distribution | Packmind, Unblocked | Packmind has no capture; Unblocked is retrieval, not rules | Today Claude only; MCP + rules-file export is the next step |
 | Agent handoff notes as a source (Yegge, Model Welfare) | None | Nobody treats session exits as knowledge events | Not yet built; cheap to add as a hook |
 
-**Where kbx is behind:** Packmind already writes to four rules-file formats; Unblocked already indexes Slack and Jira. Both are table stakes within a year and should be copied, not competed on.
+**Where homeostat is behind:** Packmind already writes to four rules-file formats; Unblocked already indexes Slack and Jira. Both are table stakes within a year and should be copied, not competed on.
 
-## Yegge lens: survival levers applied to kbx
+## Yegge lens: survival levers applied to homeostat
 
-Yegge's [Software Survival 3.0](https://yegge.ai/essays/software-survival-30/) formula, Survival ∝ (Savings × Usage × H) / (Awareness cost + Friction cost), is a useful design constraint. Each lever maps to a concrete kbx decision.
+Yegge's [Software Survival 3.0](https://yegge.ai/essays/software-survival-30/) formula, Survival ∝ (Savings × Usage × H) / (Awareness cost + Friction cost), is a useful design constraint. Each lever maps to a concrete homeostat decision.
 
-| Lever | What it means for kbx | Design decision |
+| Lever | What it means for homeostat | Design decision |
 | --- | --- | --- |
 | Insight compression | One scored knowledge entry saves every teammate's agent from re-deriving it | Measure tokens saved per entry; surface it in the weekly digest |
 | Substrate efficiency | Knowledge injected into every session costs context | Inject by area and by file path, never the whole base; cap at a token budget |
@@ -62,19 +62,19 @@ Yegge's [Software Survival 3.0](https://yegge.ai/essays/software-survival-30/) f
 | Human coefficient | Trust decides adoption | Every entry carries source PR, score, owner, and a one-click "this is wrong" |
 | Publicity | Nobody awards an unknown repo | Launch as a marketplace plugin with a public dogfood write-up |
 
-From the other three essays: the [Hive Mind](https://yegge.ai/essays/the-anthropic-hive-mind/) piece validates full work-stream transparency (SageOx records every transcript) and "build for yourself" as the only reliable road to product-market fit. [The AI Vampire](https://yegge.ai/essays/the-ai-vampire/) warns that "agent memory" pitches are crowded and that enterprises are refusing SaaS renewals, which argues for open source first. [Model Welfare](https://yegge.ai/essays/model-welfare/) adds agent-written handoff notes as a knowledge source kbx should capture alongside PRs.
+From the other three essays: the [Hive Mind](https://yegge.ai/essays/the-anthropic-hive-mind/) piece validates full work-stream transparency (SageOx records every transcript) and "build for yourself" as the only reliable road to product-market fit. [The AI Vampire](https://yegge.ai/essays/the-ai-vampire/) warns that "agent memory" pitches are crowded and that enterprises are refusing SaaS renewals, which argues for open source first. [Model Welfare](https://yegge.ai/essays/model-welfare/) adds agent-written handoff notes as a knowledge source homeostat should capture alongside PRs.
 
 ## Design: Claude Code first, MCP second
 
-Keep the two-repo shape from the pilot, package `kbx` as a Claude Code plugin, and put the knowledge base behind an MCP server so the same curated entries reach every agent. The accent boxes are the two parts nobody else has: the quality pipeline and the MCP server in front of it.
+Keep the two-repo shape from the pilot, package `homeostat` as a Claude Code plugin, and put the knowledge base behind an MCP server so the same curated entries reach every agent. The accent boxes are the two parts nobody else has: the quality pipeline and the MCP server in front of it.
 
-&#91;embedded content: kbx architecture · capture, pipeline, distribution\]
+&#91;embedded content: homeostat architecture · capture, pipeline, distribution\]
 
 Feedback enters top-left, is scored top-right, lands in the repo, and flows back down into every agent and into humans through the digest.
 
 ### Plugin layout (phase 1)
 
-- **Skills:** `/learn` (manual capture), `/kbx-explain <file>` (why is this rule here, with source PR), `/kbx-review` (walk the weekly queue).
+- **Skills:** `/learn` (manual capture), `/homeostat-explain <file>` (why is this rule here, with source PR), `/homeostat-review` (walk the weekly queue).
 - **Hooks:** `SessionStart` injects the relevant area's entries by file path within a token budget; `Stop` or `PreCompact` asks the agent for a handoff note and captures it as a low-score entry.
 - **Scheduled agents:** the daily curator and weekly deep dive. ~~Moved into the plugin's hooks config.~~ **Superseded:** per the zero per-machine maintenance constraint in the execution plan, they run centrally (CI schedule or `up` on a shared box), never on a developer's laptop.
 - **MCP server:** bundled in the plugin's `.mcp.json`, so installing the plugin is the whole setup.
@@ -83,18 +83,18 @@ Feedback enters top-left, is scored top-right, lands in the repo, and flows back
 
 | Tool | Purpose | Notes |
 | --- | --- | --- |
-| `kbx_search(query, area?, path?)` | Return the top entries relevant to a task | The main read path for non-Claude agents |
-| `kbx_context(paths[])` | Entries for a set of files, under a token cap | What the SessionStart hook calls |
-| `kbx_learn(lesson, source, area)` | Propose an entry; opens the PR | Same path as `/learn` |
-| `kbx_explain(entry_id)` | Source PR, score history, owner, conflicts | Builds trust (human coefficient) |
-| `kbx_flag(entry_id, reason)` | Mark an entry wrong or stale; −2 and route to review | One-click correction |
-| `kbx_report(window)` | Digest data: new, merged, flagged, tokens saved | Feeds Slack |
+| `homeostat_search(query, area?, path?)` | Return the top entries relevant to a task | The main read path for non-Claude agents |
+| `homeostat_context(paths[])` | Entries for a set of files, under a token cap | What the SessionStart hook calls |
+| `homeostat_learn(lesson, source, area)` | Propose an entry; opens the PR | Same path as `/learn` |
+| `homeostat_explain(entry_id)` | Source PR, score history, owner, conflicts | Builds trust (human coefficient) |
+| `homeostat_flag(entry_id, reason)` | Mark an entry wrong or stale; −2 and route to review | One-click correction |
+| `homeostat_report(window)` | Digest data: new, merged, flagged, tokens saved | Feeds Slack |
 
 Log every tool name an agent calls that does not exist (Yegge's desire paths) and implement the common ones.
 
 ### Rules-file export (phase 2)
 
-A `kbx export` command writes `.claude/rules/*.md`, `.cursor/rules/*.mdc`, `AGENTS.md` and `.github/copilot-instructions.md` from the same entries, matching Packmind's format list. This makes kbx useful to a team even before they adopt the MCP server.
+A `homeostat export` command writes `.claude/rules/*.md`, `.cursor/rules/*.mdc`, `AGENTS.md` and `.github/copilot-instructions.md` from the same entries, matching Packmind's format list. This makes homeostat useful to a team even before they adopt the MCP server.
 
 ### Open design questions
 
@@ -103,9 +103,9 @@ A `kbx export` command writes `.claude/rules/*.md`, `.cursor/rules/*.mdc`, `AGEN
 - [ ] Where do handoff notes live: their own `sessions/` folder, or merged into areas after a week?
 - [ ] Bitbucket pipeline today; GitHub Actions and GitLab CI needed before open-sourcing?
 
-## Product shape: standalone kbx with a management dashboard
+## Product shape: standalone homeostat with a management dashboard
 
-The plugin above is the entry point, but the product is a **single installable package** that ships the agent framework inside it and adds a control plane. One command (`kbx up` or a Docker image) brings up three things: the curator agents, the knowledge-base pipeline, and a web dashboard. Nothing in the competitive table offers this combination; Packmind has a dashboard but no agents, CodeRabbit has agents but no team-level knowledge admin.
+The plugin above is the entry point, but the product is a **single installable package** that ships the agent framework inside it and adds a control plane. One command (`homeostat up` or a Docker image) brings up three things: the curator agents, the knowledge-base pipeline, and a web dashboard. Nothing in the competitive table offers this combination; Packmind has a dashboard but no agents, CodeRabbit has agents but no team-level knowledge admin.
 
 ### What ships in the box
 
@@ -148,11 +148,11 @@ The dashboard reads from the same `team-knowledge-base` repo plus an event log t
 
 ## Decision: ship as an open-source app first
 
-The first aim is a public, self-hostable kbx that any team can run. A company, hosted tier or paid dashboard features come later, only if external pull shows up. This section lists what the launch needs; most of it is unglamorous but it is what separates a repo from a project people adopt.
+The first aim is a public, self-hostable homeostat that any team can run. A company, hosted tier or paid dashboard features come later, only if external pull shows up. This section lists what the launch needs; most of it is unglamorous but it is what separates a repo from a project people adopt.
 
 ### Technical readiness
 
-- [ ] Portable install: `docker compose up` or a single `npx kbx` (TypeScript only; no Python package), with a 5-minute quickstart that works on an empty repo
+- [ ] Portable install: `docker compose up` or a single `npx homeostat` (TypeScript only; no Python package), with a 5-minute quickstart that works on an empty repo
 - [ ] Git-host neutral: Bitbucket first (where the pilot runs), then GitHub (largest audience) and GitLab, all behind one interface
 - [ ] Model neutral enough: Claude Agent SDK as the default runtime, with the provider key configurable so teams on other models are not blocked
 - [ ] Secrets and permissions: tokens stay local, agents have least-privilege scopes, nothing phones home by default
@@ -176,7 +176,7 @@ The first aim is a public, self-hostable kbx that any team can run. A company, h
 
 ### Naming
 
-The pilot's internal name cannot be the public name; `kbx` is the placeholder until one is picked. Criteria for the replacement: one or two syllables, typeable as a CLI command, says "team knowledge that agents keep" without saying "memory" (crowded) or "lore" (crowded: Lorekeep, Lorekeeper and several agent-memory projects already use it). Checked and taken: lorekeep, lorekeeper, reviewmind.
+The pilot's internal name cannot be the public name. **Decided (2026-10-13): Homeostat**, after Ashby's 1948 machine that rewired itself to stay stable, the way review feedback keeps a team's agents from drifting. The criteria it was chosen against: one or two syllables, typeable as a CLI command, says "team knowledge that agents keep" without saying "memory" (crowded) or "lore" (crowded: Lorekeep, Lorekeeper and several agent-memory projects already use it). Checked and taken: lorekeep, lorekeeper, reviewmind.
 
 Shortlist to verify on GitHub org, npm, PyPI and a .dev or .sh domain:
 
@@ -210,9 +210,9 @@ Open source first, company only on pull. The two paths are not exclusive: Packmi
 
 - [ ] Finish the two-week pilot and write up the four metrics (quality, cross-team sharing, dev experience, noise) as a public post, due Oct 31, 2026
 - [ ] Restructure the pilot as a Claude Code plugin with `.claude-plugin/plugin.json`, skills, hooks and a bundled MCP server
-- [ ] Implement `kbx_search`, `kbx_context`, `kbx_learn`, `kbx_explain`, `kbx_flag`, `kbx_report`
+- [ ] Implement `homeostat_search`, `homeostat_context`, `homeostat_learn`, `homeostat_explain`, `homeostat_flag`, `homeostat_report`
 - [ ] Add the handoff-note hook on `Stop` / `PreCompact`
-- [ ] Add `kbx export` for Cursor, AGENTS.md and Copilot instruction files
+- [ ] Add `homeostat export` for Cursor, AGENTS.md and Copilot instruction files
 - [ ] Replace the Bitbucket-only pipeline with a portable script plus GitHub Actions template
 - [ ] Publish to the Claude community marketplace and post the dogfood write-up
 - [ ] Review the proceed signals on Jan 31, 2027 and decide on open source vs company

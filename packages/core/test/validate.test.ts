@@ -32,9 +32,9 @@ describe("validate", () => {
     expect(result.issues.every((i) => i.file)).toBe(true);
   });
 
-  test("missing kbx.yaml is an error but entries are still checked", () => {
+  test("missing homeostat.yaml is an error but entries are still checked", () => {
     const files = readKb("starter-kb");
-    delete files["kbx.yaml"];
+    delete files["homeostat.yaml"];
     const result = validate(files);
     expect(result.issues.map((i) => i.code)).toEqual(["config.missing"]);
     expect(result.entries).toHaveLength(3);

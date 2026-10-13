@@ -1,12 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { expect, test } from "vitest";
 
-const bin = new URL("../bin/kbx.js", import.meta.url).pathname;
+const bin = new URL("../bin/homeostat.js", import.meta.url).pathname;
 const starter = new URL("../../../examples/starter-kb", import.meta.url).pathname;
 
 // vitest compiles TypeScript itself, so only running the real bin under Node proves that every
 // module loads with Node's type stripping (no enums, parameter properties or namespaces).
-test("the kbx binary runs under plain Node", () => {
+test("the homeostat binary runs under plain Node", () => {
   const out = execFileSync(process.execPath, [bin, "validate", starter], { encoding: "utf8" });
   expect(out).toContain("3 entries, no problems");
 });
@@ -19,6 +19,6 @@ test("piping into a reader that closes early is not a crash", () => {
       encoding: "utf8",
     },
   );
-  expect(out).toContain("Usage: kbx");
+  expect(out).toContain("Usage: homeostat");
   expect(out).not.toContain("EPIPE");
 });

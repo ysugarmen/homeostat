@@ -5,10 +5,10 @@ This is the step 2.8 check and the launch demo. One person runs it by hand on Gi
 ## Before you start
 
 - Node 24+, `git`, and the GitHub CLI logged in (`gh auth status`).
-- `kbx` on your PATH. Until it is on npm: `pnpm install && pnpm --filter kbx link --global` in a checkout of this repo.
+- `homeostat` on your PATH. Until it is on npm: `pnpm install && pnpm --filter homeostat link --global` in a checkout of this repo.
 - Claude Code logged in (`claude`). The demo runs the agents through it (`agents.runtime: claude-code`), so your own subscription is enough. That is fine for a personal sandbox; a team KB uses a Console API key instead (the default), because a personal subscription is for personal, non-commercial use only.
 - A **second GitHub account** for the reviewer. The curator only learns from feedback by someone other than the PR author.
-- Claude Code with the kbx plugin. From a checkout: `claude plugin marketplace add <path-to-kbx>` then `claude plugin install kbx@kbx`.
+- Claude Code with the homeostat plugin. From a checkout: `claude plugin marketplace add <path-to-homeostat>` then `claude plugin install homeostat@homeostat`.
 
 Below, `ME` is your GitHub login and `REVIEWER` is the second account's login.
 
@@ -19,11 +19,11 @@ export ME=your-login REVIEWER=reviewer-login
 ## 1. Create the knowledge base (1 min)
 
 ```sh
-gh repo create "$ME/kbx-demo-kb" --private --clone && cd kbx-demo-kb
-kbx init --member me --handle "@$ME"
+gh repo create "$ME/homeostat-demo-kb" --private --clone && cd homeostat-demo-kb
+homeostat init --member me --handle "@$ME"
 ```
 
-Edit `kbx.yaml`: add the reviewer as a senior member, a `frontend` area, and the sources.
+Edit `homeostat.yaml`: add the reviewer as a senior member, a `frontend` area, and the sources.
 
 ```yaml
 team:
@@ -42,8 +42,8 @@ areas:
 
 sources:
   host: github
-  kbRepo: your-login/kbx-demo-kb
-  repos: [your-login/kbx-demo-app]
+  kbRepo: your-login/homeostat-demo-kb
+  repos: [your-login/homeostat-demo-app]
 
 # Personal sandbox: draft through your own Claude Code login.
 agents:
@@ -51,17 +51,17 @@ agents:
 ```
 
 ```sh
-kbx validate && git add -A && git commit -m "kbx init" && git push -u origin main
+homeostat validate && git add -A && git commit -m "homeostat init" && git push -u origin main
 cd ..
 ```
 
 ## 2. Create the code repo (1 min)
 
 ```sh
-gh repo create "$ME/kbx-demo-app" --private --clone && cd kbx-demo-app
+gh repo create "$ME/homeostat-demo-app" --private --clone && cd homeostat-demo-app
 mkdir -p web && printf '.button { color: #ffffff; background: #0055ff; }\n' > web/button.css
 git add -A && git commit -m "button" && git push -u origin main
-gh api -X PUT "repos/$ME/kbx-demo-app/collaborators/$REVIEWER" -f permission=push
+gh api -X PUT "repos/$ME/homeostat-demo-app/collaborators/$REVIEWER" -f permission=push
 ```
 
 The reviewer accepts the invitation (email or github.com/notifications).
@@ -94,11 +94,11 @@ The commit after the comment is what tells the curator the feedback was accepted
 In a team setup this runs in CI with a Console key. For the demo, run it from the KB checkout; it drafts through your Claude Code login:
 
 ```sh
-cd ../kbx-demo-kb
-GITHUB_TOKEN=$(gh auth token) kbx curate
+cd ../homeostat-demo-kb
+GITHUB_TOKEN=$(gh auth token) homeostat curate
 ```
 
-Expect: `+ knowledge/frontend/....md (accepted, score 4)` and `opened https://github.com/.../pull/1`. Open that PR, read the entry, and merge it. Until kbx is published on npm, the KB repo's own validate check fails with `E404`; run `kbx validate` on the branch instead and merge with `--admin`:
+Expect: `+ knowledge/frontend/....md (accepted, score 4)` and `opened https://github.com/.../pull/1`. Open that PR, read the entry, and merge it. Until homeostat is published on npm, the KB repo's own validate check fails with `E404`; run `homeostat validate` on the branch instead and merge with `--admin`:
 
 ```sh
 gh pr merge --squash --delete-branch --admin && git pull
@@ -109,19 +109,19 @@ gh pr merge --squash --delete-branch --admin && git pull
 Point the plugin at the KB checkout once, through `/plugin` settings (`kb_dir`), or for this shell:
 
 ```sh
-export KBX_DIR="$PWD"
-cd ../kbx-demo-app && git pull
+export HOMEOSTAT_DIR="$PWD"
+cd ../homeostat-demo-app && git pull
 claude
 ```
 
 Ask: *"Add a `.badge` style in web/badge.css with a blue background."*
 
-Done when the agent uses `var(--color-*)` rather than a hex value without being told, and says so when asked why (`/kbx:explain web/badge.css` shows the rule, its PR comment and its owner).
+Done when the agent uses `var(--color-*)` rather than a hex value without being told, and says so when asked why (`/homeostat:explain web/badge.css` shows the rule, its PR comment and its owner).
 
-For Cursor and Copilot, run `kbx export --kb ../kbx-demo-kb --out .` in `kbx-demo-app`, commit, and ask the same question in each tool.
+For Cursor and Copilot, run `homeostat export --kb ../homeostat-demo-kb --out .` in `homeostat-demo-app`, commit, and ask the same question in each tool.
 
 ## Clean up
 
 ```sh
-gh repo delete "$ME/kbx-demo-kb" --yes && gh repo delete "$ME/kbx-demo-app" --yes
+gh repo delete "$ME/homeostat-demo-kb" --yes && gh repo delete "$ME/homeostat-demo-app" --yes
 ```

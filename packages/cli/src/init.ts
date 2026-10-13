@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { CONFIG_FILE, ID_PATTERN, slugify, validate } from "@kbx/core";
+import { CONFIG_FILE, ID_PATTERN, slugify, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
 import { formatIssues, painter } from "./format.ts";
@@ -26,8 +26,8 @@ export function memberIdFrom(name: string | undefined): string {
 function configTemplate(member: string, handle: string | undefined): string {
   const handleLine = handle
     ? `      handle: "${handle}"`
-    : `      # handle: "@your-user"   # needed by \`kbx codeowners\``;
-  return `# kbx knowledge base config. \`kbx validate\` checks it.
+    : `      # handle: "@your-user"   # needed by \`homeostat codeowners\``;
+  return `# homeostat knowledge base config. \`homeostat validate\` checks it.
 version: 1
 
 team:
@@ -48,7 +48,7 @@ scoring:
 distribution:
   tokenBudget: 2000
 
-# Needed by the curator (kbx curate): the KB repo and the code repos it reads.
+# Needed by the curator (homeostat curate): the KB repo and the code repos it reads.
 # sources:
 #   host: github            # or bitbucket
 #   kbRepo: your-org/team-kb
@@ -56,9 +56,9 @@ distribution:
 `;
 }
 
-const VALIDATE_STEP = "npx --yes kbx@0 validate";
-const CURATE_STEP = "npx --yes kbx@0 curate";
-const DEEP_DIVE_STEP = "npx --yes kbx@0 deep-dive";
+const VALIDATE_STEP = "npx --yes homeostat@0 validate";
+const CURATE_STEP = "npx --yes homeostat@0 curate";
+const DEEP_DIVE_STEP = "npx --yes homeostat@0 deep-dive";
 /** The agents default to the Claude Code runtime, so their CI jobs install Claude Code. */
 const INSTALL_CLAUDE = "npm install -g @anthropic-ai/claude-code";
 
@@ -69,13 +69,13 @@ interface CiFile {
   snippet: string;
 }
 
-/** A scheduled GitHub Actions workflow that runs one kbx agent and may open a PR here. */
+/** A scheduled GitHub Actions workflow that runs one homeostat agent and may open a PR here. */
 const githubAgentWorkflow = (
   name: string,
   purpose: string,
   cron: string,
   command: string,
-) => `name: kbx ${name}
+) => `name: homeostat ${name}
 
 # ${purpose}
 on:
@@ -98,13 +98,13 @@ jobs:
         with:
           node-version: 24
       - run: |
-          git config user.name "kbx ${name}"
-          git config user.email "kbx@users.noreply.github.com"
+          git config user.name "homeostat ${name}"
+          git config user.email "homeostat@users.noreply.github.com"
       # With agents.runtime: claude-code (Team/Enterprise plans only, for a team KB), uncomment:
       # - run: ${INSTALL_CLAUDE}
       - run: ${command}
         env:
-          GITHUB_TOKEN: \${{ secrets.KBX_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: \${{ secrets.HOMEOSTAT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           # A Claude Console API key (agents.runtime: api, the default).
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
           # Or, with agents.runtime: claude-code, a token from \`claude setup-token\`:
@@ -127,8 +127,8 @@ const GITHUB_DEEP_DIVE = githubAgentWorkflow(
 const CI_FILES: Record<Host, CiFile[]> = {
   github: [
     {
-      path: ".github/workflows/kbx.yml",
-      content: `name: kbx
+      path: ".github/workflows/homeostat.yml",
+      content: `name: homeostat
 
 on:
   pull_request:
@@ -151,12 +151,12 @@ jobs:
       snippet: `      - run: ${VALIDATE_STEP}`,
     },
     {
-      path: ".github/workflows/kbx-curator.yml",
+      path: ".github/workflows/homeostat-curator.yml",
       content: GITHUB_CURATOR,
       snippet: GITHUB_CURATOR,
     },
     {
-      path: ".github/workflows/kbx-deep-dive.yml",
+      path: ".github/workflows/homeostat-deep-dive.yml",
       content: GITHUB_DEEP_DIVE,
       snippet: GITHUB_DEEP_DIVE,
     },
@@ -171,35 +171,35 @@ clone:
 
 definitions:
   steps:
-    - step: &kbx-validate
-        name: kbx validate
+    - step: &homeostat-validate
+        name: homeostat validate
         script:
           - ${VALIDATE_STEP}
 
 pipelines:
   pull-requests:
     "**":
-      - step: *kbx-validate
+      - step: *homeostat-validate
   branches:
     main:
-      - step: *kbx-validate
+      - step: *homeostat-validate
   custom:
     # Scheduled in Repository settings > Pipelines > Schedules (daily).
-    kbx-curator:
+    homeostat-curator:
       - step:
-          name: kbx curator
+          name: homeostat curator
           script:
-            - git config user.name "kbx curator"
-            - git config user.email "kbx-curator@noreply.invalid"
+            - git config user.name "homeostat curator"
+            - git config user.email "homeostat-curator@noreply.invalid"
             # With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}
             - ${CURATE_STEP}
     # Scheduled weekly the same way.
-    kbx-deep-dive:
+    homeostat-deep-dive:
       - step:
-          name: kbx deep dive
+          name: homeostat deep dive
           script:
-            - git config user.name "kbx deep-dive"
-            - git config user.email "kbx-deep-dive@noreply.invalid"
+            - git config user.name "homeostat deep-dive"
+            - git config user.email "homeostat-deep-dive@noreply.invalid"
             # With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}
             - ${DEEP_DIVE_STEP}
 `,
@@ -207,13 +207,13 @@ pipelines:
   pull-requests:
     "**":
       - step:
-          name: kbx validate
+          name: homeostat validate
           script:
             - ${VALIDATE_STEP}
   custom:
-    kbx-curator:
+    homeostat-curator:
       - step:
-          name: kbx curator
+          name: homeostat curator
           script:
             - ${CURATE_STEP}`,
     },
@@ -225,18 +225,18 @@ const TOKEN_HELP: Record<Host, string> = {
 Ask a workspace admin for a workspace access token with:
   code repos:  pullrequest:read, repository:read
   this repo:   pullrequest:write, repository:write
-Store it as the secured repository variable KBX_BITBUCKET_TOKEN, and a Claude Console API key
+Store it as the secured repository variable HOMEOSTAT_BITBUCKET_TOKEN, and a Claude Console API key
 as ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-commercial use
-only; a team KB needs a Console key or a Team/Enterprise plan.) Then schedule the kbx-curator pipeline daily and kbx-deep-dive weekly under
-Repository settings > Pipelines > Schedules, and add a sources section to kbx.yaml.`,
+only; a team KB needs a Console key or a Team/Enterprise plan.) Then schedule the homeostat-curator pipeline daily and homeostat-deep-dive weekly under
+Repository settings > Pipelines > Schedules, and add a sources section to homeostat.yaml.`,
   github: `The curator reads PRs from your code repos and opens one PR on this repo each day.
 The workflow's GITHUB_TOKEN covers this repo. To read other repos, create a fine-grained
 token or GitHub App with:
   code repos:  Pull requests: read, Contents: read
   this repo:   Pull requests: write, Contents: write
-Store it as the Actions secret KBX_GITHUB_TOKEN, and a Claude Console API key as
+Store it as the Actions secret HOMEOSTAT_GITHUB_TOKEN, and a Claude Console API key as
 ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-commercial use only;
-a team KB needs a Console key or a Team/Enterprise plan.) Then add a sources section to kbx.yaml.`,
+a team KB needs a Console key or a Team/Enterprise plan.) Then add a sources section to homeostat.yaml.`,
 };
 
 export interface InitOptions {
@@ -246,7 +246,7 @@ export interface InitOptions {
   force?: boolean;
 }
 
-/** `kbx init [dir]`: scaffolds kbx.yaml, knowledge/ and a validate CI file in a KB repo. */
+/** `homeostat init [dir]`: scaffolds homeostat.yaml, knowledge/ and a validate CI file in a KB repo. */
 export function runInit(dir: string, opts: InitOptions, io: Io): number {
   const root = resolve(dir);
   const paint = painter(io);
@@ -271,13 +271,13 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
 
   const writes: Record<string, string> = { [CONFIG_FILE]: configTemplate(member, opts.handle) };
   if (!existsSync(join(root, "knowledge/core"))) writes["knowledge/core/.gitkeep"] = "";
-  // The hooks log local events under .kbx/; they never belong in the shared repo.
+  // The hooks log local events under .homeostat/; they never belong in the shared repo.
   const gitignore = existsSync(join(root, ".gitignore"))
     ? readFileSync(join(root, ".gitignore"), "utf8")
     : "";
-  if (!/^\/?\.kbx\/?$/m.test(gitignore)) {
+  if (!/^\/?\.homeostat\/?$/m.test(gitignore)) {
     writes[".gitignore"] =
-      `${gitignore}${gitignore && !gitignore.endsWith("\n") ? "\n" : ""}.kbx/\n`;
+      `${gitignore}${gitignore && !gitignore.endsWith("\n") ? "\n" : ""}.homeostat/\n`;
   }
   const notes: string[] = [];
   if (host) {
@@ -314,7 +314,7 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
   } else {
     io.stdout(
       "Skipped CI: could not detect the git host from the origin remote.\n" +
-        "Rerun with --host github|bitbucket --force to add it (--force also rewrites kbx.yaml).\n\n",
+        "Rerun with --host github|bitbucket --force to add it (--force also rewrites homeostat.yaml).\n\n",
     );
   }
   for (const note of notes) io.stdout(`${note}\n\n`);
@@ -322,8 +322,8 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
   io.stdout(
     `Next steps:
   1. Add your teammates and areas to ${CONFIG_FILE}
-  2. Give each member a handle, then run kbx codeowners
-  3. Write your first entry under knowledge/core/ and run kbx validate
+  2. Give each member a handle, then run homeostat codeowners
+  3. Write your first entry under knowledge/core/ and run homeostat validate
   4. Commit and push
 `,
   );

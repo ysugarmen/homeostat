@@ -1,12 +1,12 @@
 {
-  "name": "kbx",
-  "description": "The kbx Claude Code plugin, installable from this repository.",
+  "name": "homeostat",
+  "description": "The homeostat Claude Code plugin, installable from this repository.",
   "owner": {
-    "name": "kbx contributors"
+    "name": "homeostat contributors"
   },
   "plugins": [
     {
-      "name": "kbx",
+      "name": "homeostat",
       "source": "./packages/plugin",
       "description": "Capture, explain and review your team's knowledge base entries from inside Claude Code."
     }

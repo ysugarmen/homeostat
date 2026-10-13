@@ -55,17 +55,17 @@ export function commitFile(
   const base = old ?? git(dir, "rev-parse", "--verify", "--quiet", "HEAD");
   if (!base) throw new Error("the knowledge base repo has no commits yet");
 
-  const tmp = mkdtempSync(join(tmpdir(), "kbx-index-"));
+  const tmp = mkdtempSync(join(tmpdir(), "homeostat-index-"));
   try {
     const env: NodeJS.ProcessEnv = { ...process.env, GIT_INDEX_FILE: join(tmp, "index") };
     // commit-tree needs an identity; fall back to a neutral one rather than fail.
     if (!git(dir, "config", "user.name")) {
-      Object.assign(env, { GIT_AUTHOR_NAME: "kbx", GIT_COMMITTER_NAME: "kbx" });
+      Object.assign(env, { GIT_AUTHOR_NAME: "homeostat", GIT_COMMITTER_NAME: "homeostat" });
     }
     if (!git(dir, "config", "user.email")) {
       Object.assign(env, {
-        GIT_AUTHOR_EMAIL: "kbx@localhost",
-        GIT_COMMITTER_EMAIL: "kbx@localhost",
+        GIT_AUTHOR_EMAIL: "homeostat@localhost",
+        GIT_COMMITTER_EMAIL: "homeostat@localhost",
       });
     }
     gitOrThrow(dir, ["read-tree", base], { env });

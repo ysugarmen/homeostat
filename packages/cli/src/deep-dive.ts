@@ -7,7 +7,7 @@ import {
   DeepDiveError,
   deepDive,
   validate,
-} from "@kbx/core";
+} from "@homeostat/core";
 import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { readKbFiles } from "./files.ts";
@@ -27,7 +27,7 @@ function prBody(changes: DeepDiveChange[], notes: string[]): string {
     c.actions.map((a) => `| ${c.id} | ${a.action} | ${a.note} |`),
   );
   return [
-    "The weekly kbx deep dive: near-duplicates merged, contradictions marked disputed, stale entries retired.",
+    "The weekly homeostat deep dive: near-duplicates merged, contradictions marked disputed, stale entries retired.",
     "",
     "| Entry | Action | Detail |",
     "| --- | --- | --- |",
@@ -38,13 +38,13 @@ function prBody(changes: DeepDiveChange[], notes: string[]): string {
   ].join("\n");
 }
 
-/** `kbx deep-dive`: the weekly maintenance run, meant for the KB repo's scheduled CI job. */
+/** `homeostat deep-dive`: the weekly maintenance run, meant for the KB repo's scheduled CI job. */
 export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number> {
   try {
     const root = resolve(opts.dir);
     const files = readKbFiles(root);
     const config = validate(files).config;
-    if (!config) throw new CliError("kbx.yaml is missing or invalid; run kbx validate");
+    if (!config) throw new CliError("homeostat.yaml is missing or invalid; run homeostat validate");
 
     const now = io.now?.() ?? new Date();
     const today = now.toISOString().slice(0, 10);
@@ -74,21 +74,21 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
 
     const sources = config.sources;
     if (!sources) {
-      throw new CliError("kbx.yaml has no sources section; it is needed to open the PR");
+      throw new CliError("homeostat.yaml has no sources section; it is needed to open the PR");
     }
     const [owner = "", name = ""] = sources.kbRepo.split("/");
     await publish({
       root,
-      branch: `kbx/deep-dive-${today}`,
+      branch: `homeostat/deep-dive-${today}`,
       changes: changes.map((c) => ({
         path: c.path,
         text: c.text,
-        message: `kbx: ${c.actions.map((a) => a.action).join(", ")} ${c.id}`,
+        message: `homeostat: ${c.actions.map((a) => a.action).join(", ")} ${c.id}`,
       })),
       provider: providerFor(sources.host, io, "open the deep-dive PR"),
       kbRepo: { owner, name },
       base: sources.baseBranch,
-      title: `kbx: weekly deep dive (${plural(changes.length, "entry", "entries")} changed)`,
+      title: `homeostat: weekly deep dive (${plural(changes.length, "entry", "entries")} changed)`,
       body: prBody(changes, notes),
       io,
     });
