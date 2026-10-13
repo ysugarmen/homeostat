@@ -13,6 +13,8 @@ export interface CheckContext {
   autoMergeThreshold: number;
   /** Member ids from the config's `team`. When omitted, member references are not checked. */
   members?: readonly string[];
+  /** The computed score, when known; the threshold check uses it instead of the stored one. */
+  score?: number;
 }
 
 /** Checks one parsed entry against its location and the KB config. Pure; no I/O. */
@@ -64,11 +66,12 @@ export function checkEntry(entry: Entry, ctx: CheckContext): Issue[] {
     }
   }
 
-  if (fm.status === "accepted" && fm.score < ctx.autoMergeThreshold && !fm.approvedBy) {
+  const score = ctx.score ?? fm.score;
+  if (fm.status === "accepted" && score < ctx.autoMergeThreshold && !fm.approvedBy) {
     issues.push(
       error(
         "accepted.belowThreshold",
-        `accepted with score ${fm.score} below the auto-merge threshold ${ctx.autoMergeThreshold}; set approvedBy or lower the status`,
+        `accepted with score ${score} below the auto-merge threshold ${ctx.autoMergeThreshold}; set approvedBy or lower the status`,
         { path: "status", file },
       ),
     );

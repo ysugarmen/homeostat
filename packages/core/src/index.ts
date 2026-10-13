@@ -9,7 +9,16 @@ export {
   parseConfig,
   type Weights,
 } from "./config.ts";
+export {
+  type Conflict,
+  type ConflictKind,
+  detectConflicts,
+  scopesOverlap,
+  TITLE_SIMILARITY,
+  titleSimilarity,
+} from "./conflicts.ts";
 export { type Entry, parseEntry } from "./entry.ts";
+export { applyFixes } from "./fix.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export {
   type Frontmatter,
@@ -21,4 +30,6 @@ export {
   type Status,
   sourceSchema,
 } from "./schema.ts";
+export { type ScoreContext, type ScoreReason, type ScoreResult, score } from "./score.ts";
 export { countTokens } from "./tokens.ts";
+export { type KbFiles, type ValidatedEntry, type ValidateResult, validate } from "./validate.ts";
