@@ -30,7 +30,12 @@ export interface HookInput {
 
 /** The KB checkout: the plugin's kb_dir option, then $HOMEOSTAT_DIR, then the session dir itself. */
 export function findKb(env: Io["env"], cwd: string): string | undefined {
-  const configured = env?.CLAUDE_PLUGIN_OPTION_KB_DIR || env?.HOMEOSTAT_DIR;
+  // The plugin passes its kb_dir setting to hooks as CLAUDE_PLUGIN_OPTION_KB_DIR and to the MCP
+  // server as HOMEOSTAT_KB_DIR_SETTING; both may be empty (or an unexpanded template) when unset.
+  const setting = [env?.CLAUDE_PLUGIN_OPTION_KB_DIR, env?.HOMEOSTAT_KB_DIR_SETTING].find(
+    (v) => v && !v.includes("${"),
+  );
+  const configured = setting || env?.HOMEOSTAT_DIR;
   if (configured) return resolve(configured);
   return existsSync(join(cwd, CONFIG_FILE)) ? cwd : undefined;
 }

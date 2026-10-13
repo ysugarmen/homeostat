@@ -180,3 +180,17 @@ test("inside an agent's own claude -p call the hooks do nothing", async () => {
   expect(code).toBe(0);
   expect(stdout).toBe("");
 });
+
+describe("findKb", () => {
+  test("an empty or unexpanded plugin setting falls back to HOMEOSTAT_DIR", async () => {
+    const { findKb } = await import("../src/hook.ts");
+    expect(findKb({ HOMEOSTAT_KB_DIR_SETTING: "", HOMEOSTAT_DIR: "/kb" }, "/x")).toBe("/kb");
+    expect(
+      findKb({ HOMEOSTAT_KB_DIR_SETTING: "${user_config.kb_dir}", HOMEOSTAT_DIR: "/kb" }, "/x"),
+    ).toBe("/kb");
+    expect(findKb({ HOMEOSTAT_KB_DIR_SETTING: "/set", HOMEOSTAT_DIR: "/kb" }, "/x")).toBe("/set");
+    expect(findKb({ CLAUDE_PLUGIN_OPTION_KB_DIR: "/hook", HOMEOSTAT_DIR: "/kb" }, "/x")).toBe(
+      "/hook",
+    );
+  });
+});

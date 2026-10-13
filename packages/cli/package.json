@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@homeostat/core": "workspace:*",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "@homeostat/mcp": "workspace:*"
   }
 }

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "homeostat": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/run.mjs", "mcp"],
+      "env": { "HOMEOSTAT_KB_DIR_SETTING": "${user_config.kb_dir}" }
+    }
+  }
+}

@@ -61,9 +61,9 @@ Goal: a developer on any team can install it in one command and see the loop clo
 
 ## Phase 3 — MCP server (weeks 5–6)
 
-- [ ] **3.1 Tools.** `search`, `context` (same selection logic as the hook), `learn`, `explain` (why a rule exists, with source link), `flag` (dispute an entry), `report` (KB health). *Done when:* each tool has a test and a description under 200 characters.
-- [ ] **3.2 Unknown-call logging.** Log every tool name the model attempts that doesn't exist; surface it in the dashboard as a desire path. *Done when:* a fake call shows up in the log.
-- [ ] **3.3 Cross-client check.** *Done when:* Claude Desktop and Cursor both list the server and `search` returns results.
+- [x] **3.1 Tools.** `search`, `context` (same selection logic as the hook), `learn`, `explain` (why a rule exists, with source link), `flag` (dispute an entry), `report` (KB health). *Done when:* each tool has a test and a description under 200 characters. **Status:** `homeostat mcp` (package `@homeostat/mcp`, SDK 1.32 low-level server); `search` is local BM25 keyword ranking, `context` reuses the hook's selection, `learn`/`flag` commit to `candidates/<member>`; tested through a real client over in-memory and stdio transports.
+- [x] **3.2 Unknown-call logging.** Log every tool name the model attempts that doesn't exist; surface it in the dashboard as a desire path. *Done when:* a fake call shows up in the log. **Status:** unknown tools are logged (`mcp-unknown-tool`) and answered with the tool list and closest match; common guesses (`get_rules`, `remember`, `list`, argument spellings like `q`, `entry_id`) are accepted and logged as `mcp-alias`. The dashboard surfaces both (Phase 4).
+- [ ] **3.3 Cross-client check.** *Done when:* Claude Desktop and Cursor both list the server and `search` returns results. **Status:** verified live in Claude Code through the plugin (`mcp__plugin_homeostat_homeostat__search` returned the right entry); Claude Desktop and Cursor configs are in `packages/mcp/README.md` and need a manual check.
 
 ## Phase 4 — Dashboard (weeks 6–9)
 

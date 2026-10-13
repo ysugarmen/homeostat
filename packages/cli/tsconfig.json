@@ -1,6 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": ".", "outDir": "dist" },
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
   "include": ["src", "test"],
-  "references": [{ "path": "../core" }]
+  "references": [
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../mcp"
+    }
+  ]
 }

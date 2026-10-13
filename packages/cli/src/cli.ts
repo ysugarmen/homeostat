@@ -5,9 +5,11 @@ import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
 import { type ExportOptions, runExport } from "./export.ts";
+import { type FlagOptions, runFlag } from "./flag.ts";
 import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
+import { runMcp } from "./mcp.ts";
 import { runUp, type UpOptions } from "./up.ts";
 import { runValidate } from "./validate.ts";
 
@@ -120,6 +122,26 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--push", "push --branch to origin after committing")
     .action(async (url: string | undefined, opts: LearnOptions) => {
       exitCode = await runLearn(url, opts, io);
+    });
+
+  program
+    .command("flag")
+    .description("Report that an entry is wrong: it loses score and goes back to review.")
+    .argument("<id>", "entry id")
+    .option("--reason <text>", "what is wrong")
+    .option("--dir <dir>", "knowledge base root", ".")
+    .option("--by <id>", "member reporting it (default: git user)")
+    .option("--branch <name>", "commit to this KB branch instead of the working tree")
+    .option("--push", "push --branch to origin after committing")
+    .action((id: string, opts: FlagOptions) => {
+      exitCode = runFlag(id, opts, io);
+    });
+
+  program
+    .command("mcp")
+    .description("Serve the knowledge base to any agent over MCP (stdio).")
+    .action(async () => {
+      exitCode = await runMcp(io);
     });
 
   program
