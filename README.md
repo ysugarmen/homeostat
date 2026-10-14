@@ -31,6 +31,9 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat events` | The local event log, one line per event |
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |
 | `homeostat mcp` | Serve the KB to any agent over MCP (stdio) |
+| `homeostat docs convert <file...>` | Bring existing markdown documents into `knowledge/<area>/docs/`, with section ids and provenance |
+| `homeostat seed <checkout>` | Draft a team's first documents from a local repo (manual only: the one command that sends code to a model) |
+| `homeostat digest` | Post the weekly digest to Slack (CI) |
 | `homeostat doctor --security` | Check a setup: what is read, what leaves, who can change the rules, the blast radius |
 
 The Claude Code plugin is in [`packages/plugin`](packages/plugin).

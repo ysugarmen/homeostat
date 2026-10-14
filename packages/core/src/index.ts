@@ -102,6 +102,7 @@ export {
   type RuleText,
 } from "./deepdive.ts";
 export { explainEntry, hitLine, kbReport } from "./describe.ts";
+export { buildDigest, type DigestInput } from "./digest.ts";
 export {
   DOC_SECTION_MAX_WORDS,
   type Doc,

@@ -5,6 +5,7 @@ import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
+import { type DigestOptions, runDigest } from "./digest.ts";
 import { type ConvertDocsOptions, runConvertDocs } from "./docs.ts";
 import { runDoctor } from "./doctor.ts";
 import { runEvents } from "./events-command.ts";
@@ -215,6 +216,18 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--force", "replace documents that already exist")
     .action(async (repo: string, opts: SeedOptions) => {
       exitCode = await runSeed(repo, opts, io);
+    });
+
+  program
+    .command("digest")
+    .description(
+      "Post the weekly digest to the Slack webhook in notifications.slackWebhookEnv (run in CI).",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--days <n>", "window in days", "7")
+    .option("--dry-run", "print the digest instead of posting it")
+    .action(async (opts: DigestOptions) => {
+      exitCode = await runDigest(opts, io);
     });
 
   program

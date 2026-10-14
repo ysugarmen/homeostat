@@ -47,6 +47,10 @@ scoring:
 distribution:
   tokenBudget: 2000
 
+# The weekly digest (homeostat digest) posts to the Slack webhook in this CI secret.
+# notifications:
+#   slackWebhookEnv: HOMEOSTAT_SLACK_WEBHOOK
+
 # Needed by the curator (homeostat curate): the KB repo and the code repos it reads.
 # sources:
 #   host: github            # or bitbucket
@@ -58,6 +62,33 @@ distribution:
 const VALIDATE_STEP = `npx --yes homeostat@${VERSION} validate`;
 const CURATE_STEP = `npx --yes homeostat@${VERSION} curate`;
 const DEEP_DIVE_STEP = `npx --yes homeostat@${VERSION} deep-dive`;
+const DIGEST_STEP = `npx --yes homeostat@${VERSION} digest`;
+
+/** The weekly digest: no model, no write access; it only posts to the team's Slack webhook. */
+const GITHUB_DIGEST = `name: homeostat digest
+
+# The weekly digest: new and changed rules, document updates, the review queue and flags,
+# posted to Slack. Set notifications.slackWebhookEnv in homeostat.yaml and the secret it names.
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: ${DIGEST_STEP}
+        env:
+          HOMEOSTAT_SLACK_WEBHOOK: \${{ secrets.HOMEOSTAT_SLACK_WEBHOOK }}
+`;
 /** With agents.runtime: claude-code, the agents' CI jobs also install Claude Code. */
 const INSTALL_CLAUDE = "npm install -g @anthropic-ai/claude-code";
 
@@ -159,6 +190,11 @@ jobs:
       content: GITHUB_DEEP_DIVE,
       snippet: GITHUB_DEEP_DIVE,
     },
+    {
+      path: ".github/workflows/homeostat-digest.yml",
+      content: GITHUB_DIGEST,
+      snippet: GITHUB_DIGEST,
+    },
   ],
   bitbucket: [
     {
@@ -201,6 +237,12 @@ pipelines:
             - git config user.email "homeostat-deep-dive@noreply.invalid"
             # With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}
             - ${DEEP_DIVE_STEP}
+    # Scheduled weekly; posts to the webhook in the secured variable HOMEOSTAT_SLACK_WEBHOOK.
+    homeostat-digest:
+      - step:
+          name: homeostat digest
+          script:
+            - ${DIGEST_STEP}
 `,
       snippet: `pipelines:
   pull-requests:
