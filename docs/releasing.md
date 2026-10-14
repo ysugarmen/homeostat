@@ -25,9 +25,15 @@ The tag starts `.github/workflows/release.yml`, which:
 
 1. **Make the repository public.** npm only issues provenance for packages built from public repositories.
 2. **Reserve the names**: the `homeostat` package and the `@homeostat` scope on npm. Turn on 2FA for the npm and GitHub owner accounts.
-3. **Add a trusted publisher** for each of the four packages on npmjs.com (package settings → Trusted publisher → GitHub Actions): repository `ysugarmen/homeostat`, workflow `release.yml`, environment `npm`. If npm will not add one before a package exists, publish the first version of that package by hand from the packed tarball (`npm publish <tgz> --access public`), then add the publisher and release through tags from then on.
-4. **Create the `npm` environment** in the GitHub repository settings, with a required reviewer, so a pushed tag alone cannot publish.
-5. **Install Renovate** on the repository. `renovate.json` waits three days before proposing a new version, and `pnpm-workspace.yaml` refuses to install anything newer than three days (`minimumReleaseAge`).
+3. **First release only:** npm attaches a trusted publisher only to a package that already exists. So for 0.1.0:
+   - create a granular access token with read and write on packages and scopes, expiring in a day or two
+   - store it as the repository secret `NPM_TOKEN`
+   - push the tag
+
+   The workflow still publishes with provenance.
+4. **Add a trusted publisher** for each of the four packages on npmjs.com (package settings → Trusted publisher → GitHub Actions): repository `ysugarmen/homeostat`, workflow `release.yml`, environment `npm`. Then delete the `NPM_TOKEN` secret and revoke the token: from now on releases need no stored credential.
+5. **Create the `npm` environment** in the GitHub repository settings, with a required reviewer, so a pushed tag alone cannot publish.
+6. **Install Renovate** on the repository. `renovate.json` waits three days before proposing a new version, and `pnpm-workspace.yaml` refuses to install anything newer than three days (`minimumReleaseAge`).
 
 ## Checking a release
 

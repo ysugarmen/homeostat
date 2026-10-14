@@ -1,28 +1,38 @@
 {
   "name": "@homeostat/dashboard",
   "version": "0.1.0",
-  "description": "Local dashboard for a Homeostat knowledge base: setup and metrics.",
-  "license": "Apache-2.0",
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
-  "dependencies": {
-    "@homeostat/core": "workspace:*",
-    "yaml": "^2.9.1"
+  "description": "The local dashboard for homeostat.",
+  "keywords": [
+    "homeostat",
+    "dashboard"
+  ],
+  "homepage": "https://github.com/ysugarmen/homeostat#readme",
+  "bugs": {
+    "url": "https://github.com/ysugarmen/homeostat/issues"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ysugarmen/homeostat.git",
     "directory": "packages/dashboard"
   },
-  "engines": {
-    "node": ">=22.18"
+  "license": "Apache-2.0",
+  "author": "Yonatan Sugarmen",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
   },
   "files": [
     "dist/src",
-    "!dist/src/**/*.tsbuildinfo"
+    "!dist/src/**/*.tsbuildinfo",
+    "README.md"
   ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "@homeostat/core": "workspace:*",
+    "yaml": "^2.9.1"
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true,

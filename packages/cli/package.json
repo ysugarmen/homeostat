@@ -1,12 +1,41 @@
 {
   "name": "homeostat",
   "version": "0.1.0",
-  "description": "Command-line interface for homeostat knowledge bases.",
+  "description": "Turn your team's code-review lessons into rules every coding agent follows: Claude Code, MCP, Cursor, Copilot, AGENTS.md.",
+  "keywords": [
+    "claude-code",
+    "mcp",
+    "ai-agents",
+    "code-review",
+    "knowledge-base",
+    "cursor",
+    "copilot",
+    "agents-md",
+    "coding-rules"
+  ],
+  "homepage": "https://github.com/ysugarmen/homeostat#readme",
+  "bugs": {
+    "url": "https://github.com/ysugarmen/homeostat/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ysugarmen/homeostat.git",
+    "directory": "packages/cli"
+  },
   "license": "Apache-2.0",
+  "author": "Yonatan Sugarmen",
   "type": "module",
   "bin": {
     "homeostat": "./bin/homeostat.js",
     "homeo": "./bin/homeostat.js"
+  },
+  "files": [
+    "bin",
+    "dist/src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.18"
   },
   "dependencies": {
     "@homeostat/core": "workspace:*",
@@ -14,18 +43,6 @@
     "@homeostat/mcp": "workspace:*",
     "@homeostat/dashboard": "workspace:*"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ysugarmen/homeostat.git",
-    "directory": "packages/cli"
-  },
-  "engines": {
-    "node": ">=22.18"
-  },
-  "files": [
-    "bin",
-    "dist/src"
-  ],
   "publishConfig": {
     "access": "public",
     "provenance": true
