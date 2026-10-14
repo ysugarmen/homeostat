@@ -63,3 +63,13 @@ export function nextRun(expr: string, from: Date, withinDays = 31): Date | undef
   }
   return undefined;
 }
+
+const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+/** When the weekly digest runs under `homeostat up`: 08:00 UTC on `notifications.digestDay`. */
+export const digestCron = (config: Config) =>
+  `0 8 * * ${DAYS.indexOf(config.notifications.digestDay)}`;
+
+/** Whether `homeostat up` should post the digest now: a webhook is configured and it is time. */
+export const digestDue = (config: Config, date: Date) =>
+  config.notifications.slackWebhookEnv !== undefined && cronMatches(digestCron(config), date);

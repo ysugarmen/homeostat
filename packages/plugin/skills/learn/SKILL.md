@@ -39,6 +39,14 @@ Do not invent facts. If the lesson came from a correction in this session, the r
 
 Show the draft to the user and wait for approval before writing it.
 
+**A fact about how the system works** (a renamed service, a finished migration, a contract between repos) belongs in a team document rather than a rule. Find them under `<kb>/knowledge/<area>/docs/` (Glob) or with the MCP `docs` tool. Then patch exactly one section:
+
+```sh
+homeostat learn --dir "<kb>" --doc <area>/<topic> --section <id> --append --text "<the new fact>"
+```
+
+Use `--append` to add to a section. Drop it to replace a section's text when it is now wrong, keeping every sentence that is still true. Use `--heading "<Heading>"` with a new `--section` id to add a section. Never rewrite a whole document.
+
 ## 3. Write it
 
 From a PR review comment URL (Bitbucket `#comment-N`, GitHub `#discussion_rN`), pass the URL first; the CLI fetches the comment, sets the source and works out the author:

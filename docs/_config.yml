@@ -1,0 +1,6 @@
+title: Homeostat
+description: Your team's code-review lessons, as rules every coding agent follows.
+theme: jekyll-theme-primer
+# Planning documents stay in the repo but are not part of the site's navigation.
+exclude:
+  - execution-plan.md

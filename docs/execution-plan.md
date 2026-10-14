@@ -107,8 +107,8 @@ Design: [knowledge-docs.md](knowledge-docs.md).
 ## Phase 6 — Launch (weeks 10–12)
 
 - [ ] **6.1 README** with a 90-second demo GIF of the end-to-end loop, one-command install, and the "why this exists" paragraph from the executive summary.
-- [ ] **6.2 Docs site:** quickstart, entry format, config reference, agents, MCP, dashboard, contributing.
-- [ ] **6.3 CONTRIBUTING, code of conduct, issue templates, good-first-issue labels.**
+- [x] **6.2 Docs site:** quickstart, entry format, config reference, agents, MCP, dashboard, contributing. — *Status:* written for GitHub Pages (Jekyll, no build tooling): `docs/index.md` and `docs/guide/` (quickstart, rules and documents, a configuration reference covering every key with a test that keeps it complete, agents, tools, dashboard), linking the trust pages. Turn it on in Settings → Pages → Deploy from branch `main`, folder `/docs`.
+- [ ] **6.3 CONTRIBUTING, code of conduct, issue templates, good-first-issue labels.** — *Status:* CONTRIBUTING.md, CODE_OF_CONDUCT.md (Contributor Covenant 2.1, reports to the maintainer's email), bug and feature issue forms, a security contact link, and a PR template. The good-first-issue label exists; the issues themselves are still to be filed.
 - [ ] **6.4 Claude Code marketplace submission.**
 - [ ] **6.5 Announce:** Show HN, r/ClaudeAI, the Claude Code Discord, a short post from the pilot team's engineering blog, direct notes to people writing about agent memory.
 - [ ] **6.6 Decision checkpoint** at the date set in the design doc: stars, installs, external PRs, inbound hosting requests. Decide whether a hosted tier is worth building.

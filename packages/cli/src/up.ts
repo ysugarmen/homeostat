@@ -1,9 +1,10 @@
 import { resolve } from "node:path";
-import { type AgentName, dueAgents, readKbFiles, validate } from "@homeostat/core";
+import { type AgentName, digestDue, dueAgents, readKbFiles, validate } from "@homeostat/core";
 import { startDashboard } from "@homeostat/dashboard";
 import type { Io } from "./cli.ts";
 import { runCurate } from "./curate.ts";
 import { runDeepDive } from "./deep-dive.ts";
+import { runDigest } from "./digest.ts";
 import { git } from "./git.ts";
 
 export interface UpOptions {
@@ -43,6 +44,10 @@ async function tick(root: string, io: Io, now: Date, all: boolean): Promise<numb
   for (const agent of due) {
     io.stdout(`[${now.toISOString()}] running ${agent}\n`);
     code = Math.max(code, await RUNNERS[agent](root, io));
+  }
+  if (!all && digestDue(config, now)) {
+    io.stdout(`[${now.toISOString()}] posting the weekly digest\n`);
+    code = Math.max(code, await runDigest({ dir: root }, io));
   }
   return code;
 }

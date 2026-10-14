@@ -48,7 +48,14 @@ export {
   TITLE_SIMILARITY,
   titleSimilarity,
 } from "./conflicts.ts";
-export { type AgentName, cronMatches, dueAgents, nextRun } from "./cron.ts";
+export {
+  type AgentName,
+  cronMatches,
+  digestCron,
+  digestDue,
+  dueAgents,
+  nextRun,
+} from "./cron.ts";
 export {
   type CuratedEntry,
   CurateError,

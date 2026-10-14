@@ -64,3 +64,19 @@ describe("nextRun", () => {
     expect(nextRun("bad", new Date())).toBeUndefined();
   });
 });
+
+test("the digest is due at 08:00 UTC on digestDay, and only with a webhook configured", async () => {
+  const { digestDue } = await import("../src/cron.ts");
+  const { parseConfig } = await import("../src/config.ts");
+  const base = "version: 1\nteam:\n  members:\n    - { id: dana, role: senior }\nareas: {}\n";
+  const withHook = parseConfig(
+    `${base}notifications:\n  slackWebhookEnv: HOOK\n  digestDay: tuesday\n`,
+  ).config;
+  const without = parseConfig(base).config;
+  if (!withHook || !without) throw new Error("bad config");
+  const tuesday8 = new Date("2026-10-13T08:00:00Z"); // a Tuesday
+  expect(digestDue(withHook, tuesday8)).toBe(true);
+  expect(digestDue(withHook, new Date("2026-10-13T09:00:00Z"))).toBe(false);
+  expect(digestDue(withHook, new Date("2026-10-12T08:00:00Z"))).toBe(false);
+  expect(digestDue(without, new Date("2026-10-12T08:00:00Z"))).toBe(false);
+});

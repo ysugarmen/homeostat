@@ -11,11 +11,11 @@ The Homeostat knowledge base as an MCP server, so any agent can read and add to 
 | `flag` | Reports a rule as wrong: it loses score and goes back to review |
 | `docs` | Lists the team's reference documents and their sections, for an area or a file |
 | `read` | Reads a document, or one section of it, with where each section came from |
-
-`learn` and `flag` are off unless the KB sets `security.mcpWrites: true`, and then each session may make at most `security.mcpWriteLimit` (5) writes. An agent can be steered by text it reads, so by default it suggests and a person saves (`/homeostat:learn`, `homeostat learn`). Rules in `security.teamOnlyAreas` are only returned to members of that area.
 | `report` | Knowledge base health over recent days |
 
-Agents guess tool and argument names. Common guesses (`get_rules`, `remember`, `list`, `q`, `entry_id`, ...) are accepted and logged as desire paths in the KB's `.homeostat/events.jsonl`; any other unknown tool is logged and answered with the real tool list and the closest match. `homeostat report` shows the count, so the common guesses can become real tools.
+`learn` and `flag` are off unless the KB sets `security.mcpWrites: true`, and then each session may make at most `security.mcpWriteLimit` (5) writes. An agent can be steered by text it reads, so by default it suggests and a person saves (`/homeostat:learn`, `homeostat learn`). Rules in `security.teamOnlyAreas` are only returned to members of that area.
+
+Agents guess tool and argument names. Common guesses (`get_rules`, `remember`, `list`, `q`, `entry_id`, ...) are accepted and logged as desire paths in the KB's local event log (`.homeostat/events.db`); any other unknown tool is logged and answered with the real tool list and the closest match. `homeostat status` and the dashboard show them, so the common guesses can become real tools.
 
 ## Run it
 
