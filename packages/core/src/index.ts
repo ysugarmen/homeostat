@@ -22,6 +22,13 @@ export {
   claudeCodeAsker,
   type RunResult,
 } from "./claude-code.ts";
+export {
+  bedrockAsker,
+  bedrockModelId,
+  type CloudAskerOptions,
+  type CloudClient,
+  vertexAsker,
+} from "./cloud.ts";
 export { CODEOWNERS_FILE, generateCodeowners } from "./codeowners.ts";
 export {
   CONFIG_FILE,

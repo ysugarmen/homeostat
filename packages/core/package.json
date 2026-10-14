@@ -40,5 +40,21 @@
         "default": "./dist/src/index.js"
       }
     }
+  },
+  "devDependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.34.4",
+    "@anthropic-ai/vertex-sdk": "^0.20.4"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.34.4",
+    "@anthropic-ai/vertex-sdk": "^0.20.4"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/bedrock-sdk": {
+      "optional": true
+    },
+    "@anthropic-ai/vertex-sdk": {
+      "optional": true
+    }
   }
 }

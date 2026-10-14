@@ -105,8 +105,18 @@ export const configSchema = z.strictObject({
        * key in ANTHROPIC_API_KEY: the right choice for a team. `claude-code` runs `claude -p` with
        * whatever Claude Code is logged in with; on a personal Free/Pro/Max subscription that is
        * for personal, non-commercial use only, so teams use it only with a Team/Enterprise plan.
+       * `bedrock` and `vertex` call Claude through the team's own AWS or Google Cloud account.
        */
-      runtime: z.enum(["api", "claude-code"]).default("api"),
+      runtime: z.enum(["api", "claude-code", "bedrock", "vertex"]).default("api"),
+      /** With runtime bedrock: the AWS region (else AWS_REGION). Credentials come from the AWS chain. */
+      bedrock: z.strictObject({ region: z.string().min(1).optional() }).optional(),
+      /** With runtime vertex: the Google Cloud project and region (`global`, `us`, `eu` or a region). */
+      vertex: z
+        .strictObject({
+          projectId: z.string().min(1).optional(),
+          region: z.string().min(1).default("global"),
+        })
+        .optional(),
       curator: agentSchema("0 6 * * *", 26).prefault({}),
       deepDive: agentSchema("0 7 * * 1", 7 * 24)
         .extend({

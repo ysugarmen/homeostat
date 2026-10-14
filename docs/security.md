@@ -95,7 +95,7 @@ Controls (✅ built; publishing steps in [releasing.md](releasing.md)):
 Many companies cannot send even review comments to a new external service.
 
 Controls:
-1. **Choose the model platform.** Add runtimes for Amazon Bedrock and Google Vertex AI next to the Anthropic API and Claude Code (the Anthropic SDK has clients for both), so data stays inside the team's own cloud account and contracts. Document Anthropic API terms: API data is not used for training by default, and zero data retention is available on request.
+1. **Choose the model platform** ✅ ([runtimes.md](runtimes.md)). Add runtimes for Amazon Bedrock and Google Vertex AI next to the Anthropic API and Claude Code (the Anthropic SDK has clients for both), so data stays inside the team's own cloud account and contracts. Document Anthropic API terms: API data is not used for training by default, and zero data retention is available on request.
 2. **The consumer-subscription runtime stays personal-only** (already the case; see the decisions log).
 3. **Show exactly what would leave** ✅. `homeostat curate --show-prompts` prints every prompt and sends none. Each model call is logged as a `model-call` event (agent, runtime, model, size; never content).
 4. **Exclusions** ✅ (all checked before anything reaches a model):

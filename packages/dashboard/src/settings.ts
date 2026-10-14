@@ -152,8 +152,29 @@ export const SECTIONS: Section[] = [
         path: ["agents", "runtime"],
         label: "Claude runtime",
         kind: "select",
-        options: ["api", "claude-code"],
-        help: "api: Console key. claude-code: a Claude Code login (personal use, or a Team/Enterprise plan)",
+        options: ["api", "claude-code", "bedrock", "vertex"],
+        help: "api: Console key. claude-code: a Claude Code login (personal use, or a Team/Enterprise plan). bedrock / vertex: your own AWS or Google Cloud account",
+      },
+      {
+        path: ["agents", "bedrock", "region"],
+        label: "Bedrock region",
+        kind: "text",
+        optional: true,
+        help: "e.g. eu-west-1; empty uses AWS_REGION",
+      },
+      {
+        path: ["agents", "vertex", "projectId"],
+        label: "Vertex project",
+        kind: "text",
+        optional: true,
+        help: "Google Cloud project id",
+      },
+      {
+        path: ["agents", "vertex", "region"],
+        label: "Vertex region",
+        kind: "text",
+        optional: true,
+        help: "global, us, eu or a region",
       },
       ...agentFields("curator", "Curator"),
       ...agentFields("deepDive", "Deep dive"),
@@ -300,8 +321,9 @@ export function applySection(
       else if (field.kind === "lines") doc.setIn(field.path, doc.createNode(lines(raw ?? "")));
       else if (field.kind === "number")
         doc.setIn(field.path, raw === null || raw === "" ? undefined : Number(raw));
-      else if (field.optional && !raw?.trim()) doc.deleteIn(field.path);
-      else if (raw !== null) doc.setIn(field.path, raw.trim());
+      else if (field.optional && !raw?.trim()) {
+        if (doc.hasIn(field.path)) doc.deleteIn(field.path);
+      } else if (raw !== null) doc.setIn(field.path, raw.trim());
     }
   }
 
