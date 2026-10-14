@@ -73,7 +73,12 @@ test("the real SDK clients load lazily and expose messages.create", async () => 
   const { AnthropicBedrockMantle } = await import("@anthropic-ai/bedrock-sdk");
   const { AnthropicVertex } = await import("@anthropic-ai/vertex-sdk");
   const bedrock = new AnthropicBedrockMantle({ awsRegion: "us-east-1" });
-  const vertex = new AnthropicVertex({ region: "global", projectId: "p" });
+  // A stub auth client: no Google credential lookup in tests.
+  const vertex = new AnthropicVertex({
+    region: "global",
+    projectId: "p",
+    authClient: {} as never,
+  });
   expect(typeof bedrock.messages.create).toBe("function");
   expect(typeof vertex.messages.create).toBe("function");
 });

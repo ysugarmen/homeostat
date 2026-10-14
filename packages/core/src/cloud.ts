@@ -107,10 +107,15 @@ export function bedrockAsker(opts: CloudAskerOptions): Asker {
 export function vertexAsker(opts: CloudAskerOptions): Asker {
   return cloudAsker("vertex", opts.model, opts, () =>
     load("@anthropic-ai/vertex-sdk", "vertex", (m) => {
-      return new m.AnthropicVertex({
+      const client = new m.AnthropicVertex({
         region: opts.region ?? "global",
         ...(opts.projectId ? { projectId: opts.projectId } : {}),
       });
+      // The constructor starts the Google credential lookup at once. Mark it handled so a missing
+      // credential cannot surface as an unhandled rejection; the first request still awaits it
+      // and fails with the real error.
+      client._authClientPromise?.catch?.(() => {});
+      return client;
     }),
   );
 }
