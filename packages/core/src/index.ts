@@ -162,6 +162,19 @@ export { type ScoreContext, type ScoreReason, type ScoreResult, score } from "./
 export { type SearchHit, type SearchOptions, searchEntries, tokenize } from "./search.ts";
 export { findEmails, redactSecrets, type SecretFinding, scanSecrets } from "./secrets.ts";
 export {
+  ClaudeSeeder,
+  type RepoSnapshot,
+  SEED_SYSTEM,
+  SEED_TOPICS,
+  type SeedDraft,
+  type Seeder,
+  type SeedTopic,
+  seedDoc,
+  seedPrompt,
+  seedSchema,
+  snapshotRepo,
+} from "./seed.ts";
+export {
   CONTEXT_HEADER,
   KIND_GUIDANCE,
   renderContext,

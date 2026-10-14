@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import type { ConflictJudge, DocPatcher, Drafter, Merger, Provider } from "@homeostat/core";
+import type { ConflictJudge, DocPatcher, Drafter, Merger, Provider, Seeder } from "@homeostat/core";
 import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
@@ -15,6 +15,7 @@ import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
 import { runMcp } from "./mcp.ts";
 import { runExplain, runList, runSearch, runStatus } from "./query.ts";
+import { runSeed, type SeedOptions } from "./seed.ts";
 import { runDashboard, runUp, type UpOptions } from "./up.ts";
 import { runValidate } from "./validate.ts";
 
@@ -35,6 +36,7 @@ export interface Io {
   provider?: Provider;
   drafter?: Drafter;
   patcher?: DocPatcher;
+  seeder?: Seeder;
   merger?: Merger;
   judge?: ConflictJudge;
 }
@@ -197,6 +199,22 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--force", "overwrite documents that already exist")
     .action((files: string[], opts: ConvertDocsOptions) => {
       exitCode = runConvertDocs(files, opts, io);
+    });
+
+  program
+    .command("seed")
+    .description(
+      "Draft a new team's first documents from a local repo checkout. Manual only: sends code to the model.",
+    )
+    .argument("<repo>", "path to a local checkout of the code repo")
+    .requiredOption("--area <area>", "area the documents describe (core for org-wide)")
+    .requiredOption("--owner <member>", "member who will own them")
+    .option("--topic <topic>", "architecture, conventions or cross-repo; repeatable", collect)
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--dry-run", "print exactly what would be sent; send nothing, write nothing")
+    .option("--force", "replace documents that already exist")
+    .action(async (repo: string, opts: SeedOptions) => {
+      exitCode = await runSeed(repo, opts, io);
     });
 
   program
