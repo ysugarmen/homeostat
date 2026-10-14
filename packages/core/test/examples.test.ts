@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { describe, expect, test } from "vitest";
 import { checkEntry } from "../src/check.ts";
 import { parseConfig } from "../src/config.ts";
+import { isDocPath } from "../src/doc.ts";
 import { parseEntry } from "../src/entry.ts";
 
 const examples = new URL("../../../examples/", import.meta.url).pathname;
@@ -13,7 +14,8 @@ function loadKb(name: string) {
   if (!config) throw new Error(JSON.stringify(issues));
   const files = readdirSync(join(root, "knowledge"), { recursive: true, encoding: "utf8" })
     .filter((f) => f.endsWith(".md"))
-    .map((f) => relative(root, join(root, "knowledge", f)));
+    .map((f) => relative(root, join(root, "knowledge", f)))
+    .filter((f) => !isDocPath(f)); // documents are checked in doc.test.ts
   return { root, config, files };
 }
 
