@@ -34,10 +34,16 @@ The KB is injected into every session of every developer. Whoever gets a rule me
 Ways in:
 - **A review comment** by a member, written maliciously, by a compromised account, or simply wrong. The curator drafts it into a rule.
 - **Indirect injection.** An agent reads attacker-controlled content (a dependency's README, an issue, a web page), then writes a "handoff note" or calls MCP `learn` with the attacker's instruction.
-- **A weak merge path.** The design doc's "score ≥ 3 auto-merges" means no human reads it. In the pilot, a scoring bug let every curator PR auto-merge.
+- **A weak merge path.** Auto-merge means no human reads the entry. The score is evidence that a lesson is genuine (a member's review comment led to a code change), not a check of what the rule says. In the pilot, a scoring bug let every curator PR auto-merge.
 
 Controls:
-1. **No automatic merge, ever.** Score sets status and review priority. Merging always needs a human approval from CODEOWNERS. `init` sets up branch protection, or prints how. The curator already only opens PRs ✅; the plan removes "auto-merge" from the design.
+1. **Guarded auto-merge** (decided 2026-10-14: auto-merge stays, behind gates). An entry merges without a reviewer only when **all** of these hold:
+   - its score reaches `scoring.autoMergeThreshold`
+   - it is human-originated: `pr-feedback` from a member reviewer, followed by a code change. Agent-written entries (handoff notes, MCP `learn`) and deep-dive edits always need a reviewer.
+   - every automated check passes: validation, the secret scanner (T2) and the risky-content linter (T3). Any finding means a human reviews it.
+   - it is in scope: `scoring.autoMerge: { enabled, areas, maxPerRun }`, so e.g. `core`, which reaches every session, can require a reviewer while area rules auto-merge
+
+   Everything else needs a CODEOWNERS approval, which `init` sets up as branch protection (or prints how). Auto-merged entries are labelled, listed in the digest and on the dashboard, and one `flag` sends them back to review.
 2. **A risky-content linter in `validate`.** It errors on entries that contain:
    - URLs outside an allowlist, or shell pipes to a shell
    - instructions about credentials, tokens, environment variables or network exfiltration
@@ -134,11 +140,11 @@ People adopt what they can inspect. For launch:
    - the pinned versions
    - the model runtime and its data terms
    - exclusions and retention
-4. **Safe defaults.** No auto-merge, scanner on, MCP writes off, team-only areas never exported, version pinned, retention on.
+4. **Safe defaults.** Guarded auto-merge only, scanner on, MCP writes off, team-only areas never exported, version pinned, retention on.
 5. **Later, only if a hosted tier appears:** an external penetration test, SOC 2. Self-hosted open source does not need them to start.
 
 ## 4. Open decisions
 
-1. **Drop auto-merge entirely** (recommended), or keep it behind an explicit opt-in that `doctor` flags?
+1. ~~Drop auto-merge entirely?~~ **Decided:** keep auto-merge, guarded as in T1.
 2. **Cloud runtimes now:** Bedrock and Vertex in this phase (recommended; one new dependency each, `@anthropic-ai/bedrock-sdk` and `@anthropic-ai/vertex-sdk`), or after dogfooding?
 3. **MCP writes default:** off (recommended) or on?
