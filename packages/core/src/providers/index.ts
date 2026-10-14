@@ -12,3 +12,4 @@ export type {
   RepoRef,
   ReviewComment,
 } from "./types.ts";
+export { SKIP_MARKER } from "./types.ts";

@@ -1,14 +1,15 @@
 import { requestJson } from "./http.ts";
-import type {
-  Commit,
-  NewPullRequest,
-  OpenPullRequest,
-  Person,
-  Provider,
-  ProviderOptions,
-  PullRequest,
-  RepoRef,
-  ReviewComment,
+import {
+  type Commit,
+  type NewPullRequest,
+  type OpenPullRequest,
+  type Person,
+  type Provider,
+  type ProviderOptions,
+  type PullRequest,
+  type RepoRef,
+  type ReviewComment,
+  SKIP_MARKER,
 } from "./types.ts";
 
 interface BbUser {
@@ -27,6 +28,7 @@ interface BbPullRequest {
   title: string;
   author: BbUser;
   updated_on: string;
+  description?: string;
   source: { branch: { name: string } };
   destination: { branch: { name: string } };
   links: { html: { href: string } };
@@ -88,6 +90,10 @@ export class BitbucketProvider implements Provider {
       mergedAt: pr.updated_on,
       sourceBranch: pr.source.branch.name,
       targetBranch: pr.destination.branch.name,
+      // Bitbucket Cloud has no PR labels, so the marker goes in the title or description.
+      ...(`${pr.title}\n${pr.description ?? ""}`.includes(SKIP_MARKER)
+        ? { skipRequested: true as const }
+        : {}),
     }));
   }
 

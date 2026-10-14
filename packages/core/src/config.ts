@@ -59,6 +59,8 @@ export const configSchema = z.strictObject({
         z.strictObject({
           id: name,
           role: z.enum(["senior", "member"]),
+          /** The curator never reads this member's pull requests or review comments. */
+          optOut: z.boolean().optional(),
           areas: z.array(z.string()).default([]),
           /** CODEOWNERS identity: `@user`, `@org/team` or an email. */
           handle: z
@@ -149,6 +151,8 @@ export const configSchema = z.strictObject({
       allowedDomains: z
         .array(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, "must be a domain"))
         .default([]),
+      /** Days the local event log keeps events; older ones are deleted. */
+      eventRetentionDays: z.int().positive().default(90),
     })
     .prefault({}),
   /** Where the agents read from and write to. Needed by `homeostat curate`, not by validation. */
@@ -160,6 +164,13 @@ export const configSchema = z.strictObject({
       baseBranch: z.string().min(1).default("main"),
       /** Code repos whose merged PRs the curator reads. */
       repos: z.array(repoRef).default([]),
+      /** Never read: whole repos, and review comments on files matching these globs. */
+      exclude: z
+        .strictObject({
+          repos: z.array(repoRef).default([]),
+          paths: z.array(z.string().min(1)).default([]),
+        })
+        .prefault({}),
     })
     .optional(),
 });

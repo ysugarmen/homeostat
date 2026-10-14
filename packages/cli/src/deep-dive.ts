@@ -50,7 +50,7 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
 
     const now = io.now?.() ?? new Date();
     const today = now.toISOString().slice(0, 10);
-    const ask = askerFor(config, "deepDive", io);
+    const ask = askerFor(config, "deepDive", io, root);
     const useLlm = opts.llm !== false;
     const merger = useLlm ? (io.merger ?? new ClaudeMerger(ask)) : undefined;
     const judge = useLlm ? (io.judge ?? new ClaudeConflictJudge(ask)) : undefined;

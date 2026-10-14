@@ -97,6 +97,18 @@ export const SECTIONS: Section[] = [
         kind: "lines",
         help: "One owner/name per line",
       },
+      {
+        path: ["sources", "exclude", "repos"],
+        label: "Never read these repos",
+        kind: "lines",
+        help: "One owner/name per line",
+      },
+      {
+        path: ["sources", "exclude", "paths"],
+        label: "Never read comments on these files",
+        kind: "lines",
+        help: "One glob per line, e.g. **/secrets/**",
+      },
     ],
   },
   {
@@ -205,6 +217,11 @@ export const SECTIONS: Section[] = [
         kind: "lines",
         help: "One domain per line, e.g. docs.example.com",
       },
+      {
+        path: ["security", "eventRetentionDays"],
+        label: "Keep local events for (days)",
+        kind: "number",
+      },
     ],
   },
 ];
@@ -257,6 +274,7 @@ export function applySection(
           ...(handle ? { handle } : {}),
           role: form.get(`member.${i}.role`) ?? "member",
           areas,
+          ...(form.get(`member.${i}.optOut`) ? { optOut: true } : {}),
         },
       ];
     });

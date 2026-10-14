@@ -74,6 +74,14 @@ export function logEvent(kbRoot: string, event: Record<string, unknown>) {
     .run(String(e.ts), String(e.type), JSON.stringify(e));
 }
 
+/** Deletes events older than `days`; the log is local, but it should not grow or linger. */
+export function pruneEvents(kbRoot: string, days: number, now = new Date()): number {
+  if (!existsSync(join(kbRoot, EVENTS_DB))) return 0;
+  const cutoff = new Date(now.getTime() - days * 86_400_000).toISOString();
+  const r = db(kbRoot).prepare("DELETE FROM events WHERE ts < ?").run(cutoff);
+  return Number(r.changes);
+}
+
 export function readEvents(kbRoot: string, q: EventQuery = {}): Event[] {
   if (!existsSync(join(kbRoot, EVENTS_DB)) && !existsSync(join(kbRoot, LEGACY_EVENTS))) return [];
   const where: string[] = [];
@@ -116,6 +124,8 @@ export function describeEvent(e: Event): string {
         return `${rest.id} by ${rest.author} (${rest.sourceType}${rest.branch ? `, on ${rest.branch}` : ""})`;
       case "entry-flagged":
         return `${rest.id} by ${rest.by}: ${rest.reason}`;
+      case "model-call":
+        return `${rest.agent} via ${rest.runtime} (${rest.model}): ${rest.chars} chars${rest.ok ? "" : ", failed"}`;
       case "auto-merged":
         return `${(rest.entries as string[] | undefined)?.join(", ") ?? ""} in ${rest.url}`;
       case "agent-run":

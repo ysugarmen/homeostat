@@ -6,6 +6,7 @@ import {
   CORE_AREA,
   type Config,
   logEvent,
+  pruneEvents,
   readKbFiles,
   renderContext,
   selectEntries,
@@ -48,6 +49,7 @@ async function sessionStart(input: HookInput, io: Io) {
 
   const { config, entries } = validate(readKbFiles(kbRoot));
   if (!config) throw new HookSkip("knowledge base config is invalid; run homeostat validate");
+  pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
 
   const paths = touchedPaths(cwd);
   const selection = selectEntries(

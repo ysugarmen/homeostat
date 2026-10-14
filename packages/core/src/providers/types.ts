@@ -19,7 +19,12 @@ export interface PullRequest {
   mergedAt: string;
   sourceBranch: string;
   targetBranch: string;
+  /** Set when the PR carries the `homeostat:skip` marker (label, title or description). */
+  skipRequested?: true;
 }
+
+/** The marker that keeps a pull request out of the curator. */
+export const SKIP_MARKER = "homeostat:skip";
 
 export type OpenPullRequest = Omit<PullRequest, "mergedAt">;
 

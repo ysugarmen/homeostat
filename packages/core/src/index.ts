@@ -95,6 +95,7 @@ export {
   LEGACY_EVENTS,
   logEvent,
   logFailure,
+  pruneEvents,
   readEvents,
 } from "./events.ts";
 export {

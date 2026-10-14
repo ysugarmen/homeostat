@@ -1,3 +1,4 @@
+import { minimatch } from "minimatch";
 import { CORE_AREA } from "../check.ts";
 import type { Config } from "../config.ts";
 import { formatEntry } from "../entry.ts";
@@ -71,7 +72,15 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
   const result: CurateResult = { entries: [], skipped: [], scanned: [], redacted: 0 };
   let files = { ...input.files };
 
+  const excludedRepos = new Set(sources.exclude.repos.map((r) => r.toLowerCase()));
+  const optedOut = new Set(
+    config.team.members.filter((m) => m.optOut && m.handle).map((m) => m.handle?.slice(1)),
+  );
+  const excludedPath = (path: string | undefined) =>
+    path !== undefined && sources.exclude.paths.some((g) => minimatch(path, g, { dot: true }));
+
   for (const repoName of sources.repos) {
+    if (excludedRepos.has(repoName.toLowerCase())) continue;
     const [owner = "", name = ""] = repoName.split("/");
     const repo = { owner, name };
     const scanned = { repo: repoName, pullRequests: 0, threads: 0 };
@@ -79,6 +88,15 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
 
     for (const pr of await input.provider.listMergedPullRequests(repo, input.since)) {
       scanned.pullRequests++;
+      // Data controls (security plan T5): checked before anything is read or sent to a model.
+      if (pr.skipRequested) {
+        result.skipped.push({ url: pr.url, reason: "marked homeostat:skip" });
+        continue;
+      }
+      if (optedOut.has(pr.author.id)) {
+        result.skipped.push({ url: pr.url, reason: "the author opted out" });
+        continue;
+      }
       let threads: ReturnType<typeof reviewThreads>;
       try {
         const [comments, commits] = await Promise.all([
@@ -105,6 +123,14 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         });
         const skip = (reason: string) => result.skipped.push({ url, reason });
 
+        if (optedOut.has(thread.root.author.id)) {
+          skip("the reviewer opted out");
+          continue;
+        }
+        if (excludedPath(thread.root.path)) {
+          skip("the file is in sources.exclude.paths");
+          continue;
+        }
         if (known.has(key)) {
           skip("already in the knowledge base");
           continue;

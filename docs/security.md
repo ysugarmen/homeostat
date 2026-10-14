@@ -66,7 +66,7 @@ Controls:
    - on every entry in `validate` (an error, so CI blocks the PR)
    - on `learn`, `flag` and handoff notes **before** they are committed (refused, with the reason)
 2. **PII hygiene.** Entries keep member ids, never emails. The scanner also flags emails and phone numbers in entry text.
-3. **Retention.** The local event log prunes itself (default 90 days, configurable) and never leaves the machine.
+3. **Retention** ✅. The local event log prunes itself (`security.eventRetentionDays`, default 90) and never leaves the machine.
 
 ### T3. Over-privileged or leaked credentials — high
 
@@ -97,11 +97,11 @@ Many companies cannot send even review comments to a new external service.
 Controls:
 1. **Choose the model platform.** Add runtimes for Amazon Bedrock and Google Vertex AI next to the Anthropic API and Claude Code (the Anthropic SDK has clients for both), so data stays inside the team's own cloud account and contracts. Document Anthropic API terms: API data is not used for training by default, and zero data retention is available on request.
 2. **The consumer-subscription runtime stays personal-only** (already the case; see the decisions log).
-3. **Show exactly what would leave.** `homeostat curate --dry-run --show-prompts` prints every prompt before anything is sent. Each model call is logged (kind, size, provider; never content).
-4. **Exclusions:**
+3. **Show exactly what would leave** ✅. `homeostat curate --show-prompts` prints every prompt and sends none. Each model call is logged as a `model-call` event (agent, runtime, model, size; never content).
+4. **Exclusions** ✅ (all checked before anything reaches a model):
    - `sources.exclude` (repos and path globs never read)
-   - a PR label (`homeostat:skip`) that keeps a PR out of the curator
-   - a member-level opt-out
+   - the `homeostat:skip` marker (a GitHub label, or the PR title or description) that keeps a PR out of the curator
+   - a member-level opt-out (`optOut: true`): that member's PRs and review comments are never read
 5. **A self-hosted, local-model option** later, for teams with strict rules (an OpenAI-compatible local endpoint). Out of scope for now.
 
 ### T6. Cross-team and cross-repo exposure — medium

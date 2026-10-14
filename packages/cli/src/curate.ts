@@ -6,9 +6,13 @@ import {
   CurateError,
   type CurateResult,
   curate,
+  DRAFT_SYSTEM,
+  type Drafter,
+  draftPrompt,
   logEvent,
   logFailure,
   type Provider,
+  pruneEvents,
   type RepoRef,
   readKbFiles,
   splitAutoMerge,
@@ -25,6 +29,21 @@ export interface CurateOptions {
   dir: string;
   since?: string;
   dryRun?: boolean;
+  /** Print every prompt the curator would send, send none, and commit nothing. */
+  showPrompts?: boolean;
+}
+
+/** A drafter that prints what would be sent to the model and drafts nothing. */
+function promptPrinter(io: Io): Drafter {
+  let first = true;
+  return {
+    async draft(thread, ctx) {
+      if (first) io.stdout(`--- system prompt (sent with every thread) ---\n${DRAFT_SYSTEM}\n\n`);
+      first = false;
+      io.stdout(`--- prompt for ${thread.root.url} ---\n${draftPrompt(thread, ctx)}\n\n`);
+      return null;
+    },
+  };
 }
 
 const toRepo = (ref: string): RepoRef => {
@@ -155,7 +174,10 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   const today = now.toISOString().slice(0, 10);
 
   const provider = providerFor(sources.host, io, "read pull requests and open the KB PR");
-  const drafter = io.drafter ?? new ClaudeDrafter(askerFor(config, "curator", io));
+  pruneEvents(root, config.security.eventRetentionDays, now);
+  const drafter = opts.showPrompts
+    ? promptPrinter(io)
+    : (io.drafter ?? new ClaudeDrafter(askerFor(config, "curator", io, root)));
 
   const result = await curate({ files, provider, drafter, since, today });
   logEvent(root, {
@@ -181,7 +203,7 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   }
 
   const hasOrigin = git(root, "remote", "get-url", "origin") !== undefined;
-  if (opts.dryRun) {
+  if (opts.dryRun || opts.showPrompts) {
     io.stdout("dry run: nothing committed\n");
     return 0;
   }

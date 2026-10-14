@@ -235,6 +235,10 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
       "look at PRs merged since this date (default: agents.curator.lookbackHours ago)",
     )
     .option("--dry-run", "draft and report, but commit and open nothing")
+    .option(
+      "--show-prompts",
+      "print every prompt that would be sent to the model; send none, commit nothing",
+    )
     .action(async (opts: CurateOptions) => {
       exitCode = await runCurate(opts, io);
     });

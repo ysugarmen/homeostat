@@ -1,13 +1,14 @@
 import { requestJson } from "./http.ts";
-import type {
-  Commit,
-  NewPullRequest,
-  OpenPullRequest,
-  Provider,
-  ProviderOptions,
-  PullRequest,
-  RepoRef,
-  ReviewComment,
+import {
+  type Commit,
+  type NewPullRequest,
+  type OpenPullRequest,
+  type Provider,
+  type ProviderOptions,
+  type PullRequest,
+  type RepoRef,
+  type ReviewComment,
+  SKIP_MARKER,
 } from "./types.ts";
 
 interface GhUser {
@@ -23,6 +24,8 @@ interface GhPullRequest {
   merged_at: string | null;
   head: { ref: string };
   base: { ref: string };
+  body?: string | null;
+  labels?: { name: string }[];
 }
 
 interface GhReviewComment {
@@ -82,6 +85,10 @@ export class GitHubProvider implements Provider {
             mergedAt: pr.merged_at,
             sourceBranch: pr.head.ref,
             targetBranch: pr.base.ref,
+            ...(pr.labels?.some((l) => l.name === SKIP_MARKER) ||
+            `${pr.title}\n${pr.body ?? ""}`.includes(SKIP_MARKER)
+              ? { skipRequested: true as const }
+              : {}),
           });
         }
       }
