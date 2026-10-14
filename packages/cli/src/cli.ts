@@ -119,6 +119,14 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--owner <id>", "member who answers for it (default: author)")
     .option("--id <id>", "entry id (default: from the title)")
     .option("--tag <tag>", "search tag; repeatable", collect)
+    .option(
+      "--kind <kind>",
+      "convention, anti-pattern, review-lesson, migration, legacy, tech-debt, practice or decision",
+    )
+    .option(
+      "--not-adopted",
+      "with --kind decision: a proposal the team rejected (rule = the proposal, why = why not)",
+    )
     .option("--example-file <path>", "markdown to use as the Example section")
     .option("--source <type>", "manual (default) or agent-handoff")
     .option("--branch <name>", "commit to this KB branch instead of the working tree")

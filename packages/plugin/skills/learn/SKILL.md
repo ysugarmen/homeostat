@@ -33,6 +33,7 @@ One entry holds exactly one rule. If the input contains several, capture the mos
 - **Why:** at most 100 words, the reason, so a future agent can judge edge cases.
 - **Area:** the area whose paths the rule is about, or `core` if it applies everywhere.
 - **Author:** the member id of the person the lesson came from. If the user is not obviously one of the members, ask which member they are.
+- **Kind** (optional, `--kind`): `convention`, `anti-pattern`, `review-lesson`, `migration`, `legacy`, `tech-debt`, `practice` or `decision`. When the team discussed something and decided **against** it, use `--kind decision --not-adopted`: the rule is the proposal, the why is why not. Agents then see it as context and stop re-proposing it, but never as an instruction.
 
 Do not invent facts. If the lesson came from a correction in this session, the rule is what the user wanted instead, and the why is the reason they gave; ask for the reason if they gave none.
 

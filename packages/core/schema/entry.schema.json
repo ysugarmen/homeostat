@@ -92,6 +92,22 @@
         "minLength": 1
       }
     },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "convention",
+        "anti-pattern",
+        "review-lesson",
+        "migration",
+        "legacy",
+        "tech-debt",
+        "practice",
+        "decision"
+      ]
+    },
+    "adopted": {
+      "type": "boolean"
+    },
     "flags": {
       "type": "array",
       "items": {

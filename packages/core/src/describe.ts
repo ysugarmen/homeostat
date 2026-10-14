@@ -1,6 +1,7 @@
 import type { Config } from "./config.ts";
 import { detectConflicts } from "./conflicts.ts";
 import type { Entry } from "./entry.ts";
+import { isRejectedDecision } from "./schema.ts";
 import { score } from "./score.ts";
 
 /** One entry in full, for `explain`: status, score breakdown, source, history and the text. */
@@ -12,6 +13,13 @@ export function explainEntry(e: Entry, config: Config): string {
   const lines = [
     `# ${fm.title} (${fm.id})`,
     `Status: ${fm.status} · score ${fm.score} (${reasons.join(", ") || "no signals"}) · owner ${fm.owner} · area ${fm.area}`,
+    ...(isRejectedDecision(fm)
+      ? [
+          "Decision: considered and NOT adopted. Do not propose it again unless something below no longer holds.",
+        ]
+      : fm.kind
+        ? [`Kind: ${fm.kind}${fm.kind === "decision" ? " (adopted)" : ""}`]
+        : []),
     `Applies to: ${fm.scope.join(", ")}`,
     `Source: ${fm.source.type} by ${fm.source.author}${fm.source.url ? ` — ${fm.source.url}` : ""}${fm.source.changedCode ? " (code changed after the comment)" : ""}`,
     `Created ${fm.created}, last confirmed ${fm.lastConfirmed}`,
@@ -19,9 +27,9 @@ export function explainEntry(e: Entry, config: Config): string {
     ...(fm.supersedes ? [`Supersedes: ${fm.supersedes}`] : []),
     ...(fm.flags ?? []).map((f) => `Flagged by ${f.by} on ${f.date}: ${f.reason}`),
     "",
-    `Rule: ${e.sections.rule ?? ""}`,
+    `${isRejectedDecision(fm) ? "Proposal" : "Rule"}: ${e.sections.rule ?? ""}`,
     "",
-    `Why: ${e.sections.why ?? ""}`,
+    `${isRejectedDecision(fm) ? "Why not" : "Why"}: ${e.sections.why ?? ""}`,
     ...(e.sections.example ? ["", e.sections.example] : []),
   ];
   return lines.join("\n");
@@ -29,7 +37,9 @@ export function explainEntry(e: Entry, config: Config): string {
 
 /** One line per search hit: id, title, area, score, then the rule. */
 export const hitLine = (e: Entry): string =>
-  `- ${e.frontmatter.id}: ${e.frontmatter.title} [${e.frontmatter.area}, score ${e.frontmatter.score}]\n  ${e.sections.rule ?? ""}`;
+  isRejectedDecision(e.frontmatter)
+    ? `- ${e.frontmatter.id}: ${e.frontmatter.title} [${e.frontmatter.area}, considered and not adopted]\n  Not adopted: ${e.sections.rule ?? ""} Why not: ${e.sections.why ?? ""}`
+    : `- ${e.frontmatter.id}: ${e.frontmatter.title} [${e.frontmatter.area}${e.frontmatter.kind ? `, ${e.frontmatter.kind}` : ""}, score ${e.frontmatter.score}]\n  ${e.sections.rule ?? ""}`;
 
 /** KB health over the last `days`, from the entries and the event log. */
 export function kbReport(

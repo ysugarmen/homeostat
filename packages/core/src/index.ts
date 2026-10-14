@@ -138,6 +138,9 @@ export {
   type Frontmatter,
   frontmatterSchema,
   ID_PATTERN,
+  isRejectedDecision,
+  KINDS,
+  type Kind,
   SOURCE_TYPES,
   type SourceType,
   STATUSES,
@@ -149,6 +152,7 @@ export { type SearchHit, type SearchOptions, searchEntries, tokenize } from "./s
 export { findEmails, redactSecrets, type SecretFinding, scanSecrets } from "./secrets.ts";
 export {
   CONTEXT_HEADER,
+  KIND_GUIDANCE,
   renderContext,
   type SelectedEntry,
   type Selection,

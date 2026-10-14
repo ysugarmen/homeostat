@@ -16,6 +16,22 @@ const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/;
 /** Rules that span several frontmatter fields but need no config. */
 function crossFieldIssues(fm: Frontmatter): Issue[] {
   const issues: Issue[] = [];
+  if (fm.adopted !== undefined && fm.kind !== "decision") {
+    issues.push(
+      error("adopted.kind", "adopted: only applies to kind: decision", { path: "adopted" }),
+    );
+  }
+  if (fm.kind === "decision" && fm.adopted === undefined) {
+    issues.push(
+      error(
+        "adopted.required",
+        "adopted: required for kind: decision (true if the team adopted it, false if not)",
+        {
+          path: "adopted",
+        },
+      ),
+    );
+  }
   if (fm.source.type === "pr-feedback") {
     if (!fm.source.url) {
       issues.push(

@@ -9,6 +9,7 @@ import {
   type Frontmatter,
   formatEntry,
   ID_PATTERN,
+  type Kind,
   logEvent,
   parseCommentUrl,
   type RepoRef,
@@ -35,6 +36,10 @@ export interface LearnOptions {
   owner?: string;
   id?: string;
   tag?: string[];
+  /** One of KINDS; `decision` needs `adopted`. */
+  kind?: string;
+  /** With kind decision: record a proposal the team chose not to adopt. */
+  notAdopted?: boolean;
   exampleFile?: string;
   /** `manual` (default) or `agent-handoff`; a comment URL always means `pr-feedback`. */
   source?: string;
@@ -175,6 +180,8 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     created: today,
     lastConfirmed: today,
     ...(opts.tag?.length ? { tags: opts.tag } : {}),
+    ...(opts.kind ? { kind: opts.kind as Kind } : {}),
+    ...(opts.kind === "decision" ? { adopted: !opts.notAdopted } : {}),
     tokens: countTokens(body),
   };
   frontmatter.score = score(frontmatter, { config }).score;

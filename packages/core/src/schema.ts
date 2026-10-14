@@ -13,6 +13,18 @@ const isoDate = z
     return !Number.isNaN(d.getTime()) && d.toISOString().startsWith(s);
   }, "must be a real calendar date");
 
+/** What kind of knowledge a rule is; agents get one line of guidance per kind. */
+export const KINDS = [
+  "convention",
+  "anti-pattern",
+  "review-lesson",
+  "migration",
+  "legacy",
+  "tech-debt",
+  "practice",
+  "decision",
+] as const;
+
 export const STATUSES = ["candidate", "accepted", "disputed", "retired"] as const;
 export const SOURCE_TYPES = ["pr-feedback", "manual", "agent-handoff", "deep-dive"] as const;
 
@@ -49,6 +61,12 @@ export const frontmatterSchema = z.strictObject({
   conflictsWith: z.array(id).optional(),
   supersedes: id.optional(),
   tags: z.array(z.string().min(1)).optional(),
+  kind: z.enum(KINDS).optional(),
+  /**
+   * With kind decision: false records a proposal the team discussed and rejected. It is never
+   * injected as a rule; search and explain show it as context so agents stop re-proposing it.
+   */
+  adopted: z.boolean().optional(),
   /** "This is wrong" reports; each costs the entry score and sends it back to review. */
   flags: z
     .array(z.strictObject({ by: memberId, reason: z.string().min(1), date: isoDate }))
@@ -59,3 +77,8 @@ export const frontmatterSchema = z.strictObject({
 export type Frontmatter = z.infer<typeof frontmatterSchema>;
 export type Status = (typeof STATUSES)[number];
 export type SourceType = (typeof SOURCE_TYPES)[number];
+export type Kind = (typeof KINDS)[number];
+
+/** A decision the team considered and chose not to adopt: context, never an instruction. */
+export const isRejectedDecision = (fm: Pick<Frontmatter, "kind" | "adopted">) =>
+  fm.kind === "decision" && fm.adopted === false;

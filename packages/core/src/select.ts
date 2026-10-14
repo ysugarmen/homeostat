@@ -1,5 +1,6 @@
 import { minimatch } from "minimatch";
 import type { Entry } from "./entry.ts";
+import { isRejectedDecision, type Kind } from "./schema.ts";
 import { countTokens } from "./tokens.ts";
 
 export const CONTEXT_HEADER = `# Team knowledge (homeostat)
@@ -45,9 +46,39 @@ function block({ entry, form }: SelectedEntry): string {
   );
 }
 
+/** One line per kind, shown above that kind's rules in a session. */
+export const KIND_GUIDANCE: Record<Kind, string> = {
+  convention: "Conventions: how this team writes code here.",
+  "anti-pattern": "Anti-patterns: approaches that caused problems here; do not use them.",
+  "review-lesson": "Review lessons: what reviewers keep catching; check your change against them.",
+  migration:
+    "Migrations in progress: check before touching this area, and write new code the new way.",
+  legacy: "Legacy: code being replaced; change it only as much as you must.",
+  "tech-debt":
+    "Known tech debt: do not copy these patterns; mention it if your change touches them.",
+  practice: "Stack practices: how this team uses its tools and libraries.",
+  decision: "Decisions: choices the team made; follow them unless the user decides otherwise.",
+};
+
+/**
+ * The session text. When rules carry a kind, they are grouped by kind, in order of each group's
+ * best rule, with one line of guidance above each group; otherwise it is the plain ranked list.
+ */
 export function renderContext(selection: Pick<Selection, "items">): string {
   if (selection.items.length === 0) return "";
-  return [CONTEXT_HEADER, ...selection.items.map(block)].join("\n\n");
+  if (!selection.items.some((i) => i.entry.frontmatter.kind)) {
+    return [CONTEXT_HEADER, ...selection.items.map(block)].join("\n\n");
+  }
+  const groups = new Map<Kind | undefined, SelectedEntry[]>();
+  for (const item of selection.items) {
+    const kind = item.entry.frontmatter.kind;
+    groups.set(kind, [...(groups.get(kind) ?? []), item]);
+  }
+  const parts = [...groups].flatMap(([kind, items]) => [
+    `**${kind ? KIND_GUIDANCE[kind] : "Other rules."}**`,
+    ...items.map(block),
+  ]);
+  return [CONTEXT_HEADER, ...parts].join("\n\n");
 }
 
 /**
@@ -57,7 +88,8 @@ export function renderContext(selection: Pick<Selection, "items">): string {
  */
 export function selectEntries(entries: readonly Entry[], opts: SelectOptions): Selection {
   const relevant = entries
-    .filter((e) => e.frontmatter.status === "accepted")
+    // A rejected decision is context for search and explain, never an instruction.
+    .filter((e) => e.frontmatter.status === "accepted" && !isRejectedDecision(e.frontmatter))
     .map((e) => {
       // A global glob matches every path, so only narrower globs count as a path match.
       const narrow = e.frontmatter.scope.filter((g) => !isGlobalGlob(g));
