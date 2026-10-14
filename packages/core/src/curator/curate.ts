@@ -26,6 +26,11 @@ export interface CuratedEntry {
   path: string;
   text: string;
   frontmatter: Frontmatter;
+  /**
+   * Risky-content findings (see `risk.ts`). Such an entry stays a candidate and fails `validate`
+   * until a member reads it and sets `riskReviewedBy`, so the PR shows it but cannot merge it.
+   */
+  risks: string[];
 }
 
 export interface Skipped {
@@ -122,7 +127,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
           continue;
         }
         const area = draft.area === CORE_AREA || config.areas[draft.area] ? draft.area : CORE_AREA;
-        const entry = buildEntry(config, {
+        let entry = buildEntry(config, {
           draft: { ...draft, area },
           id: uniqueId(slugify(draft.title) ?? `review-${pr.id}-${thread.root.id}`, ids),
           url,
@@ -130,13 +135,17 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
           today: input.today,
         });
 
-        const issues = validate({ ...files, [entry.path]: entry.text }).issues.filter(
+        const errors = validate({ ...files, [entry.path]: entry.text }).issues.filter(
           (i) => i.file === entry.path && i.severity === "error",
         );
-        if (issues.length > 0) {
-          skip(`draft did not validate: ${issues.map((i) => i.message).join("; ")}`);
+        const isRisk = (i: (typeof errors)[number]) => i.code.startsWith("risk.");
+        const blocking = errors.filter((i) => !isRisk(i));
+        if (blocking.length > 0) {
+          skip(`draft did not validate: ${blocking.map((i) => i.message).join("; ")}`);
           continue;
         }
+        const risks = errors.filter(isRisk).map((i) => i.message);
+        if (risks.length > 0) entry = asRiskyCandidate(entry, risks);
         files = { ...files, [entry.path]: entry.text };
         ids.add(entry.frontmatter.id);
         known.add(key);
@@ -184,7 +193,15 @@ function buildEntry(
     path: `knowledge/${draft.area}/${args.id}.md`,
     text: formatEntry(frontmatter, body),
     frontmatter,
+    risks: [],
   };
+}
+
+/** A flagged draft never auto-merges: it is shown to reviewers as a candidate. */
+function asRiskyCandidate(entry: CuratedEntry, risks: string[]): CuratedEntry {
+  const frontmatter: Frontmatter = { ...entry.frontmatter, status: "candidate" };
+  const body = entry.text.slice(entry.text.indexOf("## Rule"));
+  return { ...entry, frontmatter, text: formatEntry(frontmatter, body), risks };
 }
 
 /** A copy of the thread with secrets in its text replaced, so they never reach a model. */

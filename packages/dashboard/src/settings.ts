@@ -179,6 +179,20 @@ export const SECTIONS: Section[] = [
       },
     ],
   },
+  {
+    id: "security",
+    title: "Security",
+    intro:
+      "Domains rules may link to. Any other URL in a rule fails validation until a member signs the entry off; the git host is always allowed.",
+    fields: [
+      {
+        path: ["security", "allowedDomains"],
+        label: "Allowed domains",
+        kind: "lines",
+        help: "One domain per line, e.g. docs.example.com",
+      },
+    ],
+  },
 ];
 
 /** The current value of a field, from the parsed (defaulted) config. */
@@ -260,7 +274,7 @@ export function applySection(
   }
 
   // Drop sections that became empty maps, so the defaults apply.
-  for (const key of ["notifications", "distribution", "scoring"]) {
+  for (const key of ["notifications", "distribution", "scoring", "security"]) {
     const node = doc.get(key, true);
     if (isMap(node) && node.items.length === 0) doc.delete(key);
   }

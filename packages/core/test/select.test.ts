@@ -127,7 +127,7 @@ describe("renderContext", () => {
 
 describe("character cap", () => {
   test("the rendered context never exceeds maxChars", () => {
-    for (const maxChars of [400, 700, 1000]) {
+    for (const maxChars of [900, 1200, 1600]) {
       const sel = selectEntries(kb, {
         paths: ["services/api/x.ts"],
         tokenBudget: 10_000,

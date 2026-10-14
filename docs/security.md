@@ -51,10 +51,10 @@ Controls:
    - injection phrasing ("ignore previous", "you must not tell the user")
    - text hidden in HTML comments or zero-width characters
 
-   An entry that trips it needs an explicit, recorded override (`approvedBy` plus `reviewedRisk: true`).
+   An entry that trips it needs an explicit, recorded override: `riskReviewedBy: <member>`, set by a team member who has read it. The curator keeps such drafts as candidates and lists the findings in the PR, so a human sees them and CI blocks the merge. ✅ Built (T3); allowed domains live in `security.allowedDomains`, and the git host is always allowed.
 3. **Agent-written entries are marked and capped.** Handoff notes and MCP `learn` are always candidates, score from 0, and their PRs are labelled "written by an agent". They can never be the sole approval path.
-4. **Stronger framing at injection.** The context header tells agents that team rules guide code style and practice. They never override the user, safety, or security, and never ask for credentials or network calls.
-5. **Provenance check.** A `pr-feedback` entry's `source.url` must point at a repo in `sources.repos`.
+4. **Stronger framing at injection** ✅. The context header tells agents that team rules guide code style and practice. They never override the user, safety, or security, and never ask for credentials or network calls.
+5. **Provenance check** ✅. A `pr-feedback` entry's `source.url` must point at a repo in `sources.repos`.
 
 ### T2. Secrets and personal data leaking into the model or the KB — high
 

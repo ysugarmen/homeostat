@@ -28,6 +28,13 @@ function kbRepo() {
     join(dir, "homeostat.yaml"),
     readFileSync(join(dir, "homeostat.yaml"), "utf8").replace("host: bitbucket", "host: github"),
   );
+  writeFileSync(
+    join(dir, KEEP),
+    readFileSync(join(dir, KEEP), "utf8").replace(
+      "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33",
+      "https://github.com/acme/integrations-api/pull/812#discussion_r33",
+    ),
+  );
   const body =
     "## Rule\nEvery outbound HTTP call goes through withRetry().\n\n## Why\nHand-rolled retries skipped the request-id header.";
   const fm: Frontmatter = {

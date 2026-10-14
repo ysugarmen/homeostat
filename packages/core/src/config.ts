@@ -125,6 +125,17 @@ export const configSchema = z.strictObject({
         .default("monday"),
     })
     .prefault({}),
+  security: z
+    .strictObject({
+      /**
+       * Domains entries may link to (subdomains included). The git host is always allowed;
+       * any other URL in a rule fails validation until a member signs the entry off.
+       */
+      allowedDomains: z
+        .array(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, "must be a domain"))
+        .default([]),
+    })
+    .prefault({}),
   /** Where the agents read from and write to. Needed by `homeostat curate`, not by validation. */
   sources: z
     .strictObject({

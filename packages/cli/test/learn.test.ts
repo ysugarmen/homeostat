@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseEntry, readKbFiles, validate } from "@homeostat/core";
@@ -235,6 +235,10 @@ describe("homeostat learn <PR comment URL>", () => {
 
   test("GitHub: review comment, author mapped through the member handle", async () => {
     const dir = kb();
+    // A GitHub team's KB: switch the starter's host, and its one Bitbucket entry with it.
+    const config = join(dir, "homeostat.yaml");
+    writeFileSync(config, readFileSync(config, "utf8").replace("host: bitbucket", "host: github"));
+    rmSync(join(dir, "knowledge/integrations/outbound-http-retry-helper.md"));
     const { fetch, sent } = replayFetch("github");
     const url = "https://github.com/acme/web-app/pull/120#discussion_r9001";
     const { code } = await run(

@@ -36,6 +36,9 @@ function prBody(result: CurateResult, since: Date, threshold: number): string {
     return `| ${fm.title} | ${fm.area} | ${fm.status} | ${fm.score} | ${source} |`;
   });
   const skipped = result.skipped.map((s) => `- ${s.url}: ${s.reason}`);
+  const risky = result.entries.flatMap(({ frontmatter: fm, risks }) =>
+    risks.map((r) => `- \`${fm.id}\`: ${r}`),
+  );
   return [
     `Drafted by the homeostat curator from review feedback merged since ${since.toISOString().slice(0, 10)}.`,
     "",
@@ -44,6 +47,14 @@ function prBody(result: CurateResult, since: Date, threshold: number): string {
     ...rows,
     "",
     `Accepted entries reached the auto-merge threshold (${threshold}); candidates need a reviewer to set \`approvedBy\` or retire them. Edit or delete any entry on this branch before merging.`,
+    ...(risky.length
+      ? [
+          "",
+          "**Needs a careful read.** These drafts would tell every agent on the team to do something risky. The review comment may be wrong or malicious. `validate` blocks this PR until each is deleted, edited, or signed off with `riskReviewedBy`:",
+          "",
+          ...risky,
+        ]
+      : []),
     ...(skipped.length
       ? [
           "",
@@ -92,7 +103,7 @@ async function openCandidatePrs(
     const member = branch.slice("candidates/".length);
     const pr = await provider.openPullRequest(kbRepo, {
       title: `homeostat: candidates from ${member}`,
-      body: `Handoff notes and lessons captured in ${member}'s sessions (${plural(ahead, "commit")}). Review each entry: accept by setting \`status: accepted\` and \`approvedBy\`, or retire it.`,
+      body: `Handoff notes and lessons captured in ${member}'s sessions (${plural(ahead, "commit")}). Review each entry: accept by setting \`status: accepted\` and \`approvedBy\`, or retire it.\n\n**Written by an agent.** These entries come from coding sessions, where an agent may have read untrusted text (a dependency's README, an issue, a web page). Read every rule before accepting it; none of them can merge without a reviewer.`,
       sourceBranch: branch,
       targetBranch: base,
     });

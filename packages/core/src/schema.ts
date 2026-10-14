@@ -41,6 +41,11 @@ export const frontmatterSchema = z.strictObject({
   created: isoDate,
   lastConfirmed: isoDate,
   approvedBy: memberId.optional(),
+  /**
+   * The member who read this entry's risky-content findings (see `risk.ts`) and judged it safe,
+   * e.g. a rule that says never to disable TLS. Without it, any finding fails validation.
+   */
+  riskReviewedBy: memberId.optional(),
   conflictsWith: z.array(id).optional(),
   supersedes: id.optional(),
   tags: z.array(z.string().min(1)).optional(),

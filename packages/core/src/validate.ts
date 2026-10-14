@@ -3,6 +3,7 @@ import { CONFIG_FILE, type Config, parseConfig } from "./config.ts";
 import { detectConflicts } from "./conflicts.ts";
 import { type Entry, parseEntry } from "./entry.ts";
 import { error, hasErrors, type Issue } from "./issues.ts";
+import { RISK_ADVICE, scanRisk } from "./risk.ts";
 import { score } from "./score.ts";
 import { findEmails, scanSecrets } from "./secrets.ts";
 
@@ -82,6 +83,7 @@ function checkWithConfig(path: string, entry: Entry, config: Config): Issue[] {
     members: config.team.members.map((m) => m.id),
     score: computed,
   });
+  issues.push(...riskIssues(path, entry, config), ...provenanceIssues(path, entry, config));
   if (fm.score !== computed) {
     issues.push({
       code: "score.mismatch",
@@ -93,6 +95,59 @@ function checkWithConfig(path: string, entry: Entry, config: Config): Issue[] {
     });
   }
   return issues;
+}
+
+export const HOST_DOMAINS = { github: "github.com", bitbucket: "bitbucket.org" } as const;
+
+/**
+ * Risky instructions in the title or body are errors until a member signs the entry off with
+ * `riskReviewedBy`: every merged rule reaches every session, so a rule is a prompt (security T1).
+ */
+function riskIssues(path: string, entry: Entry, config: Config): Issue[] {
+  const fm = entry.frontmatter;
+  const host = config.sources ? [HOST_DOMAINS[config.sources.host]] : [];
+  const findings = scanRisk(`${fm.title}\n${entry.body}`, {
+    allowedDomains: [...host, ...config.security.allowedDomains],
+  });
+  if (fm.riskReviewedBy !== undefined) {
+    if (config.team.members.some((m) => m.id === fm.riskReviewedBy)) return [];
+    return [
+      error("risk.reviewer.unknown", `riskReviewedBy: ${fm.riskReviewedBy} is not a team member`, {
+        file: path,
+        path: "riskReviewedBy",
+      }),
+    ];
+  }
+  return findings.map((f) =>
+    error(
+      `risk.${f.kind}`,
+      `"${f.excerpt}" ${RISK_ADVICE[f.kind]}; if the entry is safe, a member sets riskReviewedBy after reading it`,
+      { file: path },
+    ),
+  );
+}
+
+/** A pr-feedback entry must point at a PR in one of the repos the curator reads. */
+function provenanceIssues(path: string, entry: Entry, config: Config): Issue[] {
+  const { source } = entry.frontmatter;
+  const sources = config.sources;
+  if (source.type !== "pr-feedback" || !source.url || !sources || sources.repos.length === 0) {
+    return [];
+  }
+  const url = new URL(source.url);
+  const [owner, name] = url.pathname.split("/").filter(Boolean);
+  const repo = `${owner}/${name}`.toLowerCase();
+  const known =
+    url.hostname === HOST_DOMAINS[sources.host] &&
+    sources.repos.some((r) => r.toLowerCase() === repo);
+  if (known) return [];
+  return [
+    error(
+      "source.url.unknown-repo",
+      `source.url: ${source.url} is not a PR in sources.repos; pr-feedback entries must come from a repo the curator reads`,
+      { file: path, path: "source.url" },
+    ),
+  ];
 }
 
 const lineOf = (text: string, index: number) => text.slice(0, index).split("\n").length;

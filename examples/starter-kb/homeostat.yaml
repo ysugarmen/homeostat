@@ -44,6 +44,10 @@ notifications:
   slackWebhookEnv: HOMEOSTAT_SLACK_WEBHOOK
   digestDay: monday
 
+# Domains rules may link to; any other URL in a rule needs a member's riskReviewedBy sign-off.
+security:
+  allowedDomains: []
+
 # Where the curator reads merged PRs and opens its daily PR (one git host per KB).
 sources:
   host: bitbucket

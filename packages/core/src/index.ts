@@ -104,6 +104,7 @@ export { applyFixes } from "./fix.ts";
 export { type Flag, flagEntry } from "./flag.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export * from "./providers/index.ts";
+export { RISK_ADVICE, type RiskFinding, scanRisk } from "./risk.ts";
 export {
   type Frontmatter,
   frontmatterSchema,
