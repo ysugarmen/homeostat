@@ -169,6 +169,7 @@ export {
 export { type ScoreContext, type ScoreReason, type ScoreResult, score } from "./score.ts";
 export { type SearchHit, type SearchOptions, searchEntries, tokenize } from "./search.ts";
 export { findEmails, redactSecrets, type SecretFinding, scanSecrets } from "./secrets.ts";
+export { type SectionUsage, sectionUsage } from "./section-usage.ts";
 export {
   ClaudeSeeder,
   type RepoSnapshot,

@@ -2,7 +2,14 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join } from "node:path";
-import { CONFIG_FILE, type Event, readEvents, readKbFiles, validate } from "@homeostat/core";
+import {
+  CONFIG_FILE,
+  type Event,
+  readEvents,
+  readKbFiles,
+  sectionUsage,
+  validate,
+} from "@homeostat/core";
 import {
   agentLiveness,
   contributions,
@@ -16,6 +23,7 @@ import { applySection, SECTIONS } from "./settings.ts";
 import {
   coveragePage,
   desirePathsPage,
+  documentsPage,
   entriesPage,
   entryPage,
   eventsPage,
@@ -89,6 +97,7 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
     return {
       config: kb.config,
       entries: kb.entries.map((e) => e.entry),
+      docs: kb.docs,
       events: readEvents(opts.kbRoot, { since }),
       now: now(),
     };
@@ -177,6 +186,11 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
         return page("Coverage", coveragePage(coverage(snap)));
       case "/impact":
         return page("Impact", impactPage(impact(snap)));
+      case "/documents":
+        return page(
+          "Documents",
+          documentsPage(sectionUsage(snap.docs ?? [], snap.events, snap.now)),
+        );
       case "/desire-paths":
         return page("Desire paths", desirePathsPage(desirePaths(snap)));
       case "/events":

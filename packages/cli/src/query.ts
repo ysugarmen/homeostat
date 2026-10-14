@@ -32,7 +32,7 @@ function load(opts: QueryOptions, io: Io) {
   const kb = validate(readKbFiles(root));
   if (!kb.config)
     throw new CliError(`homeostat.yaml is missing or invalid in ${root}; run homeostat validate`);
-  return { root, config: kb.config, entries: kb.entries.map((e) => e.entry) };
+  return { root, config: kb.config, entries: kb.entries.map((e) => e.entry), docs: kb.docs };
 }
 
 const summary = (e: Entry) => ({
@@ -135,13 +135,14 @@ export function runList(opts: QueryOptions & { area?: string; status?: string },
 
 export function runStatus(opts: QueryOptions & { days?: string }, io: Io): number {
   return guard(io, () => {
-    const { root, config, entries } = load(opts, io);
+    const { root, config, entries, docs } = load(opts, io);
     const days = opts.days ? Number(opts.days) : 7;
     const now = io.now?.() ?? new Date();
+    // The report counts its own window; document decay looks back 90 days.
     const events = readEvents(root, {
-      since: new Date(now.getTime() - days * 86_400_000).toISOString(),
+      since: new Date(now.getTime() - Math.max(days, 90) * 86_400_000).toISOString(),
     });
-    io.stdout(`${kbReport(entries, config, { days, now, events })}\n`);
+    io.stdout(`${kbReport(entries, config, { days, now, events, docs })}\n`);
     return 0;
   });
 }

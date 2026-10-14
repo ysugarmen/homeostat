@@ -1,8 +1,11 @@
 import type { Config } from "./config.ts";
 import { detectConflicts } from "./conflicts.ts";
+import type { ContextDoc } from "./doc-context.ts";
 import type { Entry } from "./entry.ts";
+import type { Event } from "./events.ts";
 import { isRejectedDecision } from "./schema.ts";
 import { score } from "./score.ts";
+import { sectionUsage } from "./section-usage.ts";
 
 /** One entry in full, for `explain`: status, score breakdown, source, history and the text. */
 export function explainEntry(e: Entry, config: Config): string {
@@ -41,11 +44,26 @@ export const hitLine = (e: Entry): string =>
     ? `- ${e.frontmatter.id}: ${e.frontmatter.title} [${e.frontmatter.area}, considered and not adopted]\n  Not adopted: ${e.sections.rule ?? ""} Why not: ${e.sections.why ?? ""}`
     : `- ${e.frontmatter.id}: ${e.frontmatter.title} [${e.frontmatter.area}${e.frontmatter.kind ? `, ${e.frontmatter.kind}` : ""}, score ${e.frontmatter.score}]\n  ${e.sections.rule ?? ""}`;
 
+function documentsLine(
+  docs: readonly ContextDoc[],
+  events: readonly Record<string, unknown>[],
+  now: Date,
+): string {
+  const usage = sectionUsage(docs, events as Event[], now);
+  const review = usage.filter((u) => u.decaying);
+  return `- Documents: ${docs.length} (${usage.length} sections; ${review.length} unused and unconfirmed for 90 days${review.length ? `: ${review.map((u) => `${u.doc}#${u.id}`).join(", ")}` : ""})`;
+}
+
 /** KB health over the last `days`, from the entries and the event log. */
 export function kbReport(
   entries: readonly Entry[],
   config: Config,
-  opts: { days: number; now: Date; events?: readonly Record<string, unknown>[] },
+  opts: {
+    days: number;
+    now: Date;
+    events?: readonly Record<string, unknown>[];
+    docs?: readonly ContextDoc[];
+  },
 ): string {
   const days = opts.days;
   const now = opts.now;
@@ -82,5 +100,6 @@ export function kbReport(
     `- Possible duplicates: ${duplicates.length}`,
     `- Rule injections into sessions: ${injections}`,
     `- Guessed tool names logged: ${unknown}`,
+    ...(opts.docs?.length ? [documentsLine(opts.docs, opts.events ?? [], now)] : []),
   ].join("\n");
 }

@@ -36,6 +36,12 @@ beforeAll(async () => {
     ok: true,
     summary: "1 drafted, 0 skipped",
   });
+  logEvent(kb, {
+    ts: "2026-10-14T09:10:00.000Z",
+    type: "doc-read",
+    doc: "integrations/partner-calls",
+    section: "http-client",
+  });
   const started = await startDashboard({ kbRoot: kb, port: 0, now: () => now });
   url = started.url;
   close = () => started.server.close();
@@ -179,4 +185,16 @@ test("loopback names on any port are accepted (a container's port mapping)", asy
     }).end();
   });
   expect(status).toBe(200);
+});
+
+describe("documents page (K7)", () => {
+  test("shows section usage from the event log", async () => {
+    const { status, html } = await get("/documents");
+    expect(status).toBe(200);
+    expect(html).toContain("integrations/partner-calls#http-client");
+    expect(html).toMatch(
+      /http-client<\/span><br>The shared HTTP client<\/td><td class="num">1<\/td>/,
+    );
+    expect(html).toContain("integrations/partner-calls#timeouts");
+  });
 });

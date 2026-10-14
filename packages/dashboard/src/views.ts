@@ -6,6 +6,7 @@ import {
   explainEntry,
   formatEvent,
   type Issue,
+  type SectionUsage,
   STATUSES,
 } from "@homeostat/core";
 import { columns, type Datum, dataTable, dial, esc, rows } from "./charts.ts";
@@ -168,6 +169,7 @@ const NAV: [string, string][] = [
   ["/members", "Members"],
   ["/coverage", "Coverage"],
   ["/impact", "Impact"],
+  ["/documents", "Documents"],
   ["/desire-paths", "Desire paths"],
   ["/events", "Events"],
   ["/settings", "Settings"],
@@ -346,6 +348,26 @@ export function impactPage(imp: Impact): string {
 <section class="panel span-6"><h2>MCP calls per day</h2>${columns(mcp, { title: "MCP calls per day, last 14 days", labelled: "ends", tickEvery: 7 })}${dataTable(mcp, ["Day", "Calls"])}</section>
 <section class="panel span-8"><h2>Most-used rules</h2>${top.length ? rows(top, { title: "Times each rule was put into a session" }) + dataTable(top, ["Rule", "Injections"]) : '<p class="empty">No injections recorded yet.</p>'}</section>
 <section class="panel span-4"><h2>Tools agents call</h2>${imp.toolUse.length ? `<table><thead><tr><th>Tool</th><th class="num">Calls</th></tr></thead><tbody>${imp.toolUse.map((t) => `<tr><td class="mono">${esc(t.tool)}</td><td class="num">${t.calls}</td></tr>`).join("")}</tbody></table>` : '<p class="empty">No MCP calls recorded yet.</p>'}</section></div>`;
+}
+
+export function documentsPage(usage: readonly SectionUsage[]): string {
+  const decaying = usage.filter((u) => u.decaying);
+  const stat = (n: number | string, k: string) =>
+    `<div class="stat"><span class="n">${n}</span><span class="k">${k}</span></div>`;
+  const docs = new Set(usage.map((u) => u.doc)).size;
+  const used = usage.filter((u) => u.reads + u.injected > 0).length;
+  return `<div class="grid"><section class="panel"><div class="stats" style="--cols: 4">${stat(docs, "documents")}${stat(usage.length, "sections")}${stat(used, "used in 90 days")}${stat(decaying.length, "to review")}</div></section>
+<section class="panel"><h2>Section usage</h2><p class="lede">Reads through MCP and sessions each section was given in full, from this machine's event log over the last 90 days. A section nobody used or confirmed in 90 days is a review candidate: its owner confirms, updates or removes it.</p>
+${
+  usage.length
+    ? `<div class="table-wrap"><table><thead><tr><th>Section</th><th class="num">Reads</th><th class="num">In sessions</th><th>Last used</th><th>Confirmed</th><th></th></tr></thead><tbody>${usage
+        .map(
+          (u) =>
+            `<tr><td><span class="mono">${esc(u.doc)}#${esc(u.id)}</span><br>${esc(u.heading)}</td><td class="num">${u.reads}</td><td class="num">${u.injected}</td><td class="mono">${u.lastUsed ? fmtTime(u.lastUsed) : "never"}</td><td class="mono">${esc(u.confirmed)}</td><td>${u.decaying ? '<span class="chip disputed">review</span>' : ""}</td></tr>`,
+        )
+        .join("")}</tbody></table></div>`
+    : '<p class="empty">No documents yet. Add them under knowledge/&lt;area&gt;/docs/, or run homeostat docs convert or homeostat seed.</p>'
+}</section></div>`;
 }
 
 export function desirePathsPage(paths: DesirePath[]): string {

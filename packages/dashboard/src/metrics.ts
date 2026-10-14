@@ -2,6 +2,7 @@ import {
   type AgentName,
   CORE_AREA,
   type Config,
+  type ContextDoc,
   detectConflicts,
   type Entry,
   type Event,
@@ -17,6 +18,8 @@ const daysSince = (iso: string, now: Date) => Math.floor((now.getTime() - Date.p
 export interface Snapshot {
   config: Config;
   entries: readonly Entry[];
+  /** Knowledge documents (K1); absent in older callers. */
+  docs?: readonly ContextDoc[];
   events: readonly Event[];
   now: Date;
 }
