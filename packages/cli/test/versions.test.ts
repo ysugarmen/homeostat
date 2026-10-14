@@ -10,7 +10,7 @@ const tracked = execFileSync("git", ["-C", root, "ls-files"], { encoding: "utf8"
   .filter((f) => /\.(md|mjs|ts|json|ya?ml)$/.test(f));
 
 /** Docs that discuss floating versions as the threat, not as an instruction. */
-const NARRATIVE = new Set(["docs/security.md", "docs/execution-plan.md"]);
+const NARRATIVE = new Set(["docs/security.md", "docs/execution-plan.md", "docs/releasing.md"]);
 
 describe("pinned releases (T4)", () => {
   test("every package and the plugin carry the one release version", () => {
