@@ -7,5 +7,7 @@ export async function serveStdio(deps: McpDeps, version?: string): Promise<void>
   await server.connect(new StdioServerTransport());
   await new Promise<void>((resolve) => {
     server.onclose = () => resolve();
+    // The stdio transport does not notice the client closing stdin; treat that as a disconnect.
+    process.stdin.once("end", () => void server.close());
   });
 }

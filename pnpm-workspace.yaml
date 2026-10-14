@@ -1,2 +1,5 @@
 packages:
   - "packages/*"
+
+# Supply-chain cooldown: never install a version published less than three days ago (minutes).
+minimumReleaseAge: 4320

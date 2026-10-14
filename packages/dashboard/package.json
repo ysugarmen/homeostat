@@ -1,6 +1,6 @@
 {
   "name": "@homeostat/dashboard",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Local dashboard for a Homeostat knowledge base: setup and metrics.",
   "license": "Apache-2.0",
   "type": "module",
@@ -10,5 +10,27 @@
   "dependencies": {
     "@homeostat/core": "workspace:*",
     "yaml": "^2.9.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ysugarmen/homeostat.git",
+    "directory": "packages/dashboard"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "files": [
+    "dist/src",
+    "!dist/src/**/*.tsbuildinfo"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "exports": {
+      ".": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/src/index.js"
+      }
+    }
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "homeostat",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Command-line interface for homeostat knowledge bases.",
   "license": "Apache-2.0",
   "type": "module",
@@ -13,5 +13,21 @@
     "commander": "^15.0.0",
     "@homeostat/mcp": "workspace:*",
     "@homeostat/dashboard": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ysugarmen/homeostat.git",
+    "directory": "packages/cli"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "files": [
+    "bin",
+    "dist/src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

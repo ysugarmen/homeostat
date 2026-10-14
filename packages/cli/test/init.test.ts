@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readKbFiles, validate } from "@homeostat/core";
+import { readKbFiles, VERSION, validate } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { runCli } from "../src/cli.ts";
 
@@ -75,7 +75,7 @@ describe("homeostat init", () => {
       const workflow = read(dir, ".github/workflows/homeostat.yml");
       expect(workflow).toContain("pull_request:");
       expect(workflow).toMatch(/actions\/checkout@[0-9a-f]{40} # v/);
-      expect(workflow).toContain("npx --yes homeostat@0 validate");
+      expect(workflow).toContain(`npx --yes homeostat@${VERSION} validate`);
       expect(stdout).toContain("Git host: GitHub (from the origin remote)");
       expect(stdout).toContain("HOMEOSTAT_GITHUB_TOKEN");
     },
@@ -90,7 +90,7 @@ describe("homeostat init", () => {
     expect(code).toBe(0);
     const pipeline = read(dir, "bitbucket-pipelines.yml");
     expect(pipeline).toContain("pull-requests:");
-    expect(pipeline).toContain("npx --yes homeostat@0 validate");
+    expect(pipeline).toContain(`npx --yes homeostat@${VERSION} validate`);
     expect(stdout).toContain("Git host: Bitbucket (from the origin remote)");
     expect(stdout).toContain("pullrequest:write");
     expect(stdout).toContain("HOMEOSTAT_BITBUCKET_TOKEN");
@@ -174,7 +174,7 @@ describe("homeostat init curator schedule", () => {
     expect(workflow).toContain('- cron: "0 6 * * *"');
     expect(workflow).toContain("pull-requests: write");
     expect(workflow).toContain("fetch-depth: 0");
-    expect(workflow).toContain("npx --yes homeostat@0 curate");
+    expect(workflow).toContain(`npx --yes homeostat@${VERSION} curate`);
     expect(workflow).toContain("ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}");
   });
 

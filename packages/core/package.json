@@ -1,6 +1,6 @@
 {
   "name": "@homeostat/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Entry schema, scoring, conflict detection and validation for homeostat knowledge bases.",
   "license": "Apache-2.0",
   "type": "module",
@@ -19,7 +19,26 @@
     "gen:schema": "node scripts/gen-schema.ts"
   },
   "files": [
-    "src",
+    "dist/src",
+    "!dist/src/**/*.tsbuildinfo",
     "schema"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ysugarmen/homeostat.git",
+    "directory": "packages/core"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "exports": {
+      ".": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/src/index.js"
+      }
+    }
+  }
 }

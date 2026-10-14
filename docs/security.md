@@ -82,10 +82,10 @@ Controls:
 
 ### T4. Supply chain of Homeostat itself — high
 
-The hooks and MCP server run on every developer's machine in every session, and the agents run in CI holding tokens. Today the plugin, the skills and the CI templates call `npx homeostat@0`, which runs **whatever 0.x is newest**. One compromised release would run on every developer's machine and in every team's CI.
+The hooks and MCP server run on every developer's machine in every session, and the agents run in CI holding tokens. Before T4, the plugin, the skills and the CI templates called `npx homeostat@0`, which runs **whatever 0.x is newest**. One compromised release would run on every developer's machine and in every team's CI.
 
-Controls:
-1. **Pin exact versions.** The plugin launcher runs the version that matches the plugin's own. `init` writes `homeostat@<exact version>` with an integrity check into CI. Upgrades happen through a PR, never silently.
+Controls (✅ built; publishing steps in [releasing.md](releasing.md)):
+1. **Pin exact versions.** The plugin launcher runs the version that matches the plugin's own. `init` writes `homeostat@<exact version>` into CI; npm checks each package against its registry signature and provenance. Upgrades happen through a PR, never silently.
 2. **Signed releases.** Publish from GitHub Actions with npm provenance (OIDC, `--provenance`), signed tags, 2FA on the npm and GitHub owner accounts.
 3. **Small, watched dependencies.** There are 8 runtime packages today; keep it small. Renovate for updates, `pnpm audit` in CI, an SBOM in each release.
 4. **Plugin integrity.** The plugin calls a pinned CLI version, never a floating one.

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "packageRules": [
+    {
+      "description": "Group non-major updates so the weekly PR count stays small.",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "non-major dependencies"
+    }
+  ],
+  "schedule": ["before 6am on monday"]
+}

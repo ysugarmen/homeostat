@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline/promises";
 import type { ConflictJudge, Drafter, Merger, Provider } from "@homeostat/core";
+import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
@@ -64,6 +65,7 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
   let exitCode = 0;
   const program = new Command("homeostat")
     .description("Team knowledge base for coding agents.")
+    .version(VERSION, "-v, --version")
     .exitOverride()
     .configureOutput({ writeOut: io.stdout, writeErr: io.stderr });
 

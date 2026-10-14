@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { CONFIG_FILE, ID_PATTERN, readKbFiles, slugify, validate } from "@homeostat/core";
+import { CONFIG_FILE, ID_PATTERN, readKbFiles, slugify, VERSION, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { formatIssues, painter } from "./format.ts";
 import { git } from "./git.ts";
@@ -55,10 +55,10 @@ distribution:
 `;
 }
 
-const VALIDATE_STEP = "npx --yes homeostat@0 validate";
-const CURATE_STEP = "npx --yes homeostat@0 curate";
-const DEEP_DIVE_STEP = "npx --yes homeostat@0 deep-dive";
-/** The agents default to the Claude Code runtime, so their CI jobs install Claude Code. */
+const VALIDATE_STEP = `npx --yes homeostat@${VERSION} validate`;
+const CURATE_STEP = `npx --yes homeostat@${VERSION} curate`;
+const DEEP_DIVE_STEP = `npx --yes homeostat@${VERSION} deep-dive`;
+/** With agents.runtime: claude-code, the agents' CI jobs also install Claude Code. */
 const INSTALL_CLAUDE = "npm install -g @anthropic-ai/claude-code";
 
 interface CiFile {

@@ -7,6 +7,7 @@ import {
   renderContext,
   searchEntries,
   selectEntries,
+  VERSION,
   validate,
 } from "@homeostat/core";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -208,7 +209,7 @@ function distance(a: string, b: string): number {
 }
 
 /** Builds the Homeostat MCP server. Transport-agnostic: the CLI connects it to stdio. */
-export function createServer(deps: McpDeps, version = "0.0.0"): Server {
+export function createServer(deps: McpDeps, version = VERSION): Server {
   const server = new Server(
     { name: "homeostat", version },
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
