@@ -41,10 +41,6 @@ jobs:
           npm install --no-audit --no-fund ../out/*.tgz
           npm sbom --sbom-format cyclonedx --omit dev > ../out/homeostat-sbom.cdx.json
       - name: Publish with provenance
-        env:
-          # Only for a package's first release, before a trusted publisher can be attached to it.
-          # Remove the NPM_TOKEN secret once trusted publishing is set up; OIDC needs no token.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           # The ./ matters: npm reads a bare "out/name.tgz" as a GitHub owner/repo shorthand.
           for f in ./out/homeostat-core-*.tgz ./out/homeostat-mcp-*.tgz ./out/homeostat-dashboard-*.tgz ./out/homeostat-[0-9]*.tgz; do

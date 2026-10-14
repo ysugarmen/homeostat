@@ -25,12 +25,7 @@ The tag starts `.github/workflows/release.yml`, which:
 
 1. **Make the repository public.** npm only issues provenance for packages built from public repositories.
 2. **Reserve the names**: the `homeostat` package and the `@homeostat` scope on npm. Turn on 2FA for the npm and GitHub owner accounts.
-3. **First release only:** npm attaches a trusted publisher only to a package that already exists. So for 0.1.0:
-   - create a granular access token with read and write on packages and scopes, expiring in a day or two
-   - store it as the repository secret `NPM_TOKEN`
-   - push the tag
-
-   The workflow still publishes with provenance.
+3. **A brand-new package's first release** cannot use trusted publishing: npm attaches a publisher only to a package that exists. 0.1.0 went out with a one-day granular token that could bypass 2FA, stored as `NPM_TOKEN` and passed as `NODE_AUTH_TOKEN` to the publish step. That token and secret are gone. Do the same for any new package added later, then remove both again.
 4. **Add a trusted publisher** for each of the four packages on npmjs.com (package settings → Trusted publisher → GitHub Actions): repository `ysugarmen/homeostat`, workflow `release.yml`, environment `npm`. Then delete the `NPM_TOKEN` secret and revoke the token: from now on releases need no stored credential.
 5. **Create the `npm` environment** in the GitHub repository settings, with a required reviewer, so a pushed tag alone cannot publish.
 6. **Install Renovate** on the repository. `renovate.json` waits three days before proposing a new version, and `pnpm-workspace.yaml` refuses to install anything newer than three days (`minimumReleaseAge`).
