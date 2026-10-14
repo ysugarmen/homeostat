@@ -184,7 +184,45 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
       `deep dive produced an invalid KB: ${errors.map((e) => `${e.file}: ${e.message}`).join("; ")}`,
     );
   }
+  notes.push(...documentNotes(kb, config, input.today, settings.staleAfterDays));
   return { changes, notes };
+}
+
+/**
+ * Document checks that need no model and no code (K4): areas with rules but no document, and
+ * sections whose provenance is older than the stale limit. They are notes for the owning team;
+ * the deep dive never edits a document on its own.
+ */
+function documentNotes(
+  kb: ReturnType<typeof validate>,
+  config: NonNullable<ReturnType<typeof validate>["config"]>,
+  today: string,
+  staleAfterDays: number,
+): string[] {
+  const notes: string[] = [];
+  const documented = new Set(kb.docs.map((d) => d.doc.frontmatter.area));
+  for (const area of Object.keys(config.areas)) {
+    const rules = kb.entries.filter(
+      (e) => e.entry.frontmatter.area === area && e.entry.frontmatter.status === "accepted",
+    ).length;
+    if (rules > 0 && !documented.has(area)) {
+      notes.push(
+        `coverage gap: area ${area} has ${rules} accepted rule${rules === 1 ? "" : "s"} but no document under knowledge/${area}/docs/`,
+      );
+    }
+  }
+  for (const { path, doc } of kb.docs) {
+    for (const s of doc.sections) {
+      const when = s.provenance?.updated ?? doc.frontmatter.updated;
+      const age = Math.floor(daysBetween(when, today));
+      if (age > staleAfterDays) {
+        notes.push(
+          `stale section: ${path}#${s.id} was last confirmed ${age} days ago (${when}); ask its owner to confirm or update it`,
+        );
+      }
+    }
+  }
+  return notes;
 }
 
 /** Higher score first; on a tie the older entry, then the smaller id. */

@@ -1,6 +1,8 @@
 import { minimatch } from "minimatch";
 import { CORE_AREA } from "../check.ts";
 import type { Config } from "../config.ts";
+import { isDocPath, parseDoc } from "../doc.ts";
+import { applySectionPatch } from "../doc-patch.ts";
 import { formatEntry } from "../entry.ts";
 import type { Provider } from "../providers/types.ts";
 import type { Frontmatter } from "../schema.ts";
@@ -9,6 +11,7 @@ import { redactSecrets } from "../secrets.ts";
 import { slugify } from "../slug.ts";
 import { countTokens } from "../tokens.ts";
 import { type KbFiles, validate } from "../validate.ts";
+import type { DocCandidate, DocPatcher } from "./doc-patcher.ts";
 import type { Drafter } from "./draft.ts";
 import { type ReviewThread, reviewThreads } from "./threads.ts";
 import { commentKey, commentKeyOf } from "./urls.ts";
@@ -18,6 +21,8 @@ export interface CurateInput {
   files: KbFiles;
   provider: Provider;
   drafter: Drafter;
+  /** Proposes document section edits from the same threads (K4); none when omitted. */
+  patcher?: DocPatcher;
   since: Date;
   /** ISO date for `created` / `lastConfirmed`. */
   today: string;
@@ -34,6 +39,15 @@ export interface CuratedEntry {
   risks: string[];
 }
 
+/** A document changed by this run: one or more section patches, each from a review thread. */
+export interface DocUpdate {
+  path: string;
+  text: string;
+  sections: { id: string; reason: string; url: string }[];
+  /** Risky-content findings; such an update fails validate until a member signs it off. */
+  risks: string[];
+}
+
 export interface Skipped {
   url: string;
   reason: string;
@@ -46,6 +60,7 @@ export interface CurateResult {
   scanned: { repo: string; pullRequests: number; threads: number }[];
   /** Secrets removed from review threads before they were sent to a model. */
   redacted: number;
+  docs: DocUpdate[];
 }
 
 export class CurateError extends Error {}
@@ -69,7 +84,14 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     kb.entries.flatMap(({ entry }) => commentKeyOf(entry.frontmatter.source.url) ?? []),
   );
   const ids = new Set(kb.entries.map(({ entry }) => entry.frontmatter.id));
-  const result: CurateResult = { entries: [], skipped: [], scanned: [], redacted: 0 };
+  const result: CurateResult = { entries: [], skipped: [], scanned: [], redacted: 0, docs: [] };
+  // Threads already behind a document section count as known, like those behind entries.
+  for (const { doc } of kb.docs) {
+    for (const s of doc.sections) {
+      const key = commentKeyOf(s.provenance?.url);
+      if (key) known.add(key);
+    }
+  }
   let files = { ...input.files };
 
   const excludedRepos = new Set(sources.exclude.repos.map((r) => r.toLowerCase()));
@@ -148,6 +170,14 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         const { thread: safe, redacted } = redactThread(thread);
         result.redacted += redacted;
         const draft = await input.drafter.draft(safe, { areas: config.areas });
+        if (input.patcher) {
+          await docPatchStep(
+            { files, config, result, today: input.today },
+            input.patcher,
+            safe,
+            url,
+          );
+        }
         if (!draft) {
           skip("no lasting rule in the thread");
           continue;
@@ -180,6 +210,82 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     }
   }
   return result;
+}
+
+/**
+ * Asks the patcher about the documents covering the thread's file, and applies its proposal as a
+ * one-section patch. A proposal that names an unknown section or would break the document is
+ * skipped; one with risky content is kept and marked, so the PR shows it but validate blocks it.
+ */
+async function docPatchStep(
+  ctx: { files: KbFiles; config: Config; result: CurateResult; today: string },
+  patcher: DocPatcher,
+  thread: ReviewThread,
+  url: string,
+): Promise<void> {
+  const path = thread.root.path;
+  if (!path) return;
+  const current = (p: string) =>
+    ctx.result.docs.find((d) => d.path === p)?.text ?? ctx.files[p] ?? "";
+  const candidates: DocCandidate[] = [];
+  for (const p of Object.keys(ctx.files)) {
+    if (!isDocPath(p)) continue;
+    const doc = parseDoc(current(p)).doc;
+    if (!doc?.frontmatter.scope.some((g) => minimatch(path, g, { dot: true }))) continue;
+    candidates.push({
+      path: p,
+      title: doc.frontmatter.title,
+      sections: doc.sections
+        .filter((s) => s.id)
+        .map((s) => ({ id: s.id, heading: s.heading, body: s.body })),
+    });
+  }
+  if (candidates.length === 0) return;
+  const proposal = await patcher.propose(thread, candidates);
+  if (!proposal) return;
+  const skip = (reason: string) =>
+    ctx.result.skipped.push({ url, reason: `document patch: ${reason}` });
+  if (
+    !candidates.some(
+      (c) => c.path === proposal.path && c.sections.some((s) => s.id === proposal.sectionId),
+    )
+  ) {
+    skip(`no section ${proposal.path}#${proposal.sectionId}`);
+    return;
+  }
+  let text: string;
+  try {
+    text = applySectionPatch(
+      current(proposal.path),
+      {
+        op: proposal.op,
+        id: proposal.sectionId,
+        body: proposal.body,
+        provenance: { source: "curator", url, updated: ctx.today },
+      },
+      ctx.today,
+    );
+  } catch (e) {
+    skip((e as Error).message);
+    return;
+  }
+  const errors = validate({ ...ctx.files, [proposal.path]: text }).issues.filter(
+    (i) => i.file === proposal.path && i.severity === "error",
+  );
+  if (errors.some((i) => !i.code.startsWith("risk."))) {
+    skip(errors.map((i) => i.message).join("; "));
+    return;
+  }
+  const risks = errors.map((i) => i.message);
+  const existing = ctx.result.docs.find((d) => d.path === proposal.path);
+  const section = { id: proposal.sectionId, reason: proposal.reason, url };
+  if (existing) {
+    existing.text = text;
+    existing.sections.push(section);
+    existing.risks.push(...risks);
+  } else {
+    ctx.result.docs.push({ path: proposal.path, text, sections: [section], risks });
+  }
 }
 
 function uniqueId(base: string, taken: ReadonlySet<string>): string {

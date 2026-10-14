@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {
+  applySectionPatch,
   CORE_AREA,
   type CommentRef,
   CommentUrlError,
@@ -9,8 +10,10 @@ import {
   type Frontmatter,
   formatEntry,
   ID_PATTERN,
+  type KbFiles,
   type Kind,
   logEvent,
+  PatchError,
   parseCommentUrl,
   type RepoRef,
   type ReviewComment,
@@ -41,6 +44,16 @@ export interface LearnOptions {
   /** With kind decision: record a proposal the team chose not to adopt. */
   notAdopted?: boolean;
   exampleFile?: string;
+  /** `<area>/<topic>`: patch a section of knowledge/<area>/docs/<topic>.md instead of adding a rule. */
+  doc?: string;
+  /** With --doc: the section id to replace or append to, or a new id with --heading. */
+  section?: string;
+  /** With --doc: the section text (falls back to --rule). */
+  text?: string;
+  /** With --doc: add the text to the section instead of replacing it. */
+  append?: boolean;
+  /** With --doc: the heading of a new section. */
+  heading?: string;
   /** `manual` (default) or `agent-handoff`; a comment URL always means `pr-feedback`. */
   source?: string;
   /** Commit the entry to this branch of the KB repo instead of writing it to the working tree. */
@@ -97,6 +110,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   const root = resolve(opts.dir);
   const files = readKbFiles(root);
   const config = loadConfig(files);
+  if (opts.doc) return learnDoc(root, files, config, opts, io);
 
   if (opts.push && !opts.branch) throw new LearnError("--push needs --branch");
   if (opts.source !== undefined) {
@@ -225,6 +239,76 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   io.stdout(
     `created ${path} ${summary}\n` +
       "Commit it on a branch and open a PR to the KB repo; a reviewer accepts it there.\n",
+  );
+  return 0;
+}
+
+/**
+ * `learn --doc <area>/<topic> --section <id>`: a one-section patch to a document, never a
+ * whole-file rewrite. Like a rule, it lands as a candidate change for the owning team to review.
+ */
+function learnDoc(
+  root: string,
+  files: KbFiles,
+  config: Config,
+  opts: LearnOptions,
+  io: Io,
+): number {
+  if (opts.push && !opts.branch) throw new LearnError("--push needs --branch");
+  const [area, topic] = (opts.doc ?? "").split("/");
+  if (!area || !topic)
+    throw new LearnError("--doc takes <area>/<topic>, e.g. integrations/partner-calls");
+  const path = `knowledge/${area}/docs/${topic.replace(/\.md$/, "")}.md`;
+  const body = (opts.text ?? opts.rule ?? "").trim();
+  if (!opts.section || !body) throw new LearnError("--doc needs --section and --text");
+  const author = opts.author ?? memberIdFrom(git(root, "config", "user.name"));
+  if (!config.team.members.some((m) => m.id === author)) {
+    throw new LearnError(`${author} is not a team member; pass --author`);
+  }
+  // On a branch, patch the branch's copy so earlier patches there are kept.
+  const current =
+    (opts.branch && git(root, "show", `refs/heads/${opts.branch}:${path}`)) || files[path];
+  if (current === undefined) throw new LearnError(`no document at ${path}`);
+
+  const today = (io.now?.() ?? new Date()).toISOString().slice(0, 10);
+  const provenance = { source: opts.source ?? "manual", author, updated: today };
+  let text: string;
+  try {
+    text = applySectionPatch(
+      current.endsWith("\n") ? current : `${current}\n`,
+      opts.heading
+        ? { op: "add", id: opts.section, heading: opts.heading, body, provenance }
+        : { op: opts.append ? "append" : "replace", id: opts.section, body, provenance },
+      today,
+    );
+  } catch (e) {
+    if (e instanceof PatchError) throw new LearnError(e.message);
+    throw e;
+  }
+  const issues = validate({ ...files, [path]: text }).issues.filter(
+    (i) => i.file === path && i.severity === "error",
+  );
+  if (issues.length > 0) {
+    io.stdout(`${formatIssues(issues, io).text}nothing written\n`);
+    return 1;
+  }
+  const what = `${opts.heading ? "added" : opts.append ? "appended to" : "updated"} #${opts.section} in ${path}`;
+  if (opts.branch) {
+    try {
+      commitFile(root, opts.branch, path, text, `homeostat: ${what}`);
+      io.stdout(`committed: ${what} on ${opts.branch}\n`);
+      if (opts.push) {
+        pushBranch(root, opts.branch);
+        io.stdout(`pushed ${opts.branch} to origin\n`);
+      }
+    } catch (e) {
+      throw new LearnError((e as Error).message);
+    }
+    return 0;
+  }
+  writeFileSync(join(root, ...path.split("/")), text);
+  io.stdout(
+    `${what}\nCommit it on a branch and open a PR to the KB repo; the owning team reviews it there.\n`,
   );
   return 0;
 }

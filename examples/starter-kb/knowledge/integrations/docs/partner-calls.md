@@ -10,7 +10,7 @@ updated: 2026-10-12
 How the integrations services talk to partner APIs. Read the section you need; each one says where it came from.
 
 ## The shared HTTP client {#http-client}
-<!-- homeostat: source=pr-feedback url=https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33 updated=2026-10-12 confidence=high -->
+<!-- homeostat: source=pr-feedback url=https://bitbucket.org/acme/integrations-api/pull-requests/790#comment-41 updated=2026-10-12 confidence=high -->
 Every outbound call goes through `withRetry()` from `@acme/http-client`. It retries 5xx and timeouts three times with backoff and sets the `x-request-id` header that partner support asks for.
 
 ## Timeouts {#timeouts}

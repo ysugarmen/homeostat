@@ -43,6 +43,8 @@ export const PROVENANCE_SOURCES = [
 
 export interface Provenance {
   source: string;
+  /** Member who wrote or approved this text, when it was not a review thread. */
+  author?: string;
   url?: string;
   updated?: string;
   confidence?: "high" | "medium" | "low";

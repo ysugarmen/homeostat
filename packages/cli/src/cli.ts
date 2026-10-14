@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import type { ConflictJudge, Drafter, Merger, Provider } from "@homeostat/core";
+import type { ConflictJudge, DocPatcher, Drafter, Merger, Provider } from "@homeostat/core";
 import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
@@ -34,6 +34,7 @@ export interface Io {
   /** Test seams for the agents: a git-host provider and a drafter instead of the real ones. */
   provider?: Provider;
   drafter?: Drafter;
+  patcher?: DocPatcher;
   merger?: Merger;
   judge?: ConflictJudge;
 }
@@ -128,6 +129,11 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
       "with --kind decision: a proposal the team rejected (rule = the proposal, why = why not)",
     )
     .option("--example-file <path>", "markdown to use as the Example section")
+    .option("--doc <area/topic>", "patch one section of knowledge/<area>/docs/<topic>.md instead")
+    .option("--section <id>", "with --doc: the section to replace or append to (or a new id)")
+    .option("--text <text>", "with --doc: the section text")
+    .option("--append", "with --doc: add to the section instead of replacing it")
+    .option("--heading <text>", "with --doc: add a new section with this heading")
     .option("--source <type>", "manual (default) or agent-handoff")
     .option("--branch <name>", "commit to this KB branch instead of the working tree")
     .option("--push", "push --branch to origin after committing")

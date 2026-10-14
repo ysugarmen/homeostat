@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import {
+  ClaudeDocPatcher,
   ClaudeDrafter,
   ClaudeUnavailableError,
   type CuratedEntry,
@@ -73,13 +74,28 @@ function prBody(
   return [
     `Drafted by the homeostat curator from review feedback merged since ${since.toISOString().slice(0, 10)}.`,
     "",
-    `| Entry | Area | Status | Score | Source |${review ? " Needs a reviewer because |" : ""}`,
-    `| --- | --- | --- | --- | --- |${review ? " --- |" : ""}`,
-    ...table,
+    ...(table.length
+      ? [
+          `| Entry | Area | Status | Score | Source |${review ? " Needs a reviewer because |" : ""}`,
+          `| --- | --- | --- | --- | --- |${review ? " --- |" : ""}`,
+          ...table,
+        ]
+      : []),
     "",
     review
       ? `Accepted entries reached the auto-merge threshold (${threshold}) but did not pass every auto-merge gate; candidates need a reviewer to set \`approvedBy\` or retire them. Edit or delete any entry on this branch before merging.`
       : `**Auto-merged.** Every entry here passed each gate: score at or above ${threshold}, a team member's review comment followed by a code change, no secret or risky-content findings, and an area in \`scoring.autoMerge\` scope. If one is wrong, \`homeostat flag <id>\` sends it back to review.`,
+    ...(review && result.docs.length
+      ? [
+          "",
+          "**Document updates** (one section each; the owning team reviews them):",
+          "",
+          ...result.docs.flatMap((d) =>
+            d.sections.map((s) => `- \`${d.path}#${s.id}\`: ${s.reason} ([comment](${s.url}))`),
+          ),
+          ...result.docs.flatMap((d) => d.risks.map((r) => `- ⚠ \`${d.path}\`: ${r}`)),
+        ]
+      : []),
     ...(risky.length
       ? [
           "",
@@ -179,7 +195,18 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
     ? promptPrinter(io)
     : (io.drafter ?? new ClaudeDrafter(askerFor(config, "curator", io, root)));
 
-  const result = await curate({ files, provider, drafter, since, today });
+  // Document patches use the same model; --show-prompts sends nothing, so it skips them.
+  const patcher = opts.showPrompts
+    ? undefined
+    : (io.patcher ?? new ClaudeDocPatcher(askerFor(config, "curator", io, root)));
+  const result = await curate({
+    files,
+    provider,
+    drafter,
+    since,
+    today,
+    ...(patcher ? { patcher } : {}),
+  });
   logEvent(root, {
     ts: now.toISOString(),
     type: "agent-run",
@@ -196,6 +223,9 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   }
   for (const e of result.entries) {
     io.stdout(`+ ${e.path} (${e.frontmatter.status}, score ${e.frontmatter.score})\n`);
+  }
+  for (const d of result.docs) {
+    io.stdout(`~ ${d.path} (${d.sections.map((s) => `#${s.id}`).join(", ")})\n`);
   }
   for (const s of result.skipped) io.stdout(`- ${s.url}: ${s.reason}\n`);
   if (result.redacted) {
@@ -217,7 +247,7 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
       text: e.text,
       message: `homeostat: ${e.frontmatter.status} ${e.frontmatter.id}`,
     }));
-  if (result.entries.length === 0) io.stdout("no new entries\n");
+  if (result.entries.length === 0 && result.docs.length === 0) io.stdout("no new entries\n");
   if (auto.length > 0) {
     const { pr } = await publish({
       root,
@@ -259,15 +289,25 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
       }
     }
   }
-  if (review.length > 0) {
+  // Document patches always go to the review PR: no document edit merges without the owning team.
+  if (review.length > 0 || result.docs.length > 0) {
+    const docChanges = result.docs.map((d) => ({
+      path: d.path,
+      text: d.text,
+      message: `homeostat: update ${d.sections.map((s) => `#${s.id}`).join(", ")} in ${d.path}`,
+    }));
+    const what = [
+      ...(review.length ? [entriesNoun(review.length)] : []),
+      ...(result.docs.length ? [plural(result.docs.length, "document update")] : []),
+    ].join(" and ");
     await publish({
       root,
       branch: `homeostat/curator-${today}`,
-      changes: changes(review.map((r) => r.entry)),
+      changes: [...changes(review.map((r) => r.entry)), ...docChanges],
       provider,
       kbRepo,
       base: sources.baseBranch,
-      title: `homeostat: ${entriesNoun(review.length)} from review feedback`,
+      title: `homeostat: ${what} from review feedback`,
       body: prBody("review", review, result, since, threshold),
       io,
     });

@@ -55,8 +55,18 @@ export {
   type CurateInput,
   type CurateResult,
   curate,
+  type DocUpdate,
   type Skipped,
 } from "./curator/curate.ts";
+export {
+  ClaudeDocPatcher,
+  DOC_PATCH_SYSTEM,
+  type DocCandidate,
+  type DocPatcher,
+  type DocProposal,
+  docPatchPrompt,
+  docPatchSchema,
+} from "./curator/doc-patcher.ts";
 export {
   ClaudeDrafter,
   DRAFT_SYSTEM,
@@ -107,6 +117,7 @@ export {
   parseProvenance,
 } from "./doc.ts";
 export { type ConvertOptions, convertDoc } from "./doc-convert.ts";
+export { applySectionPatch, changedSections, PatchError, type SectionPatch } from "./doc-patch.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
 export {
   describeEvent,
