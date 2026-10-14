@@ -22,6 +22,7 @@ export function generateCodeowners(
   const missingHandle = new Set<string>();
   const handles = (ids: readonly string[]) =>
     ids.flatMap((id) => {
+      if (id.startsWith("@")) return [id]; // a team handle
       const handle = members.find((m) => m.id === id)?.handle;
       if (!handle) missingHandle.add(id);
       return handle ? [handle] : [];
@@ -40,10 +41,18 @@ export function generateCodeowners(
     );
   }
 
+  // An area's owning team approves its rules and documents; otherwise the members who list it,
+  // otherwise the seniors. A team with a handle is named as the team, not its members.
+  const owningTeam = (area: string) =>
+    Object.values(config.teams).find((t) => t.areas.includes(area));
   const areaOwners = new Map<string, string[]>();
   for (const area of [CORE_AREA, ...Object.keys(config.areas)].sort()) {
+    const team = owningTeam(area);
     const listed = members.filter((m) => m.areas.includes(area)).map((m) => m.id);
-    areaOwners.set(area, listed.length ? listed : seniors);
+    areaOwners.set(
+      area,
+      team ? (team.handle ? [team.handle] : team.members) : listed.length ? listed : seniors,
+    );
   }
 
   const rules: [string, string[]][] = [

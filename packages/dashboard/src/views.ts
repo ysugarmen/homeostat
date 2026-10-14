@@ -419,6 +419,26 @@ function rowEditor(section: Section, config: Config): string {
         "",
       )}</tbody></table></div><p class="muted">Blank rows add members. Areas are comma-separated.</p>`;
   }
+  if (section.rows === "teams") {
+    const teams = [...Object.entries(config.teams), ...Array(2).fill(undefined)];
+    const cell = (i: number, key: string, value: string, label: string) =>
+      `<td><input type="text" name="teamrow.${i}.${key}" value="${esc(value)}" aria-label="${label}"></td>`;
+    return `<div class="table-wrap"><table class="rows"><thead><tr><th>Team</th><th>Handle</th><th>Members</th><th>Areas</th><th>Repos</th><th>Remove</th></tr></thead><tbody>${teams
+      .map(([name, t] = ["", undefined], i) =>
+        [
+          "<tr>",
+          cell(i, "name", name, "Team name"),
+          cell(i, "handle", t?.handle ?? "", "Team handle"),
+          cell(i, "members", t?.members.join(", ") ?? "", "Members"),
+          cell(i, "areas", t?.areas.join(", ") ?? "", "Areas"),
+          cell(i, "repos", t?.repos.join(", ") ?? "", "Repos"),
+          `<td>${t ? `<input type="checkbox" name="teamrow.${i}.remove" aria-label="Remove ${esc(name)}">` : ""}</td></tr>`,
+        ].join(""),
+      )
+      .join(
+        "",
+      )}</tbody></table></div><p class="muted">Blank rows add teams. Lists are comma-separated; the handle is an @org/team.</p>`;
+  }
   const areas = [...Object.entries(config.areas), ...Array(3).fill(undefined)];
   return `<div class="table-wrap"><table class="rows"><thead><tr><th>Area</th><th>Path globs</th><th>Remove</th></tr></thead><tbody>${areas
     .map(

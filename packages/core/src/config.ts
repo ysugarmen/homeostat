@@ -74,6 +74,26 @@ export const configSchema = z.strictObject({
       )
       .min(1),
   }),
+  /**
+   * Teams: who owns which areas (and so approves changes to them and their documents) and which
+   * repos they work in. Reads stay org-wide: every session sees every rule whose scope matches,
+   * whichever team wrote it. That is the cross-team memory.
+   */
+  teams: z
+    .record(
+      name,
+      z.strictObject({
+        /** A CODEOWNERS team handle (`@org/team`); otherwise the members' own handles are used. */
+        handle: z
+          .string()
+          .regex(/^@[\w.-]+\/[\w.-]+$/, "handle must be @org/team")
+          .optional(),
+        members: z.array(z.string()).default([]),
+        areas: z.array(z.string()).default([]),
+        repos: z.array(repoRef).default([]),
+      }),
+    )
+    .default({}),
   /** Area name → path globs. `core` is implicit and global. */
   areas: z.record(name, z.array(z.string().min(1)).min(1)),
   scoring: z
@@ -243,6 +263,55 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
       }
     }
   });
+  const areaTeam = new Map<string, string>();
+  for (const [team, t] of Object.entries(config.teams)) {
+    const at = `teams.${team}`;
+    for (const m of t.members) {
+      if (!seen.has(m))
+        issues.push(
+          error("config.team.member", `${at}.members: "${m}" is not in team.members`, {
+            path: `${at}.members`,
+            file,
+          }),
+        );
+    }
+    for (const area of t.areas) {
+      if (area !== CORE_AREA && !Object.hasOwn(config.areas, area)) {
+        issues.push(
+          error("config.team.area", `${at}.areas: "${area}" is not in areas`, {
+            path: `${at}.areas`,
+            file,
+          }),
+        );
+      } else if (areaTeam.has(area)) {
+        issues.push(
+          error(
+            "config.team.area.owned",
+            `${at}.areas: "${area}" is already owned by team ${areaTeam.get(area)}; an area has one owning team`,
+            {
+              path: `${at}.areas`,
+              file,
+            },
+          ),
+        );
+      } else areaTeam.set(area, team);
+    }
+    for (const repo of t.repos) {
+      if (config.sources && !config.sources.repos.includes(repo)) {
+        issues.push(
+          error("config.team.repo", `${at}.repos: "${repo}" is not in sources.repos`, {
+            path: `${at}.repos`,
+            file,
+          }),
+        );
+      }
+    }
+    if (!t.handle && t.members.length === 0) {
+      issues.push(
+        error("config.team.empty", `${at}: give the team a handle or members`, { path: at, file }),
+      );
+    }
+  }
   for (const area of config.security.teamOnlyAreas) {
     if (!Object.hasOwn(config.areas, area)) {
       issues.push(

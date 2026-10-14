@@ -25,7 +25,7 @@ export interface Section {
   intro: string;
   fields?: Field[];
   /** Row editors for the two keyed lists. */
-  rows?: "team" | "areas";
+  rows?: "team" | "areas" | "teams";
 }
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
@@ -70,6 +70,13 @@ export const SECTIONS: Section[] = [
     title: "Areas",
     intro: "Parts of your code repos, as path globs. Core is implicit and applies everywhere.",
     rows: "areas",
+  },
+  {
+    id: "teams",
+    title: "Teams",
+    intro:
+      "Which team owns which areas: it approves their rules and documents. Every session still reads every team's rules for the files it touches.",
+    rows: "teams",
   },
   {
     id: "sources",
@@ -312,6 +319,21 @@ export function applySection(
       ];
     });
     doc.setIn(["team", "members"], doc.createNode(members));
+  } else if (section.rows === "teams") {
+    const teams: Record<string, Record<string, unknown>> = {};
+    for (const i of rowIndices(form, "teamrow")) {
+      const name = form.get(`teamrow.${i}.name`)?.trim();
+      if (!name || form.get(`teamrow.${i}.remove`)) continue;
+      const handle = form.get(`teamrow.${i}.handle`)?.trim();
+      teams[name] = {
+        ...(handle ? { handle } : {}),
+        members: lines(form.get(`teamrow.${i}.members`) ?? ""),
+        areas: lines(form.get(`teamrow.${i}.areas`) ?? ""),
+        repos: lines(form.get(`teamrow.${i}.repos`) ?? ""),
+      };
+    }
+    if (Object.keys(teams).length) doc.setIn(["teams"], doc.createNode(teams));
+    else if (doc.has("teams")) doc.delete("teams");
   } else if (section.rows === "areas") {
     const areas: Record<string, string[]> = {};
     for (const i of rowIndices(form, "area")) {

@@ -46,7 +46,7 @@ describe("every config key is editable (4.2)", () => {
   test("each leaf of the schema has a field or a row editor", () => {
     const covered = new Set(SECTIONS.flatMap((s) => (s.fields ?? []).map((f) => f.path.join("."))));
     const rows = SECTIONS.flatMap((s) =>
-      s.rows ? [s.rows === "team" ? "team.members" : "areas"] : [],
+      s.rows ? [{ team: "team.members", areas: "areas", teams: "teams" }[s.rows]] : [],
     );
     const missing = leafKeys(configSchema).filter(
       (k) =>
@@ -120,6 +120,27 @@ describe("applySection", () => {
     });
     const areas = parseConfig(applySection(starterYaml, "areas", form).text ?? "").config?.areas;
     expect(Object.keys(areas ?? {})).toEqual(["integrations", "frontend", "payments"]);
+  });
+
+  test("teams row editor (K3)", () => {
+    const form = new URLSearchParams({
+      "teamrow.0.name": "partners",
+      "teamrow.0.handle": "@acme/partners",
+      "teamrow.0.members": "dana, sam",
+      "teamrow.0.areas": "integrations",
+      "teamrow.0.repos": "acme/integrations-api",
+      "teamrow.1.name": "",
+    });
+    const result = applySection(starterYaml, "teams", form);
+    expect(result.issues).toEqual([]);
+    expect(parseConfig(result.text ?? "").config?.teams).toEqual({
+      partners: {
+        handle: "@acme/partners",
+        members: ["dana", "sam"],
+        areas: ["integrations"],
+        repos: ["acme/integrations-api"],
+      },
+    });
   });
 
   test("an invalid change is refused with the reason, and nothing is returned to write", () => {

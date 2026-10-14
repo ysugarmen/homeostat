@@ -64,7 +64,7 @@ Homeostat's documents are git files with owners, provenance, review and scoring,
 - **Config:** a `teams` key (team id → members and the areas it owns), and `sources.repos` entries that may name the teams that work on them.
 - **Writes:** CODEOWNERS is generated from teams, so each team approves changes to its own areas and documents, and seniors approve core.
 - **Reads:** stay org-wide by default. A session gets every rule and document section whose scope matches what it is touching, whichever team wrote it. That *is* the cross-team memory: the integrations team's lesson reaches the frontend developer who edits the same client.
-- **Exception:** areas marked `visibility: team` (security plan T6).
+- **Exception:** areas listed in `security.teamOnlyAreas` (security plan T7).
 
 ## K4. Agents keeping documents current
 
