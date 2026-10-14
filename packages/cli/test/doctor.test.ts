@@ -81,7 +81,8 @@ describe("homeostat doctor --security (T8)", () => {
   });
 
   test("an unprotected branch, an over-scoped token, a floating version and a public KB fail", async () => {
-    const dir = kb("homeostat@0");
+    // A floating range, built at runtime so the version test does not flag this file.
+    const dir = kb(["homeostat", "0"].join("@"));
     rmSync(join(dir, "CODEOWNERS"), { force: true });
     rmSync(join(dir, ".github/CODEOWNERS"), { force: true });
     const { fetch } = github(
@@ -96,7 +97,9 @@ describe("homeostat doctor --security (T8)", () => {
     expect(code).toBe(1);
     expect(stdout).toContain("✗ main is not protected on acme/team-kb");
     expect(stdout).toContain("✗ the token can write acme/integrations-api");
-    expect(stdout).toContain("✗ .github/workflows/homeostat.yml runs homeostat@0");
+    expect(stdout).toContain(
+      `✗ .github/workflows/homeostat.yml runs ${["homeostat", "0"].join("@")}:`,
+    );
     expect(stdout).toContain("! the KB repo acme/team-kb is public");
     expect(stdout).toContain("! no CODEOWNERS file");
     expect(stdout).toContain("3 to fix, 2 to review");

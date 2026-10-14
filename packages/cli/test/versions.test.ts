@@ -5,7 +5,13 @@ import { describe, expect, test } from "vitest";
 
 const root = new URL("../../../", import.meta.url).pathname;
 const read = (path: string) => readFileSync(`${root}${path}`, "utf8");
-const tracked = execFileSync("git", ["-C", root, "ls-files"], { encoding: "utf8" })
+const tracked = execFileSync(
+  "git",
+  ["-C", root, "ls-files", "--cached", "--others", "--exclude-standard"],
+  {
+    encoding: "utf8",
+  },
+)
   .split("\n")
   .filter((f) => /\.(md|mjs|ts|json|ya?ml)$/.test(f));
 
