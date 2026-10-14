@@ -117,11 +117,11 @@ describe("documents in validate", () => {
 });
 
 describe("convertDoc", () => {
-  const legacy = `# Taxis Domain
+  const legacy = `# Partner Domain
 
 Last updated: 2026-03-24
 
-Everything about taxi bookings.
+Everything about partner bookings.
 
 ## Booking Flow
 1. Search. 2. Quote. 3. Book.
@@ -146,7 +146,7 @@ Repeated by an old full-file rewrite.
       today: "2026-10-14",
       fallbackTitle: "domain",
     });
-    expect(text).toContain("title: Taxis Domain");
+    expect(text).toContain("title: Partner Domain");
     expect(text).toContain("updated: 2026-04-02");
     expect(text).toContain("## Booking Flow {#booking-flow}");
     expect(text).toContain("## Booking Flow {#booking-flow-2}");

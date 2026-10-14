@@ -2,7 +2,7 @@
 
 Turn accepted code-review feedback into scored, governed team knowledge that every coding agent can use.
 
-> Early development, private. The design and the live plan are in [`docs/design.md`](docs/design.md) and [`docs/execution-plan.md`](docs/execution-plan.md); the end-to-end demo is [`docs/demo.md`](docs/demo.md); how it fares against Yegge's survival levers is [`docs/levers.md`](docs/levers.md).
+> Early development: not yet released on npm. The design and the live plan are in [`docs/design.md`](docs/design.md) and [`docs/execution-plan.md`](docs/execution-plan.md); the end-to-end demo is [`docs/demo.md`](docs/demo.md); how it fares against Yegge's survival levers is [`docs/levers.md`](docs/levers.md).
 
 ## How it works
 
