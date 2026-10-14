@@ -37,7 +37,9 @@ function freeBranch(root: string, base: string): string {
  * Commits each change to a new branch cut from the base (working tree untouched), pushes it and
  * opens one PR on the KB repo. Without an origin the branch stays local and no PR is opened.
  */
-export async function publish(opts: PublishOptions): Promise<void> {
+export async function publish(
+  opts: PublishOptions,
+): Promise<{ branch: string; pr?: { id: number; url: string } }> {
   const { root, io } = opts;
   const branch = freeBranch(root, opts.branch);
   const baseRef =
@@ -49,7 +51,7 @@ export async function publish(opts: PublishOptions): Promise<void> {
 
   if (git(root, "remote", "get-url", "origin") === undefined) {
     io.stdout("no origin remote: branch left local, no PR opened\n");
-    return;
+    return { branch };
   }
   pushBranch(root, branch);
   const pr = await opts.provider.openPullRequest(opts.kbRepo, {
@@ -59,4 +61,5 @@ export async function publish(opts: PublishOptions): Promise<void> {
     targetBranch: opts.base,
   });
   io.stdout(`opened ${pr.url}\n`);
+  return { branch, pr };
 }

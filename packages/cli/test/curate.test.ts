@@ -32,6 +32,15 @@ sources:
   repos: [acme/web-app]
 `,
   );
+  // A GitHub KB: its starter entry must point at a PR in a configured repo.
+  const starterEntry = join(dir, "knowledge/integrations/outbound-http-retry-helper.md");
+  writeFileSync(
+    starterEntry,
+    readFileSync(starterEntry, "utf8").replace(
+      "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33",
+      "https://github.com/acme/web-app/pull/812#discussion_r33",
+    ),
+  );
   const git = (...args: string[]) =>
     execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim();
   const origin = mkdtempSync(join(tmpdir(), "homeostat-origin-"));
@@ -50,6 +59,8 @@ sources:
 class FakeProvider implements Provider {
   readonly kind = "github" as const;
   opened: { repo: string; pr: NewPullRequest }[] = [];
+  merged: number[] = [];
+  mergeError?: Error;
   open: OpenPullRequest[] = [];
   async listMergedPullRequests(_repo: RepoRef, _since: Date): Promise<PullRequest[]> {
     return [
@@ -87,6 +98,22 @@ class FakeProvider implements Provider {
     this.opened.push({ repo: `${repo.owner}/${repo.name}`, pr });
     return { id: 7, url: "https://github.com/acme/team-kb/pull/7" };
   }
+  async mergePullRequest(_repo: RepoRef, id: number) {
+    if (this.mergeError) throw this.mergeError;
+    this.merged.push(id);
+  }
+}
+
+/** Sets `scoring.autoMerge` in the KB's config. */
+function autoMerge(dir: string, yaml: string) {
+  const path = join(dir, "homeostat.yaml");
+  writeFileSync(
+    path,
+    readFileSync(path, "utf8").replace(
+      "  autoMergeThreshold: 3\n",
+      `  autoMergeThreshold: 3\n  autoMerge:\n${yaml.replace(/^/gm, "    ")}\n`,
+    ),
+  );
 }
 
 class FakeDrafter implements Drafter {
@@ -119,7 +146,7 @@ async function run(args: string[], provider: Provider, env: Record<string, strin
 const PATH = "knowledge/frontend/use-colour-tokens-instead-of-hex-values.md";
 
 describe("homeostat curate", () => {
-  test("commits drafted entries to a dated branch, pushes it and opens one PR", async () => {
+  test("an entry that passes every gate is committed, pushed, opened and auto-merged", async () => {
     const { dir, git, origin } = kbRepo();
     const provider = new FakeProvider();
     const { code, stdout } = await run(["--dir", dir], provider);
@@ -128,27 +155,96 @@ describe("homeostat curate", () => {
     expect(stdout).toContain(`+ ${PATH} (accepted, score 4)`);
 
     expect(git("status", "--porcelain")).toBe("");
-    const entry = git("show", `homeostat/curator-2026-10-13:${PATH}`);
+    const entry = git("show", `homeostat/curator-2026-10-13-auto:${PATH}`);
     expect(parseEntry(entry).entry?.frontmatter.source.author).toBe("sam");
     expect(
-      execFileSync("git", ["-C", origin, "branch", "--list", "homeostat/curator-2026-10-13"], {
+      execFileSync("git", ["-C", origin, "branch", "--list", "homeostat/curator-2026-10-13-auto"], {
         encoding: "utf8",
       }),
-    ).toContain("homeostat/curator-2026-10-13");
+    ).toContain("homeostat/curator-2026-10-13-auto");
 
     expect(provider.opened).toHaveLength(1);
     const [opened] = provider.opened;
     expect(opened?.repo).toBe("acme/team-kb");
     expect(opened?.pr).toMatchObject({
-      title: "homeostat: 1 knowledge entry from review feedback",
-      sourceBranch: "homeostat/curator-2026-10-13",
+      title: "homeostat: auto-merge 1 knowledge entry from review feedback",
+      sourceBranch: "homeostat/curator-2026-10-13-auto",
       targetBranch: "main",
     });
+    expect(opened?.pr.body).toContain("**Auto-merged.**");
     expect(opened?.pr.body).toContain(
       "| Use colour tokens instead of hex values | frontend | accepted | 4 |",
     );
     expect(opened?.pr.body).toContain("https://github.com/acme/web-app/pull/120#discussion_r9001");
     expect(stdout).toContain("opened https://github.com/acme/team-kb/pull/7");
+    expect(provider.merged).toEqual([7]);
+    expect(stdout).toContain("auto-merged https://github.com/acme/team-kb/pull/7");
+  });
+
+  test.each([
+    ["excludeAreas: [frontend]", "area frontend always needs a reviewer"],
+    ["areas: [integrations]", "area frontend is not in scoring.autoMerge.areas"],
+    ["enabled: false", "auto-merge is off"],
+  ])("with %s the entry goes to a review PR instead", async (yaml, reason) => {
+    const { dir } = kbRepo();
+    autoMerge(dir, yaml);
+    const provider = new FakeProvider();
+    const { code } = await run(["--dir", dir], provider);
+    expect(code).toBe(0);
+    expect(provider.merged).toEqual([]);
+    expect(provider.opened).toHaveLength(1);
+    expect(provider.opened[0]?.pr).toMatchObject({
+      title: "homeostat: 1 knowledge entry from review feedback",
+      sourceBranch: "homeostat/curator-2026-10-13",
+    });
+    expect(provider.opened[0]?.pr.body).toContain(reason);
+  });
+
+  test("maxPerRun caps how many entries auto-merge in one run", async () => {
+    const { dir } = kbRepo();
+    autoMerge(dir, "maxPerRun: 1");
+    const provider = new FakeProvider();
+    provider.listReviewComments = async () =>
+      [9001, 9002].map((id) => ({
+        id,
+        body: `Comment ${id}`,
+        author: { id: "sam" },
+        createdAt: "2026-10-11T15:00:00Z",
+        url: `https://github.com/acme/web-app/pull/120#discussion_r${id}`,
+        path: "apps/web/src/Button.css",
+        line: 4,
+      }));
+    await run(["--dir", dir], provider);
+    expect(provider.opened.map((o) => o.pr.title)).toEqual([
+      "homeostat: auto-merge 1 knowledge entry from review feedback",
+      "homeostat: 1 knowledge entry from review feedback",
+    ]);
+    expect(provider.opened[1]?.pr.body).toContain("over the per-run cap (1)");
+  });
+
+  test("an entry that passes the gates is not merged if the knowledge base would not validate", async () => {
+    const { dir, git } = kbRepo();
+    // Break an existing entry on main; the auto PR would carry the breakage forward.
+    const starterEntry = join(dir, "knowledge/integrations/outbound-http-retry-helper.md");
+    writeFileSync(
+      starterEntry,
+      readFileSync(starterEntry, "utf8").replace("owner: dana", "owner: nobody"),
+    );
+    git("commit", "-qam", "break");
+    const provider = new FakeProvider();
+    const { stdout } = await run(["--dir", dir], provider);
+    expect(provider.merged).toEqual([]);
+    expect(stdout).toContain("not auto-merging https://github.com/acme/team-kb/pull/7");
+  });
+
+  test("when the host refuses the merge, the PR stays open for a reviewer", async () => {
+    const { dir } = kbRepo();
+    const provider = new FakeProvider();
+    provider.mergeError = new Error("GitHub 405: Required status check is expected");
+    const { code, stdout } = await run(["--dir", dir], provider);
+    expect(code).toBe(0);
+    expect(stdout).toContain("could not auto-merge https://github.com/acme/team-kb/pull/7");
+    expect(stdout).toContain("it stays open for a reviewer");
   });
 
   test("--dry-run drafts and reports but writes nothing", async () => {
@@ -164,10 +260,10 @@ describe("homeostat curate", () => {
 
   test("a second run the same day uses a new branch", async () => {
     const { dir, git } = kbRepo();
-    git("branch", "homeostat/curator-2026-10-13");
+    git("branch", "homeostat/curator-2026-10-13-auto");
     await run(["--dir", dir], new FakeProvider());
-    expect(git("branch", "--list", "homeostat/curator-2026-10-13-2")).toContain(
-      "homeostat/curator-2026-10-13-2",
+    expect(git("branch", "--list", "homeostat/curator-2026-10-13-auto-2")).toContain(
+      "homeostat/curator-2026-10-13-auto-2",
     );
   });
 

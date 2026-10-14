@@ -7,7 +7,7 @@ Turn accepted code-review feedback into scored, governed team knowledge that eve
 ## How it works
 
 1. **Capture.** A daily curator reads merged PRs, keeps review comments that were followed by a code change, and drafts one entry each with Claude. Developers add entries with `homeostat learn` or `/homeostat:learn`, and sessions leave handoff notes.
-2. **Govern.** Every entry is scored (+3 accepted PR feedback, +2 manual, +1 senior author, −2 conflict) and lands through a PR on the knowledge-base repo, where CODEOWNERS and the auto-merge threshold decide who approves it. A weekly deep dive merges duplicates, marks contradictions and retires stale entries.
+2. **Govern.** Every entry is scored (+3 accepted PR feedback, +2 manual, +1 senior author, −2 conflict) and lands through a PR on the knowledge-base repo, where CODEOWNERS decide who approves it. An entry merges unreviewed only when it passes every gate: the score threshold, a team member's review comment followed by a code change, no secret or risky-content findings, and an area in `scoring.autoMerge` scope. A weekly deep dive merges duplicates, marks contradictions and retires stale entries.
 3. **Distribute.** The Claude Code plugin injects the entries relevant to the files you are touching at session start, within a token budget. `homeostat export` writes the same entries as Claude, Cursor, Copilot and AGENTS.md rules files.
 
 Nothing scheduled runs on a laptop: the agents run in the KB repo's CI (or `homeostat up` on a shared box).

@@ -155,6 +155,14 @@ export class GitHubProvider implements Provider {
     return { id: created.number, url: created.html_url };
   }
 
+  async mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void> {
+    await requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls/${pullRequestId}/merge`, {
+      method: "PUT",
+      headers: this.headers(),
+      body: { merge_method: "squash" },
+    });
+  }
+
   private repoUrl(repo: RepoRef) {
     return `${this.baseUrl}/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`;
   }

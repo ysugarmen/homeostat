@@ -116,6 +116,8 @@ export function describeEvent(e: Event): string {
         return `${rest.id} by ${rest.author} (${rest.sourceType}${rest.branch ? `, on ${rest.branch}` : ""})`;
       case "entry-flagged":
         return `${rest.id} by ${rest.by}: ${rest.reason}`;
+      case "auto-merged":
+        return `${(rest.entries as string[] | undefined)?.join(", ") ?? ""} in ${rest.url}`;
       case "agent-run":
         return `${rest.agent} ${rest.ok ? "ok" : "failed"}: ${rest.summary ?? ""}`;
       default:

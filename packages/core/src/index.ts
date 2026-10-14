@@ -1,3 +1,9 @@
+export {
+  type AutoMergeDecision,
+  autoMergeDecision,
+  type MergeCandidate,
+  splitAutoMerge,
+} from "./automerge.ts";
 export { type BodySections, parseBody, RULE_MAX_WORDS, WHY_MAX_WORDS } from "./body.ts";
 export { type CheckContext, CORE_AREA, checkEntry } from "./check.ts";
 export {

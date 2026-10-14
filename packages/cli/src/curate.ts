@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import {
   ClaudeDrafter,
   ClaudeUnavailableError,
+  type CuratedEntry,
   CurateError,
   type CurateResult,
   curate,
@@ -10,6 +11,7 @@ import {
   type Provider,
   type RepoRef,
   readKbFiles,
+  splitAutoMerge,
   validate,
 } from "@homeostat/core";
 import { askerFor } from "./agents.ts";
@@ -30,23 +32,35 @@ const toRepo = (ref: string): RepoRef => {
   return { owner, name };
 };
 
-function prBody(result: CurateResult, since: Date, threshold: number): string {
-  const rows = result.entries.map(({ frontmatter: fm }) => {
+type Row = { entry: CuratedEntry; reason?: string };
+
+function prBody(
+  kind: "auto" | "review",
+  rows: Row[],
+  result: CurateResult,
+  since: Date,
+  threshold: number,
+): string {
+  const review = kind === "review";
+  const table = rows.map(({ entry: { frontmatter: fm }, reason }) => {
     const source = fm.source.url ? `[comment](${fm.source.url})` : "";
-    return `| ${fm.title} | ${fm.area} | ${fm.status} | ${fm.score} | ${source} |`;
+    const cells = [fm.title, fm.area, fm.status, String(fm.score), source];
+    return `| ${[...cells, ...(review ? [reason ?? ""] : [])].join(" | ")} |`;
   });
   const skipped = result.skipped.map((s) => `- ${s.url}: ${s.reason}`);
-  const risky = result.entries.flatMap(({ frontmatter: fm, risks }) =>
+  const risky = rows.flatMap(({ entry: { frontmatter: fm, risks } }) =>
     risks.map((r) => `- \`${fm.id}\`: ${r}`),
   );
   return [
     `Drafted by the homeostat curator from review feedback merged since ${since.toISOString().slice(0, 10)}.`,
     "",
-    "| Entry | Area | Status | Score | Source |",
-    "| --- | --- | --- | --- | --- |",
-    ...rows,
+    `| Entry | Area | Status | Score | Source |${review ? " Needs a reviewer because |" : ""}`,
+    `| --- | --- | --- | --- | --- |${review ? " --- |" : ""}`,
+    ...table,
     "",
-    `Accepted entries reached the auto-merge threshold (${threshold}); candidates need a reviewer to set \`approvedBy\` or retire them. Edit or delete any entry on this branch before merging.`,
+    review
+      ? `Accepted entries reached the auto-merge threshold (${threshold}) but did not pass every auto-merge gate; candidates need a reviewer to set \`approvedBy\` or retire them. Edit or delete any entry on this branch before merging.`
+      : `**Auto-merged.** Every entry here passed each gate: score at or above ${threshold}, a team member's review comment followed by a code change, no secret or risky-content findings, and an area in \`scoring.autoMerge\` scope. If one is wrong, \`homeostat flag <id>\` sends it back to review.`,
     ...(risky.length
       ? [
           "",
@@ -55,7 +69,7 @@ function prBody(result: CurateResult, since: Date, threshold: number): string {
           ...risky,
         ]
       : []),
-    ...(skipped.length
+    ...(review && skipped.length
       ? [
           "",
           `<details><summary>Skipped (${skipped.length})</summary>`,
@@ -172,22 +186,67 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
     return 0;
   }
   const kbRepo = toRepo(sources.kbRepo);
-  if (result.entries.length === 0) {
-    io.stdout("no new entries\n");
-  } else {
-    await publish({
+  const threshold = config.scoring.autoMergeThreshold;
+  const { auto, review } = splitAutoMerge(result.entries, config);
+  const entriesNoun = (n: number) => plural(n, "knowledge entry", "knowledge entries");
+  const changes = (entries: CuratedEntry[]) =>
+    entries.map((e) => ({
+      path: e.path,
+      text: e.text,
+      message: `homeostat: ${e.frontmatter.status} ${e.frontmatter.id}`,
+    }));
+  if (result.entries.length === 0) io.stdout("no new entries\n");
+  if (auto.length > 0) {
+    const { pr } = await publish({
       root,
-      branch: `homeostat/curator-${today}`,
-      changes: result.entries.map((e) => ({
-        path: e.path,
-        text: e.text,
-        message: `homeostat: ${e.frontmatter.status} ${e.frontmatter.id}`,
-      })),
+      branch: `homeostat/curator-${today}-auto`,
+      changes: changes(auto),
       provider,
       kbRepo,
       base: sources.baseBranch,
-      title: `homeostat: ${plural(result.entries.length, "knowledge entry", "knowledge entries")} from review feedback`,
-      body: prBody(result, since, config.scoring.autoMergeThreshold),
+      title: `homeostat: auto-merge ${entriesNoun(auto.length)} from review feedback`,
+      body: prBody(
+        "auto",
+        auto.map((entry) => ({ entry })),
+        result,
+        since,
+        threshold,
+      ),
+      io,
+    });
+    // The required CI check has not run yet, so validate the merged result here first.
+    const merged = validate({ ...files, ...Object.fromEntries(auto.map((e) => [e.path, e.text])) });
+    if (pr && !merged.ok) {
+      io.stdout(
+        `not auto-merging ${pr.url}: the knowledge base would not validate; it stays open for a reviewer\n`,
+      );
+    } else if (pr) {
+      try {
+        await provider.mergePullRequest(kbRepo, pr.id);
+        io.stdout(`auto-merged ${pr.url}\n`);
+        logEvent(root, {
+          ts: now.toISOString(),
+          type: "auto-merged",
+          url: pr.url,
+          entries: auto.map((e) => e.frontmatter.id),
+        });
+      } catch (e) {
+        io.stdout(
+          `could not auto-merge ${pr.url}: ${(e as Error).message}\nit stays open for a reviewer; see branch protection in homeostat init's output\n`,
+        );
+      }
+    }
+  }
+  if (review.length > 0) {
+    await publish({
+      root,
+      branch: `homeostat/curator-${today}`,
+      changes: changes(review.map((r) => r.entry)),
+      provider,
+      kbRepo,
+      base: sources.baseBranch,
+      title: `homeostat: ${entriesNoun(review.length)} from review feedback`,
+      body: prBody("review", review, result, since, threshold),
       io,
     });
   }

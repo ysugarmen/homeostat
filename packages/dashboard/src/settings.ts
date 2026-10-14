@@ -109,6 +109,20 @@ export const SECTIONS: Section[] = [
         (k): Field => ({ path: ["scoring", "weights", k], label: `Weight: ${k}`, kind: "number" }),
       ),
       { path: ["scoring", "autoMergeThreshold"], label: "Auto-merge threshold", kind: "number" },
+      { path: ["scoring", "autoMerge", "enabled"], label: "Auto-merge", kind: "checkbox" },
+      {
+        path: ["scoring", "autoMerge", "areas"],
+        label: "Auto-merge areas",
+        kind: "lines",
+        help: "One per line; empty means every area",
+      },
+      {
+        path: ["scoring", "autoMerge", "excludeAreas"],
+        label: "Areas that always need a reviewer",
+        kind: "lines",
+        help: "One per line, e.g. core",
+      },
+      { path: ["scoring", "autoMerge", "maxPerRun"], label: "Auto-merges per run", kind: "number" },
       {
         path: ["scoring", "reviewCadence"],
         label: "Review cadence",

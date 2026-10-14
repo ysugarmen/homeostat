@@ -78,6 +78,21 @@ export const configSchema = z.strictObject({
     .strictObject({
       weights: weightsSchema.prefault({}),
       autoMergeThreshold: z.int().default(3),
+      /**
+       * Which curator entries may merge with no reviewer. Every gate in `autoMergeDecision` must
+       * pass: threshold, member review feedback with a code change, no risky-content findings or
+       * flags, and in scope here. Everything else waits for a CODEOWNERS approval.
+       */
+      autoMerge: z
+        .strictObject({
+          enabled: z.boolean().default(true),
+          /** Areas that may auto-merge; empty means all, minus `excludeAreas`. */
+          areas: z.array(z.string()).default([]),
+          /** Areas that always need a reviewer, e.g. `core`, which reaches every session. */
+          excludeAreas: z.array(z.string()).default([]),
+          maxPerRun: z.int().positive().default(5),
+        })
+        .prefault({}),
       reviewCadence: z.enum(["daily", "weekly", "biweekly"]).default("weekly"),
     })
     .prefault({}),

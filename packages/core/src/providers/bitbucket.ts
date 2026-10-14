@@ -159,6 +159,19 @@ export class BitbucketProvider implements Provider {
     return { id: created.id, url: created.links.html.href };
   }
 
+  async mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void> {
+    await requestJson(
+      "Bitbucket",
+      this.fetch,
+      `${this.repoUrl(repo)}/pullrequests/${pullRequestId}/merge`,
+      {
+        method: "POST",
+        headers: this.headers(),
+        body: { merge_strategy: "squash", close_source_branch: true },
+      },
+    );
+  }
+
   private repoUrl(repo: RepoRef) {
     return `${this.baseUrl}/repositories/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`;
   }

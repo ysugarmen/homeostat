@@ -51,8 +51,8 @@ export interface NewPullRequest {
 }
 
 /**
- * What the agents need from a git host. Reads span every configured code repo; the only write,
- * `openPullRequest`, targets the KB repo. Branch content is pushed with git, not through here.
+ * What the agents need from a git host. Reads span every configured code repo; the writes,
+ * `openPullRequest` and `mergePullRequest`, target the KB repo. Branch content is pushed with git, not through here.
  */
 export interface Provider {
   readonly kind: "bitbucket" | "github";
@@ -61,6 +61,8 @@ export interface Provider {
   listReviewComments(repo: RepoRef, pullRequestId: number): Promise<ReviewComment[]>;
   listCommits(repo: RepoRef, pullRequestId: number): Promise<Commit[]>;
   openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }>;
+  /** Squash-merges a PR on the KB repo; used only for entries that pass every auto-merge gate. */
+  mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void>;
 }
 
 export interface ProviderOptions {

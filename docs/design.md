@@ -41,7 +41,7 @@ The wedge is the **feedback-to-knowledge loop**: the four capabilities below exi
 | Gap | Who gets closest | Why they stop | homeostat's answer (from the pilot) |
 | --- | --- | --- | --- |
 | Mine *accepted* review feedback (comment + resulting code change) | CodeRabbit | Captures the comment, not whether the author acted on it | +3 score only when the PR code actually changed |
-| Quality scoring and auto-merge threshold | None | CodeRabbit asks humans to prune quarterly | Score ≥3 auto-merges, 1–2 weekly review, conflicts always flagged |
+| Quality scoring and auto-merge threshold | None | CodeRabbit asks humans to prune quarterly | Score ≥3 auto-merges when every safety gate passes (see [security.md](security.md) T1), 1–2 weekly review, conflicts always flagged |
 | Conflict detection against existing knowledge | None | Rules files just accumulate | −2 on conflict, pipeline blocks the PR |
 | Layered ownership: core vs area, permissions, CODEOWNERS | Packmind (governance tier, paid) | Not tied to who produced the knowledge | team.json + auto-generated CODEOWNERS |
 | Cross-tool distribution | Packmind, Unblocked | Packmind has no capture; Unblocked is retrieval, not rules | Today Claude only; MCP + rules-file export is the next step |

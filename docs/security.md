@@ -43,7 +43,7 @@ Controls:
    - every automated check passes: validation, the secret scanner (T2) and the risky-content linter (T3). Any finding means a human reviews it.
    - it is in scope: `scoring.autoMerge: { enabled, areas, maxPerRun }`, so e.g. `core`, which reaches every session, can require a reviewer while area rules auto-merge
 
-   Everything else needs a CODEOWNERS approval, which `init` sets up as branch protection (or prints how). Auto-merged entries are labelled, listed in the digest and on the dashboard, and one `flag` sends them back to review.
+   Everything else needs a CODEOWNERS approval; `init` prints how to protect the branch and let only the curator's token bypass it. Before merging, the curator validates the whole knowledge base with the new entries, since the required CI check has not run yet. Auto-merged entries go in their own PR titled "auto-merge", are logged as `auto-merged` events (the digest, K8, lists them), and one `flag` sends them back to review. ✅ Built (T1).
 2. **A risky-content linter in `validate`.** It errors on entries that contain:
    - URLs outside an allowlist, or shell pipes to a shell
    - instructions about credentials, tokens, environment variables or network exfiltration

@@ -238,6 +238,24 @@ ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-co
 a team KB needs a Console key or a Team/Enterprise plan.) Then add a sources section to homeostat.yaml.`,
 };
 
+/**
+ * Auto-merge is safe only if nothing else can merge unreviewed: protect the base branch, require
+ * the validate check and a CODEOWNERS approval, and let only the curator's token skip the approval.
+ */
+const PROTECTION_HELP: Record<Host, string> = {
+  bitbucket: `Protect main (Repository settings > Branch restrictions and Merge checks):
+  - require a pull request, 1 approval from default reviewers or code owners, and a passing build
+  - exempt only the curator's token. It merges an entry unreviewed only when every gate in
+    scoring.autoMerge passes, after validating the whole knowledge base itself; everything else
+    waits for a reviewer.`,
+  github: `Protect main (Settings > Rules > Rulesets, targeting the default branch):
+  - require a pull request with 1 approval, review from Code Owners, and the "validate" check
+  - add the curator's GitHub App (or token user) to the bypass list. It merges an entry unreviewed
+    only when every gate in scoring.autoMerge passes, after validating the whole knowledge base
+    itself; everything else waits for a reviewer. Use the App or HOMEOSTAT_GITHUB_TOKEN, not the
+    workflow's GITHUB_TOKEN: PRs opened with GITHUB_TOKEN do not trigger the validate check.`,
+};
+
 export interface InitOptions {
   host?: string;
   member?: string;
@@ -309,7 +327,9 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
 
   if (host) {
     const source = opts.host ? "--host" : "the origin remote";
-    io.stdout(`Git host: ${HOST_NAME[host]} (from ${source})\n${TOKEN_HELP[host]}\n\n`);
+    io.stdout(
+      `Git host: ${HOST_NAME[host]} (from ${source})\n${TOKEN_HELP[host]}\n\n${PROTECTION_HELP[host]}\n\n`,
+    );
   } else {
     io.stdout(
       "Skipped CI: could not detect the git host from the origin remote.\n" +
