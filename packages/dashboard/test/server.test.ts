@@ -118,7 +118,11 @@ describe("settings forms write homeostat.yaml (4.2)", () => {
     expect(status).toBe(200);
     expect(html).toContain("Saved to homeostat.yaml");
     const config = parseConfig(readFileSync(join(kb, "homeostat.yaml"), "utf8")).config;
-    expect(config?.distribution).toEqual({ exports: ["claude", "cursor"], tokenBudget: 1500 });
+    expect(config?.distribution).toEqual({
+      exports: ["claude", "cursor"],
+      tokenBudget: 1500,
+      docTokenBudget: 1000,
+    });
     expect((await get("/settings/distribution")).html).toContain('value="1500"');
   });
 

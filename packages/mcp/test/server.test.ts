@@ -62,7 +62,7 @@ async function connect(opts: ConnectOptions = {}) {
 }
 
 describe("tool list", () => {
-  test("six tools, each described in under 200 characters, with JSON schemas", async () => {
+  test("eight tools, each described in under 200 characters, with JSON schemas", async () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual([
@@ -72,12 +72,14 @@ describe("tool list", () => {
       "learn",
       "flag",
       "report",
+      "docs",
+      "read",
     ]);
     for (const t of tools) {
       expect(t.description?.length ?? 0).toBeLessThan(200);
       expect(t.inputSchema.type).toBe("object");
     }
-    expect(TOOLS).toHaveLength(6);
+    expect(TOOLS).toHaveLength(8);
   });
 
   test("the server tells agents when to use it", async () => {
@@ -193,7 +195,7 @@ describe("desire paths (3.2)", () => {
     const r = await call("serch", { query: "x" });
     expect(r.isError).toBe(true);
     expect(r.text).toContain(
-      'Unknown tool "serch". Tools: context, search, explain, learn, flag, report. Did you mean search?',
+      'Unknown tool "serch". Tools: context, search, explain, learn, flag, report, docs, read. Did you mean search?',
     );
     expect(events).toContainEqual(
       expect.objectContaining({ type: "mcp-unknown-tool", name: "serch", args: ["query"] }),
@@ -217,7 +219,14 @@ describe("security (T7)", () => {
   test("learn and flag are hidden and refused unless security.mcpWrites is on", async () => {
     const { client, call, learned } = await connect({ security: [] });
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(["context", "search", "explain", "report"]);
+    expect(tools.map((t) => t.name)).toEqual([
+      "context",
+      "search",
+      "explain",
+      "report",
+      "docs",
+      "read",
+    ]);
     const r = await call("learn", { title: "t", rule: "r", why: "w" });
     expect(r.isError).toBe(true);
     expect(r.text).toContain("Saving through MCP is off");
@@ -249,5 +258,54 @@ describe("security (T7)", () => {
     expect((await member.call("context", { paths: files })).text).toContain(
       "outbound-http-retry-helper",
     );
+  });
+});
+
+describe("documents (K6)", () => {
+  test("docs lists documents and their sections, by area or file", async () => {
+    const { call } = await connect();
+    const all = await call("docs");
+    expect(all.text).toContain("- integrations/partner-calls: Partner API calls");
+    expect(all.text).toContain("http-client (The shared HTTP client)");
+    expect((await call("docs", { path: "apps/web/App.tsx" })).text).toContain(
+      "No team documents match",
+    );
+  });
+
+  test("read returns one section with its source, and logs the read", async () => {
+    const { call, events } = await connect();
+    const r = await call("read", { doc: "integrations/partner-calls", section: "timeouts" });
+    expect(r.isError).toBe(false);
+    expect(r.text).toContain("## Timeouts {#timeouts}");
+    expect(r.text).toContain("(source: manual, 2026-09-30)");
+    expect(r.text).not.toContain("withRetry");
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "doc-read",
+        doc: "integrations/partner-calls",
+        section: "timeouts",
+      }),
+    );
+    // A KB path works too, and a whole document comes back without a section.
+    const whole = await call("read_doc", {
+      document: "knowledge/integrations/docs/partner-calls.md",
+    });
+    expect(whole.text).toContain("withRetry");
+    expect(whole.text).toContain("Partner calls time out");
+  });
+
+  test("unknown documents and sections list what exists", async () => {
+    const { call } = await connect();
+    expect((await call("read", { doc: "core/nope" })).text).toContain(
+      "Documents: integrations/partner-calls",
+    );
+    expect(
+      (await call("read", { doc: "integrations/partner-calls", section: "x" })).text,
+    ).toContain("Sections: http-client, timeouts");
+  });
+
+  test("a team-only area's documents are hidden from other members", async () => {
+    const { call } = await connect({ security: ["teamOnlyAreas: [integrations]"], member: "lee" });
+    expect((await call("docs")).text).toContain("No team documents match");
   });
 });

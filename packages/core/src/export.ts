@@ -1,15 +1,25 @@
 import { CORE_AREA } from "./check.ts";
+import type { Doc } from "./doc.ts";
 import type { Entry } from "./entry.ts";
 import { BLOCK_END, BLOCK_START } from "./export-block.ts";
+import { isRejectedDecision } from "./schema.ts";
 
 export type ExportTarget = "claude" | "cursor" | "agents-md" | "copilot";
 
 /** Folders homeostat owns outright in a code repo; anything else in them is stale and removed. */
-export const OWNED_DIRS: Record<Exclude<ExportTarget, "agents-md">, string> = {
+export const OWNED_DIRS: Record<ExportTarget, string> = {
   claude: ".claude/rules/homeostat",
   cursor: ".cursor/rules/homeostat",
   copilot: ".github/instructions/homeostat",
+  /** Documents for AGENTS.md readers, which have no scoped-rules format; AGENTS.md lists them. */
+  "agents-md": ".agents/homeostat",
 };
+
+/** A document to export, with its KB path (`knowledge/<area>/docs/<topic>.md`). */
+export interface ExportDoc {
+  path: string;
+  doc: Doc;
+}
 
 /** Shared files where homeostat only owns a marked block. */
 export const BLOCK_FILES = {
@@ -42,7 +52,8 @@ interface Group {
 function groups(entries: readonly Entry[]): Group[] {
   const byArea = new Map<string, Entry[]>();
   for (const e of entries) {
-    if (e.frontmatter.status !== "accepted") continue;
+    // A rejected decision is context, never a rule to follow.
+    if (e.frontmatter.status !== "accepted" || isRejectedDecision(e.frontmatter)) continue;
     byArea.set(e.frontmatter.area, [...(byArea.get(e.frontmatter.area) ?? []), e]);
   }
   return [...byArea]
@@ -97,6 +108,64 @@ function copilotFile(g: Group): string {
 
 const block = (text: string) => `${BLOCK_START}\n${text.trimEnd()}\n${BLOCK_END}`;
 
+/** `integrations-partner-calls` for knowledge/integrations/docs/partner-calls.md. */
+const docName = (d: ExportDoc) => {
+  const [, area = "", , ...rest] = d.path.split("/");
+  return `${area}-${rest.join("-").replace(/\.md$/, "")}`;
+};
+
+/** A document as plain markdown: title, intro, sections; provenance stays in the KB. */
+const docBody = (d: ExportDoc) =>
+  [
+    `# ${d.doc.frontmatter.title}`,
+    d.doc.intro,
+    ...d.doc.sections.map((s) => `## ${s.heading}\n${s.body}`),
+    `(homeostat document: ${d.path.replace(/^knowledge\//, "")})`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+const docGlobs = (d: ExportDoc) =>
+  d.doc.frontmatter.scope.some((g) => GLOBAL.has(g)) ? [] : d.doc.frontmatter.scope;
+
+function docFiles(docs: readonly ExportDoc[], want: Set<ExportTarget>, out: ExportOutput) {
+  for (const d of docs) {
+    const name = docName(d);
+    const globs = docGlobs(d);
+    const title = d.doc.frontmatter.title;
+    if (want.has("claude")) {
+      const front = globs.length
+        ? `---\npaths:\n${globs.map((p) => `  - ${quote(p)}`).join("\n")}\n---\n`
+        : "";
+      out.owned[`${OWNED_DIRS.claude}/docs/${name}.md`] = `${front}${NOTICE}\n\n${docBody(d)}\n`;
+    }
+    if (want.has("cursor")) {
+      const front = globs.length
+        ? `---\ndescription: ${title}\nglobs: ${globs.join(", ")}\nalwaysApply: false\n---\n`
+        : `---\ndescription: ${title}\nalwaysApply: false\n---\n`;
+      out.owned[`${OWNED_DIRS.cursor}/docs-${name}.mdc`] = `${front}${NOTICE}\n\n${docBody(d)}\n`;
+    }
+    if (want.has("copilot") && globs.length) {
+      out.owned[`${OWNED_DIRS.copilot}/docs-${name}.instructions.md`] =
+        `---\napplyTo: ${quote(globs.join(","))}\n---\n${NOTICE}\n\n${docBody(d)}\n`;
+    }
+    if (want.has("agents-md")) {
+      out.owned[`${OWNED_DIRS["agents-md"]}/${name}.md`] = `${NOTICE}\n\n${docBody(d)}\n`;
+    }
+  }
+}
+
+/** The AGENTS.md list of exported documents, so agents know where to look. */
+const docIndex = (docs: readonly ExportDoc[]) =>
+  docs.length
+    ? `# Team documents (homeostat)\n\nRead the one that covers the code you are changing:\n\n${docs
+        .map(
+          (d) =>
+            `- \`${OWNED_DIRS["agents-md"]}/${docName(d)}.md\`: ${d.doc.frontmatter.title} (${d.doc.frontmatter.scope.map((g) => `\`${g}\``).join(", ")})`,
+        )
+        .join("\n")}\n`
+    : "";
+
 /**
  * Renders accepted entries as each tool's native rules files: one file per area where the tool
  * supports path scoping, and a marked block in the shared files. Pure; `homeostat export` writes them.
@@ -104,10 +173,12 @@ const block = (text: string) => `${BLOCK_START}\n${text.trimEnd()}\n${BLOCK_END}
 export function exportRules(
   entries: readonly Entry[],
   targets: readonly ExportTarget[],
+  docs: readonly ExportDoc[] = [],
 ): ExportOutput {
   const all = groups(entries);
   const out: ExportOutput = { owned: {}, ownedDirs: [], blocks: {} };
   const want = new Set(targets);
+  docFiles(docs, want, out);
 
   if (want.has("claude")) {
     out.ownedDirs.push(OWNED_DIRS.claude);
@@ -129,9 +200,9 @@ export function exportRules(
       : "";
   }
   if (want.has("agents-md")) {
-    out.blocks[BLOCK_FILES.agentsMd] = all.length
-      ? block(all.map((g) => body(g, true)).join("\n"))
-      : "";
+    out.ownedDirs.push(OWNED_DIRS["agents-md"]);
+    const parts = [...all.map((g) => body(g, true)), docIndex(docs)].filter(Boolean);
+    out.blocks[BLOCK_FILES.agentsMd] = parts.length ? block(parts.join("\n")) : "";
   }
   return out;
 }

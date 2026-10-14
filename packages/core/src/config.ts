@@ -158,6 +158,8 @@ export const configSchema = z.strictObject({
     .strictObject({
       exports: z.array(z.enum(EXPORT_TARGETS)).default([...EXPORT_TARGETS]),
       tokenBudget: z.int().positive().default(2000),
+      /** Tokens for the documents index and the most relevant sections, on top of the rules. */
+      docTokenBudget: z.int().nonnegative().default(1000),
     })
     .prefault({}),
   notifications: z

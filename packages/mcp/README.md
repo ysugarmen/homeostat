@@ -9,6 +9,8 @@ The Homeostat knowledge base as an MCP server, so any agent can read and add to 
 | `explain` | Why a rule exists: source comment, score breakdown, owner, conflicts, last confirmed |
 | `learn` | Saves a lesson as a candidate rule on the caller's `candidates/<member>` branch |
 | `flag` | Reports a rule as wrong: it loses score and goes back to review |
+| `docs` | Lists the team's reference documents and their sections, for an area or a file |
+| `read` | Reads a document, or one section of it, with where each section came from |
 
 `learn` and `flag` are off unless the KB sets `security.mcpWrites: true`, and then each session may make at most `security.mcpWriteLimit` (5) writes. An agent can be steered by text it reads, so by default it suggests and a person saves (`/homeostat:learn`, `homeostat learn`). Rules in `security.teamOnlyAreas` are only returned to members of that area.
 | `report` | Knowledge base health over recent days |

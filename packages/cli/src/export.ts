@@ -69,7 +69,7 @@ export async function runExport(opts: ExportOptions, io: Io): Promise<number> {
   try {
     const kbRoot = resolve(opts.kb ?? io.env?.HOMEOSTAT_DIR ?? ".");
     const out = resolve(opts.out);
-    const { config, entries } = validate(readKbFiles(kbRoot));
+    const { config, entries, docs } = validate(readKbFiles(kbRoot));
     if (!config) {
       throw new CliError(
         `homeostat.yaml is missing or invalid in ${kbRoot}; run homeostat validate`,
@@ -102,6 +102,10 @@ export async function runExport(opts: ExportOptions, io: Io): Promise<number> {
         config,
       ),
       targets,
+      exportable(
+        docs.map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+        config,
+      ),
     );
 
     // Desired content per path; undefined means the file should not exist.

@@ -116,6 +116,13 @@ export {
   parseDoc,
   parseProvenance,
 } from "./doc.ts";
+export {
+  type ContextDoc,
+  type DocContext,
+  docContext,
+  docCovers,
+  docRef,
+} from "./doc-context.ts";
 export { type ConvertOptions, convertDoc } from "./doc-convert.ts";
 export { applySectionPatch, changedSections, PatchError, type SectionPatch } from "./doc-patch.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
@@ -133,6 +140,7 @@ export {
 } from "./events.ts";
 export {
   BLOCK_FILES,
+  type ExportDoc,
   type ExportOutput,
   type ExportTarget,
   exportRules,

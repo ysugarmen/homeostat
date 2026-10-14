@@ -1,5 +1,4 @@
 import type { Config } from "./config.ts";
-import type { Entry } from "./entry.ts";
 
 /**
  * Team-only areas (`security.teamOnlyAreas`) keep a team's rules from spreading: they are never
@@ -11,7 +10,7 @@ export function isTeamOnly(area: string, config: Config): boolean {
 }
 
 /** The entries a member's session may see; with no known member, team-only areas are hidden. */
-export function visibleTo<E extends Pick<Entry, "frontmatter">>(
+export function visibleTo<E extends { frontmatter: { area: string } }>(
   entries: readonly E[],
   config: Config,
   member: string | undefined,
@@ -23,7 +22,7 @@ export function visibleTo<E extends Pick<Entry, "frontmatter">>(
 }
 
 /** The entries that may leave the KB repo, e.g. into a code repo's rules files. */
-export function exportable<E extends Pick<Entry, "frontmatter">>(
+export function exportable<E extends { frontmatter: { area: string } }>(
   entries: readonly E[],
   config: Config,
 ): E[] {

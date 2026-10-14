@@ -210,6 +210,11 @@ export const SECTIONS: Section[] = [
         options: EXPORT_TARGETS,
       },
       { path: ["distribution", "tokenBudget"], label: "Token budget per session", kind: "number" },
+      {
+        path: ["distribution", "docTokenBudget"],
+        label: "Token budget for documents",
+        kind: "number",
+      },
     ],
   },
   {
@@ -353,9 +358,12 @@ export function applySection(
       if (field.kind === "checkbox") doc.setIn(field.path, form.get(name) === "on");
       else if (field.kind === "checks") doc.setIn(field.path, doc.createNode(form.getAll(name)));
       else if (field.kind === "lines") doc.setIn(field.path, doc.createNode(lines(raw ?? "")));
-      else if (field.kind === "number")
-        doc.setIn(field.path, raw === null || raw === "" ? undefined : Number(raw));
-      else if (field.optional && !raw?.trim()) {
+      else if (field.kind === "number") {
+        // An empty or missing number means "use the default", so the key is removed.
+        if (raw === null || raw === "") {
+          if (doc.hasIn(field.path)) doc.deleteIn(field.path);
+        } else doc.setIn(field.path, Number(raw));
+      } else if (field.optional && !raw?.trim()) {
         if (doc.hasIn(field.path)) doc.deleteIn(field.path);
       } else if (raw !== null) doc.setIn(field.path, raw.trim());
     }

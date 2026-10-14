@@ -37,6 +37,7 @@ describe("exportRules", () => {
       ".claude/rules/homeostat",
       ".cursor/rules/homeostat",
       ".github/instructions/homeostat",
+      ".agents/homeostat",
     ]);
   });
 

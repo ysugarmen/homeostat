@@ -5,6 +5,7 @@ import {
   CONFIG_FILE,
   CORE_AREA,
   type Config,
+  docContext,
   logEvent,
   pruneEvents,
   readKbFiles,
@@ -48,7 +49,7 @@ async function sessionStart(input: HookInput, io: Io) {
   const kbRoot = findKb(io.env, cwd);
   if (!kbRoot) return;
 
-  const { config, entries } = validate(readKbFiles(kbRoot));
+  const { config, entries, docs } = validate(readKbFiles(kbRoot));
   if (!config) throw new HookSkip("knowledge base config is invalid; run homeostat validate");
   pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
 
@@ -74,7 +75,31 @@ async function sessionStart(input: HookInput, io: Io) {
     tokens: selection.tokens,
   });
 
-  const context = renderContext(selection);
+  const rules = renderContext(selection);
+  const documents = docContext(
+    visibleTo(
+      docs.map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+      config,
+      member,
+    ),
+    paths,
+    {
+      tokenBudget: config.distribution.docTokenBudget,
+      maxChars: MAX_CONTEXT_CHARS - rules.length - 2,
+      readHint:
+        'Read a section with the homeostat MCP tool `read` ({"doc": "<area>/<topic>", "section": "<id>"}) before changing code it describes.',
+    },
+  );
+  if (documents.listed.length) {
+    logEvent(kbRoot, {
+      ts: (io.now?.() ?? new Date()).toISOString(),
+      type: "doc-injection",
+      session: input.session_id,
+      docs: documents.listed,
+      sections: documents.sections,
+    });
+  }
+  const context = [rules, documents.text].filter(Boolean).join("\n\n");
   if (!context) return;
   io.stdout(
     `${JSON.stringify({

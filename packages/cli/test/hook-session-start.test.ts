@@ -99,7 +99,10 @@ describe("homeostat hook session-start", () => {
     const config = join(kbDir, "homeostat.yaml");
     writeFileSync(
       config,
-      readFileSync(config, "utf8").replace("tokenBudget: 2000", "tokenBudget: 150"),
+      readFileSync(config, "utf8").replace(
+        "tokenBudget: 2000",
+        "tokenBudget: 150\n  docTokenBudget: 0",
+      ),
     );
     const cwd = codeRepo(["services/integrations/queue/worker.ts"]);
     const { stdout } = await hook(

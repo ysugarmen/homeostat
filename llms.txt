@@ -8,6 +8,8 @@ When working in a repo whose team uses Homeostat:
 - When the user teaches you a team convention, save it: MCP `learn` (when the KB enables MCP writes), or `homeostat learn --title ... --rule ... --why ...`. It becomes a candidate a teammate reviews.
 - If a rule is wrong or outdated, `flag` it with the reason (MCP `flag`, or `homeostat flag <id> --reason ...`).
 - `explain <id>` says why a rule exists: the review comment, score breakdown and owner.
+- The team also keeps reference documents (architecture, contracts, migrations) at `knowledge/<area>/docs/`. MCP `docs` lists them, `read` returns one section; read the one covering your files before changing them.
+- A rule marked "considered and not adopted" is a decision the team rejected: do not propose it again unless its reason no longer holds.
 
 ## Docs
 
@@ -16,6 +18,7 @@ When working in a repo whose team uses Homeostat:
 - [Claude Code plugin](packages/plugin/README.md): skills, hooks, settings
 - [End-to-end demo](docs/demo.md): from a review comment to a followed rule in five minutes
 - [Design](docs/design.md) and [execution plan](docs/execution-plan.md)
+- [Data handling](docs/data-handling.md): what is read, what leaves, how to turn it off
 
 ## Entry format
 

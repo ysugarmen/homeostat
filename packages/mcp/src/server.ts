@@ -1,4 +1,6 @@
 import {
+  docCovers,
+  docRef,
   type Entry,
   explainEntry,
   hitLine,
@@ -75,6 +77,8 @@ const schemas = {
   flag: z.object({ id: z.string().min(1), reason: z.string().min(1) }),
   report: z.object({ days: z.int().positive().max(365).optional() }),
   list: z.object({ area: z.string().optional() }),
+  docs: z.object({ area: z.string().optional(), path: z.string().optional() }),
+  read: z.object({ doc: z.string().min(1), section: z.string().optional() }),
 };
 type ToolName = keyof typeof schemas;
 
@@ -94,6 +98,8 @@ const ARG_ALIASES: Record<string, string> = {
   lesson: "rule",
   description: "why",
   window: "days",
+  document: "doc",
+  section_id: "section",
 };
 
 function normalizeArgs(tool: ToolName, raw: Record<string, unknown>): Record<string, unknown> {
@@ -143,6 +149,16 @@ export const TOOLS: { name: ToolName; description: string }[] = [
     description:
       "Knowledge base health over recent days: entries by status, new, flagged, disputed, stale, duplicates, injections.",
   },
+  {
+    name: "docs",
+    description:
+      "List the team's reference documents (architecture, contracts, migrations, domain guides) and their sections, optionally for an area or file.",
+  },
+  {
+    name: "read",
+    description:
+      'Read a team document, or one section of it: doc is "<area>/<topic>" as listed by docs, section is a section id.',
+  },
 ];
 
 /** Names agents guess, mapped to the real tool. Accepted silently and logged as desire paths. */
@@ -177,6 +193,14 @@ const TOOL_ALIASES: Record<string, ToolName> = {
   health: "report",
   list: "list",
   list_rules: "list",
+  documents: "docs",
+  list_docs: "docs",
+  list_documents: "docs",
+  read_doc: "read",
+  read_document: "read",
+  get_doc: "read",
+  get_document: "read",
+  open: "read",
   list_entries: "list",
   all: "list",
 };
@@ -272,6 +296,11 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
       config,
       deps.member?.(),
     );
+    const docs = visibleTo(
+      kb.docs.map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+      config,
+      deps.member?.(),
+    );
     if (WRITE_TOOLS.has(tool)) {
       if (!config.security.mcpWrites) {
         return fail(
@@ -336,6 +365,60 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
           if (!entries.some((x) => x.frontmatter.id === a.id))
             return fail(`No entry with id "${a.id}".`);
           return text(await deps.flag(a.id, a.reason));
+        }
+        case "docs": {
+          const a = args as z.infer<typeof schemas.docs>;
+          const shown = docs.filter(
+            ({ doc }) =>
+              (!a.area || doc.frontmatter.area === a.area) && (!a.path || docCovers(doc, a.path)),
+          );
+          return text(
+            shown.length
+              ? shown
+                  .map(
+                    ({ path, doc }) =>
+                      `- ${docRef(path)}: ${doc.frontmatter.title} [${doc.frontmatter.scope.join(", ")}]\n  sections: ${doc.sections
+                        .filter((s) => s.id)
+                        .map((s) => `${s.id} (${s.heading})`)
+                        .join(", ")}`,
+                  )
+                  .join("\n")
+              : "No team documents match. The team may not have written one for this area yet.",
+          );
+        }
+        case "read": {
+          const a = args as z.infer<typeof schemas.read>;
+          const ref = a.doc
+            .replace(/^knowledge\//, "")
+            .replace(/\/docs\//, "/")
+            .replace(/\.md$/, "");
+          const found = docs.find((d) => docRef(d.path) === ref);
+          if (!found) {
+            return fail(
+              `No document "${a.doc}". Documents: ${docs.map((d) => docRef(d.path)).join(", ") || "none"}.`,
+            );
+          }
+          const { doc } = found;
+          const section = a.section ? doc.sections.find((s) => s.id === a.section) : undefined;
+          if (a.section && !section) {
+            return fail(
+              `No section "${a.section}" in ${ref}. Sections: ${doc.sections.map((s) => s.id).join(", ")}.`,
+            );
+          }
+          deps.log({ ts, type: "doc-read", doc: ref, ...(section ? { section: section.id } : {}) });
+          const source = (s: (typeof doc.sections)[number]) =>
+            s.provenance
+              ? `(source: ${s.provenance.source}${s.provenance.updated ? `, ${s.provenance.updated}` : ""}${s.provenance.url ? `, ${s.provenance.url}` : ""})`
+              : "";
+          const render = (s: (typeof doc.sections)[number]) =>
+            `## ${s.heading} {#${s.id}}\n${source(s)}\n${s.body}`.replace(/\n\n+/g, "\n\n");
+          return text(
+            section
+              ? `# ${doc.frontmatter.title} (${ref})\n\n${render(section)}`
+              : [`# ${doc.frontmatter.title} (${ref})`, doc.intro, ...doc.sections.map(render)]
+                  .filter(Boolean)
+                  .join("\n\n"),
+          );
         }
         case "report":
           return text(
