@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Security problems go to a private advisory instead (see SECURITY.md).
+        Please remove tokens, internal URLs and company names from anything you paste.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The command you ran, and a minimal homeostat.yaml or entry if it matters.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `homeostat --version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      options:
+        - CLI
+        - Claude Code plugin (hooks or skills)
+        - MCP server
+        - Curator or deep dive (CI)
+        - Dashboard
+        - Export (Cursor, Copilot, AGENTS.md)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Node version, git host (GitHub or Bitbucket), agent and its version.
