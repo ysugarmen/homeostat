@@ -161,6 +161,7 @@ export async function securityReport(root: string, config: Config, io: Io): Prom
     info(
       `code repos read: ${sources?.repos.join(", ") || "none"} (merged PRs and review comments, never source code)`,
     ),
+    info("source code reaches a model only when someone runs homeostat seed by hand"),
     sources?.exclude.repos.length || sources?.exclude.paths.length
       ? ok(
           `excluded: ${[...(sources?.exclude.repos ?? []), ...(sources?.exclude.paths ?? [])].join(", ")}`,
