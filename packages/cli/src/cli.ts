@@ -5,6 +5,7 @@ import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
+import { runDoctor } from "./doctor.ts";
 import { runEvents } from "./events-command.ts";
 import { type ExportOptions, runExport } from "./export.ts";
 import { type FlagOptions, runFlag } from "./flag.ts";
@@ -161,6 +162,17 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--json", "print JSON")
     .action((opts) => {
       exitCode = runList(opts, io);
+    });
+
+  program
+    .command("doctor")
+    .description(
+      "Security review: what is read, what leaves, who can change the rules, and the blast radius.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--security", "run the security checks (the default, and today the only ones)")
+    .action(async (opts: { dir?: string }) => {
+      exitCode = await runDoctor(opts, io);
     });
 
   program

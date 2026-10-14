@@ -31,8 +31,13 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat events` | The local event log, one line per event |
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |
 | `homeostat mcp` | Serve the KB to any agent over MCP (stdio) |
+| `homeostat doctor --security` | Check a setup: what is read, what leaves, who can change the rules, the blast radius |
 
 The Claude Code plugin is in [`packages/plugin`](packages/plugin).
+
+## Security and data
+
+The curator reads review comments, never source code. Secrets are redacted before any model call and fail validation, so they cannot be merged. A rule merges unreviewed only when it passes every auto-merge gate, and risky instructions are blocked. Model calls can stay in your own AWS or Google Cloud account. [`docs/data-handling.md`](docs/data-handling.md) is the one-page answer for a security review, [`docs/security.md`](docs/security.md) is the threat model, and [`SECURITY.md`](SECURITY.md) explains how to report a vulnerability.
 
 ## Layout
 
