@@ -46,7 +46,8 @@ jobs:
           # Remove the NPM_TOKEN secret once trusted publishing is set up; OIDC needs no token.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          for f in out/homeostat-core-*.tgz out/homeostat-mcp-*.tgz out/homeostat-dashboard-*.tgz out/homeostat-[0-9]*.tgz; do
+          # The ./ matters: npm reads a bare "out/name.tgz" as a GitHub owner/repo shorthand.
+          for f in ./out/homeostat-core-*.tgz ./out/homeostat-mcp-*.tgz ./out/homeostat-dashboard-*.tgz ./out/homeostat-[0-9]*.tgz; do
             npm publish "$f" --provenance --access public
           done
       - name: GitHub release
