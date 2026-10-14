@@ -24,9 +24,9 @@ Type "homeostat validate $KB"
 Enter
 Sleep 1.5s
 
-Type "# Any agent can find it, and the team's documents:"
+Type "# Once a reviewer accepts it, every agent can search it and see why it exists:"
 Enter
-Type "homeostat search 'partner client' --dir $KB"
+Type "homeostat search 'retry partner calls' --dir $KB"
 Enter
 Sleep 2.5s
 
