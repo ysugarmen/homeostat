@@ -1,14 +1,36 @@
-# homeostat
+# Homeostat
 
-Turn accepted code-review feedback into scored, governed team knowledge that every coding agent can use.
+**Your team's code-review lessons, as rules every coding agent follows.**
 
-> Early development: not yet released on npm. The design and the live plan are in [`docs/design.md`](docs/design.md) and [`docs/execution-plan.md`](docs/execution-plan.md); the end-to-end demo is [`docs/demo.md`](docs/demo.md); how it fares against Yegge's survival levers is [`docs/levers.md`](docs/levers.md).
+Your reviewers already teach your coding agents, one comment at a time: "use the retry helper", "never log the request body", "that service was renamed". Each agent forgets by the next session, so the same comment gets written again next week. Claude's own memory helps one person in one tool. It is unreviewed, and it is not shared with the rest of the team or with Cursor, Copilot and Codex.
+
+Homeostat closes the loop:
+- It turns review feedback that led to a code change into short, scored rules and living team documents.
+- It keeps them in a git repo where every change is a reviewed pull request.
+- It gives every agent the ones that matter for the files it is touching.
+
+<!-- demo.gif: render with `vhs docs/demo.tape` -->
+
+## Get started
+
+```sh
+# In a new or existing repo for your team's knowledge base:
+npx --yes homeostat@0.1.0 init
+
+# In Claude Code, on each developer's machine:
+claude plugin marketplace add ysugarmen/homeostat
+claude plugin install homeostat@homeostat
+```
+
+The [quickstart](docs/guide/quickstart.md) takes you from there to a curator opening its first PR in about ten minutes. The full guide starts at [docs/index.md](docs/index.md).
+
+> Early days: 0.1.0 is the first release. The design and live plan are in [docs/design.md](docs/design.md) and [docs/execution-plan.md](docs/execution-plan.md).
 
 ## How it works
 
-1. **Capture.** A daily curator reads merged PRs, keeps review comments that were followed by a code change, and drafts one entry each with Claude. Developers add entries with `homeostat learn` or `/homeostat:learn`, and sessions leave handoff notes.
+1. **Capture.** A daily curator reads merged PRs, keeps review comments that were followed by a code change, and drafts one rule each with Claude. It also proposes one-section updates to the team documents those comments affect. Developers add rules and document sections with `homeostat learn` or `/homeostat:learn`, and sessions leave handoff notes.
 2. **Govern.** Every entry is scored (+3 accepted PR feedback, +2 manual, +1 senior author, −2 conflict) and lands through a PR on the knowledge-base repo, where CODEOWNERS decide who approves it. An entry merges unreviewed only when it passes every gate: the score threshold, a team member's review comment followed by a code change, no secret or risky-content findings, and an area in `scoring.autoMerge` scope. A weekly deep dive merges duplicates, marks contradictions and retires stale entries.
-3. **Distribute.** The Claude Code plugin injects the entries relevant to the files you are touching at session start, within a token budget. `homeostat export` writes the same entries as Claude, Cursor, Copilot and AGENTS.md rules files.
+3. **Distribute.** The Claude Code plugin injects the rules relevant to the files you are touching at session start, within a token budget, plus an index of the documents that cover them. Any agent can use the MCP server. `homeostat export` writes the same rules and documents as Claude, Cursor, Copilot and AGENTS.md files.
 
 Nothing scheduled runs on a laptop: the agents run in the KB repo's CI (or `homeostat up` on a shared box).
 
@@ -49,7 +71,7 @@ The curator reads review comments, never source code. Secrets are redacted befor
 | `packages/core` | Entry schema, config, scoring, validation, providers (Bitbucket, GitHub), curator, deep dive, export |
 | `packages/cli` | The `homeostat` command and the plugin's hook handlers |
 | `packages/plugin` | Claude Code plugin: skills and hooks |
-| `packages/mcp` | MCP server: context, search, explain, learn, flag, report |
+| `packages/mcp` | MCP server: context, search, explain, docs, read, report (and learn, flag when enabled) |
 | `packages/dashboard` | Local dashboard: setup forms and metrics, server-rendered |
 | `examples/starter-kb` | A small example knowledge base |
 
@@ -59,6 +81,8 @@ The curator reads review comments, never source code. Secrets are redacted befor
 pnpm install
 pnpm check   # lint + typecheck + tests
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
