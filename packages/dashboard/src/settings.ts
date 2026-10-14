@@ -239,6 +239,18 @@ export const SECTIONS: Section[] = [
         help: "One domain per line, e.g. docs.example.com",
       },
       {
+        path: ["security", "teamOnlyAreas"],
+        label: "Team-only areas",
+        kind: "lines",
+        help: "Never exported; only their members' sessions see them",
+      },
+      {
+        path: ["security", "mcpWrites"],
+        label: "Let agents save and flag through MCP",
+        kind: "checkbox",
+      },
+      { path: ["security", "mcpWriteLimit"], label: "MCP writes per session", kind: "number" },
+      {
         path: ["security", "eventRetentionDays"],
         label: "Keep local events for (days)",
         kind: "number",

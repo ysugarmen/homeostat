@@ -3,6 +3,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import {
   EXPORT_TARGETS,
   type ExportTarget,
+  exportable,
   exportRules,
   readKbFiles,
   removeBlock,
@@ -10,6 +11,8 @@ import {
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
+import { git } from "./git.ts";
+import { detectHost } from "./init.ts";
 import { CliError } from "./provider.ts";
 
 export interface ExportOptions {
@@ -17,6 +20,32 @@ export interface ExportOptions {
   out: string;
   target?: string[];
   check?: boolean;
+  /** Export even when the target repo is public. */
+  allowPublic?: boolean;
+}
+
+/**
+ * Whether the repo at `dir` is public, by asking its git host without credentials: a public repo
+ * answers, a private one does not. Undefined when it cannot tell (no origin, unknown host, offline).
+ */
+async function isPublicRepo(dir: string, io: Io): Promise<{ public?: boolean; repo?: string }> {
+  const remote = git(dir, "remote", "get-url", "origin");
+  const host = remote ? detectHost(remote) : undefined;
+  const path = remote && /[:/]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(remote.trim())?.[1];
+  if (!host || !path) return {};
+  const url =
+    host === "github"
+      ? `https://api.github.com/repos/${path}`
+      : `https://api.bitbucket.org/2.0/repositories/${path}`;
+  try {
+    const res = await (io.fetch ?? fetch)(url, { headers: { Accept: "application/json" } });
+    if (res.status === 200) return { public: true, repo: path };
+    if (res.status === 404 || res.status === 403 || res.status === 401)
+      return { public: false, repo: path };
+    return { repo: path };
+  } catch {
+    return { repo: path };
+  }
 }
 
 /** Relative paths of every file under `dir`, `/`-separated; empty when it does not exist. */
@@ -36,7 +65,7 @@ function listFiles(root: string, dir: string): string[] {
 const readOr = (path: string) => (existsSync(path) ? readFileSync(path, "utf8") : undefined);
 
 /** `homeostat export`: writes accepted entries into a code repo as each agent's native rules files. */
-export function runExport(opts: ExportOptions, io: Io): number {
+export async function runExport(opts: ExportOptions, io: Io): Promise<number> {
   try {
     const kbRoot = resolve(opts.kb ?? io.env?.HOMEOSTAT_DIR ?? ".");
     const out = resolve(opts.out);
@@ -55,8 +84,23 @@ export function runExport(opts: ExportOptions, io: Io): number {
     const targets = (
       opts.target?.length ? opts.target : config.distribution.exports
     ) as ExportTarget[];
+    if (!opts.check) {
+      const visibility = await isPublicRepo(out, io);
+      if (visibility.public && !opts.allowPublic) {
+        throw new CliError(
+          `${visibility.repo} is public: exporting would publish your team's rules. Rerun with --allow-public if that is intended.`,
+        );
+      }
+      if (visibility.public === undefined && visibility.repo) {
+        io.stderr(`could not check whether ${visibility.repo} is public; exporting anyway\n`);
+      }
+    }
+    // Team-only areas never leave the KB repo.
     const plan = exportRules(
-      entries.map((e) => e.entry),
+      exportable(
+        entries.map((e) => e.entry),
+        config,
+      ),
       targets,
     );
 

@@ -11,6 +11,7 @@ import {
   renderContext,
   selectEntries,
   validate,
+  visibleTo,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { git } from "./git.ts";
@@ -52,8 +53,13 @@ async function sessionStart(input: HookInput, io: Io) {
   pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
 
   const paths = touchedPaths(cwd);
+  const member = memberIdFrom(git(cwd, "config", "user.name"));
   const selection = selectEntries(
-    entries.map((e) => e.entry),
+    visibleTo(
+      entries.map((e) => e.entry),
+      config,
+      member,
+    ),
     { paths, tokenBudget: config.distribution.tokenBudget, maxChars: MAX_CONTEXT_CHARS },
   );
   logEvent(kbRoot, {

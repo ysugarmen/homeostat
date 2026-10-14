@@ -5,7 +5,7 @@
 When working in a repo whose team uses Homeostat:
 
 - Before editing code, call the MCP tool `context` with the files you will touch, or run `homeostat search <topic>`, and follow the rules returned.
-- When the user teaches you a team convention, save it: MCP `learn`, or `homeostat learn --title ... --rule ... --why ...`. It becomes a candidate a teammate reviews.
+- When the user teaches you a team convention, save it: MCP `learn` (when the KB enables MCP writes), or `homeostat learn --title ... --rule ... --why ...`. It becomes a candidate a teammate reviews.
 - If a rule is wrong or outdated, `flag` it with the reason (MCP `flag`, or `homeostat flag <id> --reason ...`).
 - `explain <id>` says why a rule exists: the review comment, score breakdown and owner.
 

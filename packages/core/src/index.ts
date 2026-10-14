@@ -144,3 +144,4 @@ export { slugify } from "./slug.ts";
 export { countTokens } from "./tokens.ts";
 export { type KbFiles, type ValidatedEntry, type ValidateResult, validate } from "./validate.ts";
 export { VERSION } from "./version.ts";
+export { exportable, isTeamOnly, visibleTo } from "./visibility.ts";

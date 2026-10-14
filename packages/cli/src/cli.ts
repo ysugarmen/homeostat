@@ -220,8 +220,9 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
       collect,
     )
     .option("--check", "exit 1 if the exported files are out of date, without writing")
-    .action((opts: ExportOptions) => {
-      exitCode = runExport(opts, io);
+    .option("--allow-public", "export even when the code repo is public")
+    .action(async (opts: ExportOptions) => {
+      exitCode = await runExport(opts, io);
     });
 
   program

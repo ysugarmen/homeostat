@@ -163,6 +163,12 @@ export const configSchema = z.strictObject({
         .default([]),
       /** Days the local event log keeps events; older ones are deleted. */
       eventRetentionDays: z.int().positive().default(90),
+      /** Areas whose rules are never exported and reach only their own members' sessions. */
+      teamOnlyAreas: z.array(z.string()).default([]),
+      /** Let agents save and flag entries through MCP. Off by default; the CLI and skills still can. */
+      mcpWrites: z.boolean().default(false),
+      /** With mcpWrites on: the most learn and flag calls one MCP session may make. */
+      mcpWriteLimit: z.int().positive().default(5),
     })
     .prefault({}),
   /** Where the agents read from and write to. Needed by `homeostat curate`, not by validation. */
@@ -237,6 +243,17 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
       }
     }
   });
+  for (const area of config.security.teamOnlyAreas) {
+    if (!Object.hasOwn(config.areas, area)) {
+      issues.push(
+        error(
+          "config.security.teamOnlyArea",
+          `security.teamOnlyAreas: "${area}" is not in areas${area === CORE_AREA ? " (core reaches everyone by definition)" : ""}`,
+          { path: "security.teamOnlyAreas", file },
+        ),
+      );
+    }
+  }
 
   return issues.length ? { issues } : { config, issues };
 }

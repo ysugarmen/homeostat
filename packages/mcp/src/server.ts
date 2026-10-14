@@ -9,6 +9,7 @@ import {
   selectEntries,
   VERSION,
   validate,
+  visibleTo,
 } from "@homeostat/core";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -37,8 +38,12 @@ export interface McpDeps {
   log(event: Record<string, unknown>): void;
   /** Recent events, newest last, for `report`. */
   events?(): Record<string, unknown>[];
+  /** The member this session belongs to, for team-only areas; unknown hides them. */
+  member?(): string | undefined;
   now(): Date;
 }
+
+const WRITE_TOOLS = new Set(["learn", "flag"]);
 
 const INSTRUCTIONS = `Homeostat holds your team's reviewed coding rules, learned from accepted code-review feedback. Before changing code, call context with the files you will touch (or search for a topic) and follow the rules it returns. When the user teaches you a team convention, save it with learn. If a rule is wrong, flag it. explain says why a rule exists.`;
 
@@ -215,8 +220,13 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
   );
 
+  // Writes are off unless the KB enables them, and capped per session when on (security T7):
+  // an agent steered by text it read must not be able to push a stream of branches.
+  let writes = 0;
+  const writesOn = () => validate(deps.readKb()).config?.security.mcpWrites === true;
+
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOLS.map((t) => ({
+    tools: TOOLS.filter((t) => writesOn() || !WRITE_TOOLS.has(t.name)).map((t) => ({
       name: t.name,
       description: t.description,
       inputSchema: z.toJSONSchema(schemas[t.name]) as { type: "object" },
@@ -257,7 +267,24 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
         "No usable knowledge base: homeostat.yaml is missing or invalid. Point Homeostat at your KB checkout with the plugin's kb_dir setting or HOMEOSTAT_DIR.",
       );
     }
-    const entries = kb.entries.map((e) => e.entry);
+    const entries = visibleTo(
+      kb.entries.map((e) => e.entry),
+      config,
+      deps.member?.(),
+    );
+    if (WRITE_TOOLS.has(tool)) {
+      if (!config.security.mcpWrites) {
+        return fail(
+          `Saving through MCP is off for this knowledge base (security.mcpWrites). Tell the user what you would ${tool}; they can run /homeostat:${tool === "learn" ? "learn" : "review"} or homeostat ${tool}.`,
+        );
+      }
+      if (writes >= config.security.mcpWriteLimit) {
+        return fail(
+          `This session has used its ${config.security.mcpWriteLimit} MCP writes (security.mcpWriteLimit). Tell the user what else you would save.`,
+        );
+      }
+      writes++;
+    }
 
     try {
       switch (tool) {

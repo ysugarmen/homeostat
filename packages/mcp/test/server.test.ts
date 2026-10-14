@@ -7,22 +7,35 @@ import { createServer, type LearnInput, TOOLS } from "../src/server.ts";
 
 const starter = new URL("../../../examples/starter-kb/", import.meta.url).pathname;
 
-function kbFiles() {
+/** The starter KB; `security` lines are added under its security section. */
+function kbFiles(security: string[] = []) {
   const files: Record<string, string> = {};
   for (const f of readdirSync(starter, { recursive: true, encoding: "utf8" })) {
     if ((f.endsWith(".md") || f.endsWith(".yaml")) && f !== "README.md") {
       files[f] = readFileSync(join(starter, f), "utf8");
     }
   }
+  files["homeostat.yaml"] = (files["homeostat.yaml"] ?? "").replace(
+    "  allowedDomains: []\n",
+    `  allowedDomains: []\n${security.map((l) => `  ${l}\n`).join("")}`,
+  );
   return files;
 }
 
-async function connect() {
+interface ConnectOptions {
+  /** Lines for the security section; the default turns MCP writes on. */
+  security?: string[];
+  member?: string;
+}
+
+async function connect(opts: ConnectOptions = {}) {
+  const security = opts.security ?? ["mcpWrites: true"];
   const events: Record<string, unknown>[] = [];
   const learned: LearnInput[] = [];
   const flagged: [string, string][] = [];
   const server = createServer({
-    readKb: kbFiles,
+    readKb: () => kbFiles(security),
+    ...(opts.member ? { member: () => opts.member } : {}),
     learn: async (input) => {
       learned.push(input);
       return "saved as a candidate on candidates/lee";
@@ -197,5 +210,44 @@ describe("desire paths (3.2)", () => {
     const r = await call("search", {});
     expect(r.isError).toBe(true);
     expect(r.text).toContain("Invalid arguments for search: query:");
+  });
+});
+
+describe("security (T7)", () => {
+  test("learn and flag are hidden and refused unless security.mcpWrites is on", async () => {
+    const { client, call, learned } = await connect({ security: [] });
+    const { tools } = await client.listTools();
+    expect(tools.map((t) => t.name)).toEqual(["context", "search", "explain", "report"]);
+    const r = await call("learn", { title: "t", rule: "r", why: "w" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("Saving through MCP is off");
+    expect(learned).toEqual([]);
+  });
+
+  test("writes are capped per session", async () => {
+    const { call, learned } = await connect({ security: ["mcpWrites: true", "mcpWriteLimit: 2"] });
+    const args = { title: "Use tokens", rule: "Use tokens.", why: "Dark mode." };
+    expect((await call("learn", args)).isError).toBe(false);
+    expect((await call("learn", args)).isError).toBe(false);
+    const third = await call("learn", args);
+    expect(third.isError).toBe(true);
+    expect(third.text).toContain("used its 2 MCP writes");
+    expect(learned).toHaveLength(2);
+  });
+
+  test("a team-only area reaches its own members' sessions and nobody else's", async () => {
+    const security = ["teamOnlyAreas: [integrations]"];
+    const files = ["services/integrations/partner.ts"];
+    const outsider = await connect({ security, member: "lee" });
+    expect((await outsider.call("context", { paths: files })).text).not.toContain(
+      "outbound-http-retry-helper",
+    );
+    expect((await outsider.call("explain", { id: "outbound-http-retry-helper" })).isError).toBe(
+      true,
+    );
+    const member = await connect({ security, member: "dana" });
+    expect((await member.call("context", { paths: files })).text).toContain(
+      "outbound-http-retry-helper",
+    );
   });
 });

@@ -109,8 +109,8 @@ Controls:
 The KB is readable by everyone who can read the KB repo. Exports copy rules into code repos, which may have a different audience, or be public.
 
 Controls:
-1. **Area visibility.** `areas.<name>.visibility: team | org`. Team-only areas are not exported, and are injected only into sessions of that area's members.
-2. **Export guard.** `homeostat export` refuses to write into a repo it detects as public unless given `--allow-public`, and never exports team-only areas.
+1. **Area visibility** ✅. `security.teamOnlyAreas`: never exported, and injected only into sessions (and MCP results) of that area's members. This limits spread, not access; access is whoever can read the KB repo.
+2. **Export guard** ✅. `homeostat export` refuses to write into a repo it detects as public unless given `--allow-public`, and never exports team-only areas.
 3. **KB repo checks.** `doctor` warns if the KB repo is public.
 
 ### T7. MCP and hooks as an attack surface on the laptop — medium
@@ -119,8 +119,8 @@ An injected agent could call MCP `learn` or `flag` in a loop, pushing branches w
 
 Controls:
 1. Writes require Claude Code's tool approval (already the case).
-2. Rate limit: at most N writes per session, configurable.
-3. MCP write tools are off unless `mcp.allowWrites: true`.
+2. Rate limit ✅: at most `security.mcpWriteLimit` (5) writes per session.
+3. MCP write tools are off ✅ unless `security.mcpWrites: true`; when off they are not even listed.
 4. Everything an agent writes is a candidate on a branch (already the case).
 
 ### T8. Dashboard and local data — low
