@@ -4,6 +4,7 @@ import { detectConflicts } from "./conflicts.ts";
 import { type Entry, parseEntry } from "./entry.ts";
 import { error, hasErrors, type Issue } from "./issues.ts";
 import { score } from "./score.ts";
+import { findEmails, scanSecrets } from "./secrets.ts";
 
 /** A knowledge base as file contents keyed by path relative to its root, `/`-separated. */
 export type KbFiles = Record<string, string>;
@@ -45,6 +46,7 @@ export function validate(files: KbFiles): ValidateResult {
   for (const path of Object.keys(files).filter(isEntryPath).sort()) {
     const parsed = parseEntry(files[path] ?? "");
     issues.push(...parsed.issues.map((i) => ({ ...i, file: path })));
+    issues.push(...contentIssues(path, files[path] ?? ""));
     if (!parsed.entry) continue;
     entries.push({ path, entry: parsed.entry });
     if (config) issues.push(...checkWithConfig(path, parsed.entry, config));
@@ -88,6 +90,28 @@ function checkWithConfig(path: string, entry: Entry, config: Config): Issue[] {
       path: "score",
       file: path,
       fix: { field: "score", value: computed },
+    });
+  }
+  return issues;
+}
+
+const lineOf = (text: string, index: number) => text.slice(0, index).split("\n").length;
+
+/** Secrets are errors (the KB is shared and git keeps history); emails are warnings. */
+function contentIssues(path: string, text: string): Issue[] {
+  const issues: Issue[] = scanSecrets(text).map((f) =>
+    error(
+      "secret.found",
+      `possible ${f.kind} (${f.preview}) on line ${lineOf(text, f.start)}: remove it and rotate it; the KB is shared and git keeps history`,
+      { file: path },
+    ),
+  );
+  for (const email of new Set(findEmails(text))) {
+    issues.push({
+      code: "pii.email",
+      severity: "warning",
+      message: `email address ${email}: refer to people by member id`,
+      file: path,
     });
   }
   return issues;

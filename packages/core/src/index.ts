@@ -116,6 +116,7 @@ export {
 } from "./schema.ts";
 export { type ScoreContext, type ScoreReason, type ScoreResult, score } from "./score.ts";
 export { type SearchHit, type SearchOptions, searchEntries, tokenize } from "./search.ts";
+export { findEmails, redactSecrets, type SecretFinding, scanSecrets } from "./secrets.ts";
 export {
   CONTEXT_HEADER,
   renderContext,

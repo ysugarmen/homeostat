@@ -151,6 +151,9 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
     io.stdout(`+ ${e.path} (${e.frontmatter.status}, score ${e.frontmatter.score})\n`);
   }
   for (const s of result.skipped) io.stdout(`- ${s.url}: ${s.reason}\n`);
+  if (result.redacted) {
+    io.stdout(`redacted ${result.redacted} secret(s) from review threads before drafting\n`);
+  }
 
   const hasOrigin = git(root, "remote", "get-url", "origin") !== undefined;
   if (opts.dryRun) {

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { flagEntry, logEvent, readKbFiles, validate } from "@homeostat/core";
+import { flagEntry, logEvent, readKbFiles, scanSecrets, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { commitFile, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
@@ -19,6 +19,9 @@ export function runFlag(id: string, opts: FlagOptions, io: Io): number {
   try {
     const root = resolve(opts.dir);
     if (!opts.reason?.trim()) throw new CliError("--reason is required: say what is wrong");
+    const leak = scanSecrets(opts.reason)[0];
+    if (leak)
+      throw new CliError(`the reason contains a possible ${leak.kind}; remove it before flagging`);
     if (opts.push && !opts.branch) throw new CliError("--push needs --branch");
     const kb = validate(readKbFiles(root));
     if (!kb.config) {

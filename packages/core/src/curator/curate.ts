@@ -4,11 +4,12 @@ import { formatEntry } from "../entry.ts";
 import type { Provider } from "../providers/types.ts";
 import type { Frontmatter } from "../schema.ts";
 import { score } from "../score.ts";
+import { redactSecrets } from "../secrets.ts";
 import { slugify } from "../slug.ts";
 import { countTokens } from "../tokens.ts";
 import { type KbFiles, validate } from "../validate.ts";
 import type { Drafter } from "./draft.ts";
-import { reviewThreads } from "./threads.ts";
+import { type ReviewThread, reviewThreads } from "./threads.ts";
 import { commentKey, commentKeyOf } from "./urls.ts";
 
 export interface CurateInput {
@@ -37,6 +38,8 @@ export interface CurateResult {
   skipped: Skipped[];
   /** Per repo: merged PRs and review threads looked at. */
   scanned: { repo: string; pullRequests: number; threads: number }[];
+  /** Secrets removed from review threads before they were sent to a model. */
+  redacted: number;
 }
 
 export class CurateError extends Error {}
@@ -60,7 +63,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     kb.entries.flatMap(({ entry }) => commentKeyOf(entry.frontmatter.source.url) ?? []),
   );
   const ids = new Set(kb.entries.map(({ entry }) => entry.frontmatter.id));
-  const result: CurateResult = { entries: [], skipped: [], scanned: [] };
+  const result: CurateResult = { entries: [], skipped: [], scanned: [], redacted: 0 };
   let files = { ...input.files };
 
   for (const repoName of sources.repos) {
@@ -111,7 +114,9 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
           continue;
         }
 
-        const draft = await input.drafter.draft(thread, { areas: config.areas });
+        const { thread: safe, redacted } = redactThread(thread);
+        result.redacted += redacted;
+        const draft = await input.drafter.draft(safe, { areas: config.areas });
         if (!draft) {
           skip("no lasting rule in the thread");
           continue;
@@ -179,5 +184,25 @@ function buildEntry(
     path: `knowledge/${draft.area}/${args.id}.md`,
     text: formatEntry(frontmatter, body),
     frontmatter,
+  };
+}
+
+/** A copy of the thread with secrets in its text replaced, so they never reach a model. */
+function redactThread(thread: ReviewThread): { thread: ReviewThread; redacted: number } {
+  let redacted = 0;
+  const clean = (s: string) => {
+    const r = redactSecrets(s);
+    redacted += r.findings.length;
+    return r.text;
+  };
+  const comment = (c: ReviewThread["root"]) => ({ ...c, body: clean(c.body) });
+  return {
+    thread: {
+      ...thread,
+      pullRequest: { ...thread.pullRequest, title: clean(thread.pullRequest.title) },
+      root: comment(thread.root),
+      replies: thread.replies.map(comment),
+    },
+    redacted,
   };
 }
