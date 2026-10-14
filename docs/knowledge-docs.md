@@ -105,6 +105,4 @@ Uses the existing `notifications` config: a weekly message with new and changed 
 
 ## Open decisions
 
-1. **Documents layout:** `knowledge/<area>/docs/` (recommended; keeps area ownership in one place) or a top-level `docs/`?
-2. **`seed` in the open-source tool:** include it (recommended, opt-in and manual-only), or leave it out because it sends code to a model?
-3. **Digest channel:** Slack only first (recommended), or Slack and email?
+All decided 2026-10-14: documents live in `knowledge/<area>/docs/`; `seed` is included, manual and opt-in only; the digest is Slack only to start.

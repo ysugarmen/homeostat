@@ -146,5 +146,5 @@ People adopt what they can inspect. For launch:
 ## 4. Open decisions
 
 1. ~~Drop auto-merge entirely?~~ **Decided:** keep auto-merge, guarded as in T1.
-2. **Cloud runtimes now:** Bedrock and Vertex in this phase (recommended; one new dependency each, `@anthropic-ai/bedrock-sdk` and `@anthropic-ai/vertex-sdk`), or after dogfooding?
-3. **MCP writes default:** off (recommended) or on?
+2. **Decided:** Bedrock and Vertex runtimes in this phase.
+3. **Decided:** MCP write tools are off by default.
