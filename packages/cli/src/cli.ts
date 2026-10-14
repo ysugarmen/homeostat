@@ -5,6 +5,7 @@ import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
+import { type ConvertDocsOptions, runConvertDocs } from "./docs.ts";
 import { runDoctor } from "./doctor.ts";
 import { runEvents } from "./events-command.ts";
 import { type ExportOptions, runExport } from "./export.ts";
@@ -162,6 +163,26 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--json", "print JSON")
     .action((opts) => {
       exitCode = runList(opts, io);
+    });
+
+  const docs = program
+    .command("docs")
+    .description("Knowledge documents: the team's living reference under knowledge/<area>/docs/.");
+  docs
+    .command("convert")
+    .description("Bring existing markdown documents into the KB, with section ids and provenance.")
+    .argument("<files...>", "markdown files to convert")
+    .requiredOption("--area <area>", "area the documents describe (core for org-wide)")
+    .requiredOption("--owner <member>", "member who owns them")
+    .option(
+      "--scope <glob>",
+      "paths they describe; repeatable (default: the area's globs)",
+      collect,
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--force", "overwrite documents that already exist")
+    .action((files: string[], opts: ConvertDocsOptions) => {
+      exitCode = runConvertDocs(files, opts, io);
     });
 
   program

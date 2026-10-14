@@ -1,6 +1,7 @@
-import { checkEntry } from "./check.ts";
+import { CORE_AREA, checkEntry } from "./check.ts";
 import { CONFIG_FILE, type Config, parseConfig } from "./config.ts";
 import { detectConflicts } from "./conflicts.ts";
+import { type Doc, isDocPath, parseDoc } from "./doc.ts";
 import { type Entry, parseEntry } from "./entry.ts";
 import { error, hasErrors, type Issue } from "./issues.ts";
 import { RISK_ADVICE, scanRisk } from "./risk.ts";
@@ -15,16 +16,24 @@ export interface ValidatedEntry {
   entry: Entry;
 }
 
+export interface ValidatedDoc {
+  path: string;
+  doc: Doc;
+}
+
 export interface ValidateResult {
   /** True when there are no errors; warnings (all fixable) do not fail validation. */
   ok: boolean;
   issues: Issue[];
   entries: ValidatedEntry[];
+  /** Knowledge documents (`knowledge/<area>/docs/`), validated separately from rules. */
+  docs: ValidatedDoc[];
   config?: Config;
 }
 
 /** Every `.md` file under `knowledge/` is an entry, so misplaced entries are caught too. */
-const isEntryPath = (path: string) => path.startsWith("knowledge/") && path.endsWith(".md");
+const isEntryPath = (path: string) =>
+  path.startsWith("knowledge/") && path.endsWith(".md") && !isDocPath(path);
 
 /**
  * Validates a whole knowledge base: config, every entry, scores, and cross-entry conflicts.
@@ -53,6 +62,17 @@ export function validate(files: KbFiles): ValidateResult {
     if (config) issues.push(...checkWithConfig(path, parsed.entry, config));
   }
 
+  const docs: ValidatedDoc[] = [];
+  for (const path of Object.keys(files).filter(isDocPath).sort()) {
+    const text = files[path] ?? "";
+    const parsed = parseDoc(text);
+    issues.push(...parsed.issues.map((i) => ({ ...i, file: path })));
+    issues.push(...contentIssues(path, text));
+    if (!parsed.doc) continue;
+    docs.push({ path, doc: parsed.doc });
+    if (config) issues.push(...docConfigIssues(path, parsed.doc, config));
+  }
+
   const pathOf = new Map<string, string[]>();
   for (const { path, entry } of entries) {
     pathOf.set(entry.frontmatter.id, [...(pathOf.get(entry.frontmatter.id) ?? []), path]);
@@ -70,7 +90,7 @@ export function validate(files: KbFiles): ValidateResult {
     }
   }
 
-  return { ok: !hasErrors(issues), issues, entries, ...(config ? { config } : {}) };
+  return { ok: !hasErrors(issues), issues, entries, docs, ...(config ? { config } : {}) };
 }
 
 function checkWithConfig(path: string, entry: Entry, config: Config): Issue[] {
@@ -93,6 +113,58 @@ function checkWithConfig(path: string, entry: Entry, config: Config): Issue[] {
       file: path,
       fix: { field: "score", value: computed },
     });
+  }
+  return issues;
+}
+
+/** A document's area, owner and folder must agree with the config; its text is scanned like a rule's. */
+function docConfigIssues(path: string, doc: Doc, config: Config): Issue[] {
+  const fm = doc.frontmatter;
+  const issues: Issue[] = [];
+  const folder = path.split("/")[1];
+  if (fm.area !== CORE_AREA && !Object.hasOwn(config.areas, fm.area)) {
+    issues.push(
+      error("doc.area.unknown", `area "${fm.area}" is not in homeostat.yaml`, {
+        file: path,
+        path: "area",
+      }),
+    );
+  }
+  if (folder !== fm.area) {
+    issues.push(
+      error("doc.area.folder", `area is "${fm.area}" but the file is under knowledge/${folder}/`, {
+        file: path,
+        path: "area",
+      }),
+    );
+  }
+  for (const [field, id] of [
+    ["owner", fm.owner],
+    ["riskReviewedBy", fm.riskReviewedBy],
+  ] as const) {
+    if (id !== undefined && !config.team.members.some((m) => m.id === id)) {
+      issues.push(
+        error(`doc.${field}.unknown`, `${field}: ${id} is not a team member`, {
+          file: path,
+          path: field,
+        }),
+      );
+    }
+  }
+  if (fm.riskReviewedBy === undefined) {
+    const host = config.sources ? [HOST_DOMAINS[config.sources.host]] : [];
+    const text = [doc.intro, ...doc.sections.map((s) => `${s.heading}\n${s.body}`)].join("\n");
+    for (const f of scanRisk(text, {
+      allowedDomains: [...host, ...config.security.allowedDomains],
+    })) {
+      issues.push(
+        error(
+          `risk.${f.kind}`,
+          `"${f.excerpt}" ${RISK_ADVICE[f.kind]}; if the document is safe, a member sets riskReviewedBy after reading it`,
+          { file: path },
+        ),
+      );
+    }
   }
   return issues;
 }

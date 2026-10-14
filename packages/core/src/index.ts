@@ -92,6 +92,21 @@ export {
   type RuleText,
 } from "./deepdive.ts";
 export { explainEntry, hitLine, kbReport } from "./describe.ts";
+export {
+  DOC_SECTION_MAX_WORDS,
+  type Doc,
+  type DocFrontmatter,
+  type DocSection,
+  docFrontmatterSchema,
+  formatDoc,
+  formatProvenance,
+  isDocPath,
+  PROVENANCE_SOURCES,
+  type Provenance,
+  parseDoc,
+  parseProvenance,
+} from "./doc.ts";
+export { type ConvertOptions, convertDoc } from "./doc-convert.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
 export {
   describeEvent,
@@ -142,6 +157,12 @@ export {
 } from "./select.ts";
 export { slugify } from "./slug.ts";
 export { countTokens } from "./tokens.ts";
-export { type KbFiles, type ValidatedEntry, type ValidateResult, validate } from "./validate.ts";
+export {
+  type KbFiles,
+  type ValidatedDoc,
+  type ValidatedEntry,
+  type ValidateResult,
+  validate,
+} from "./validate.ts";
 export { VERSION } from "./version.ts";
 export { exportable, isTeamOnly, visibleTo } from "./visibility.ts";
