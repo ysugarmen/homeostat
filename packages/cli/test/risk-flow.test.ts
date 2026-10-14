@@ -156,7 +156,10 @@ describe("a poisoned review comment cannot reach every session (T3)", () => {
     const config = join(dir, "homeostat.yaml");
     writeFileSync(
       config,
-      `${readFileSync(config, "utf8")}\nsecurity:\n  allowedDomains: [docs.example.com]\n`,
+      readFileSync(config, "utf8").replace(
+        "allowedDomains: []",
+        "allowedDomains: [docs.example.com]",
+      ),
     );
     const path = join(dir, "knowledge/integrations/outbound-http-retry-helper.md");
     writeFileSync(
