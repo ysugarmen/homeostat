@@ -42,6 +42,12 @@ export {
 } from "./cloud.ts";
 export { CODEOWNERS_FILE, generateCodeowners } from "./codeowners.ts";
 export {
+  type Confidence,
+  type ConfidenceInput,
+  confidence,
+  explainConfidence,
+} from "./confidence.ts";
+export {
   CONFIG_FILE,
   type Config,
   configSchema,

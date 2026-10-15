@@ -7,7 +7,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `version` | (required) | Always `1` |
-| `team.members` | (required) | Each member has an `id` (lowercase), `role` (`senior` or `member`), and `areas` they review. Optional: `handle` (`@user`, `@org/team` or an email, used for CODEOWNERS and to recognise reviewers on the git host), and `optOut: true` (the curator never reads their PRs or review comments) |
+| `team.members` | (required) | Each member has an `id` (lowercase), `role` (`junior`, `member`, `senior` or `lead`; seniors and leads own the config), and `areas` they review. Optional: `handle` (`@user`, `@org/team` or an email, used for CODEOWNERS and to recognise reviewers on the git host), and `optOut: true` (the curator never reads their PRs or review comments) |
 | `teams` | `{}` | Team name → `handle` (`@org/team`), `members`, `areas` it owns, and `repos` it works in. The owning team approves its areas' rules and documents. Every session still reads every team's rules for the files it touches |
 | `areas` | (required) | Area name → path globs in your code repos. `core` is implicit and applies everywhere |
 
@@ -28,6 +28,26 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `scoring.autoMerge.areas` | `[]` | Areas that may auto-merge; empty means all |
 | `scoring.autoMerge.excludeAreas` | `[]` | Areas that always need a reviewer, e.g. `core` |
 | `scoring.autoMerge.maxPerRun` | `5` | Most entries one curator run may auto-merge |
+| `scoring.confidence.accept` | `70` | The daily run merges a lesson at or above this confidence (0–100) with no reviewer |
+| `scoring.confidence.coreAccept` | `80` | The same, for `core` and global rules, which reach every session |
+| `scoring.confidence.decline` | `35` | Lessons below this are declined; between `decline` and `accept` they go to a reviewer |
+| `scoring.confidence.base.prFeedbackChangedCode` | `50` | Starting points: a review comment followed by a code change |
+| `scoring.confidence.base.prFeedback` | `20` | a review comment with no code change after it |
+| `scoring.confidence.base.manual` | `45` | written by a team member (`learn`, `/homeostat:learn`) |
+| `scoring.confidence.base.agentHandoff` | `25` | written by an agent (handoff notes, MCP) |
+| `scoring.confidence.base.deepDive` | `40` | produced by the deep dive |
+| `scoring.confidence.roles.junior` | `0` | Added for the role of the person the lesson came from: its writer, or the reviewer it was drawn from |
+| `scoring.confidence.roles.member` | `6` | |
+| `scoring.confidence.roles.senior` | `14` | |
+| `scoring.confidence.roles.lead` | `20` | |
+| `scoring.confidence.bonus.areaOwner` | `6` | That person works in the lesson's area |
+| `scoring.confidence.bonus.specific` | `8` | The rule names a concrete function, path or package |
+| `scoring.confidence.bonus.goodTitle` | `4` | A clear title of three words or more |
+| `scoring.confidence.bonus.repeat` | `10` | Per extra independent occurrence in the same run (up to two) |
+| `scoring.confidence.bonus.modelRating` | `10` | The most the model's own rating of a drafted lesson adds or removes |
+| `scoring.confidence.penalty.vagueTitle` | `15` | Subtracted for a title like "lesson1" |
+| `scoring.confidence.penalty.conflict` | `25` | Subtracted when it contradicts an accepted rule (which also sends it to a person) |
+| `scoring.confidence.penalty.flag` | `20` | Subtracted per open flag |
 | `scoring.reviewCadence` | `weekly` | Reserved for review reminders; not used yet |
 
 ## `agents`

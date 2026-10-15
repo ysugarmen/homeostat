@@ -125,6 +125,50 @@ export const configSchema = z.strictObject({
         })
         .prefault({}),
       reviewCadence: z.enum(["daily", "weekly", "biweekly"]).default("weekly"),
+      /**
+       * The daily run's 0–100 confidence per lesson: merged at or above `accept` (`coreAccept` for
+       * rules that reach every session), declined below `decline`, a reviewer in between.
+       */
+      confidence: z
+        .strictObject({
+          accept: z.int().min(0).max(100).default(70),
+          coreAccept: z.int().min(0).max(100).default(80),
+          decline: z.int().min(0).max(100).default(35),
+          base: z
+            .strictObject({
+              prFeedbackChangedCode: z.int().default(50),
+              prFeedback: z.int().default(20),
+              manual: z.int().default(45),
+              agentHandoff: z.int().default(25),
+              deepDive: z.int().default(40),
+            })
+            .prefault({}),
+          roles: z
+            .strictObject({
+              junior: z.int().default(0),
+              member: z.int().default(6),
+              senior: z.int().default(14),
+              lead: z.int().default(20),
+            })
+            .prefault({}),
+          bonus: z
+            .strictObject({
+              areaOwner: z.int().default(6),
+              specific: z.int().default(8),
+              goodTitle: z.int().default(4),
+              repeat: z.int().default(10),
+              modelRating: z.int().default(10),
+            })
+            .prefault({}),
+          penalty: z
+            .strictObject({
+              vagueTitle: z.int().default(15),
+              conflict: z.int().default(25),
+              flag: z.int().default(20),
+            })
+            .prefault({}),
+        })
+        .prefault({}),
     })
     .prefault({}),
   agents: z

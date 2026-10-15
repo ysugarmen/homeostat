@@ -128,6 +128,33 @@ export const SECTIONS: Section[] = [
         (k): Field => ({ path: ["scoring", "weights", k], label: `Weight: ${k}`, kind: "number" }),
       ),
       { path: ["scoring", "autoMergeThreshold"], label: "Auto-merge threshold", kind: "number" },
+      { path: ["scoring", "confidence", "accept"], label: "Merge at confidence", kind: "number" },
+      {
+        path: ["scoring", "confidence", "coreAccept"],
+        label: "Merge at confidence (core or global rules)",
+        kind: "number",
+      },
+      {
+        path: ["scoring", "confidence", "decline"],
+        label: "Decline below confidence",
+        kind: "number",
+      },
+      ...(
+        [
+          ["base", ["prFeedbackChangedCode", "prFeedback", "manual", "agentHandoff", "deepDive"]],
+          ["roles", ["junior", "member", "senior", "lead"]],
+          ["bonus", ["areaOwner", "specific", "goodTitle", "repeat", "modelRating"]],
+          ["penalty", ["vagueTitle", "conflict", "flag"]],
+        ] as const
+      ).flatMap(([group, keys]) =>
+        keys.map(
+          (k): Field => ({
+            path: ["scoring", "confidence", group, k],
+            label: `Confidence ${group}: ${k}`,
+            kind: "number",
+          }),
+        ),
+      ),
       { path: ["scoring", "autoMerge", "enabled"], label: "Auto-merge", kind: "checkbox" },
       {
         path: ["scoring", "autoMerge", "areas"],
