@@ -115,4 +115,33 @@ describe("roles", () => {
     expect(score(fm, { config: junior }).score).toBe(2);
     expect(generateCodeowners(lead, []).text).toMatch(/^\/homeostat\.yaml\s+@dana$/m);
   });
+
+  test("search finds a lesson saved a minute ago; explain says it is pending", async () => {
+    const dir = kb();
+    await run([
+      "learn",
+      "--dir",
+      dir,
+      "--author",
+      "dana",
+      "--area",
+      "integrations",
+      "--title",
+      "Use the shared retry helper for partner calls",
+      "--rule",
+      "Wrap every partner API call in withRetry() from services/integrations/http.ts.",
+      "--why",
+      "Partner APIs time out; hand-rolled retries skipped the request-id header.",
+    ]);
+    const found = await run(["search", "--dir", dir, "retry", "partner"]);
+    expect(found.stdout).toContain("use-the-shared-retry-helper-for-partner-calls");
+    const explained = await run([
+      "explain",
+      "--dir",
+      dir,
+      "use-the-shared-retry-helper-for-partner-calls",
+    ]);
+    expect(explained.stdout).toContain("Status: candidate");
+    expect(explained.stdout).toContain("Pending in this clone: it applies to your sessions now");
+  });
 });

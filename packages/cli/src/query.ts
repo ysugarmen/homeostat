@@ -22,17 +22,31 @@ export interface QueryOptions {
   json?: boolean;
 }
 
-function load(opts: QueryOptions, io: Io) {
+/**
+ * `inForce` reads pending lessons as accepted, the way the author's sessions see them; search uses
+ * it so a lesson saved a minute ago is found. explain, list and status show the real status.
+ */
+function load(opts: QueryOptions, io: Io, view: { inForce?: boolean } = {}) {
   const root = opts.dir ? resolve(opts.dir) : findKb(io.env, process.cwd());
   if (!root) {
     throw new CliError(
       "no knowledge base here: pass --dir, set HOMEOSTAT_DIR, or run inside the KB repo",
     );
   }
-  const kb = validate(readKbView(root).files);
+  const { files, pending } = readKbView(root, view);
+  const kb = validate(files);
   if (!kb.config)
     throw new CliError(`homeostat.yaml is missing or invalid in ${root}; run homeostat validate`);
-  return { root, config: kb.config, entries: kb.entries.map((e) => e.entry), docs: kb.docs };
+  const pendingIds = new Set(
+    kb.entries.filter((e) => pending.has(e.path)).map((e) => e.entry.frontmatter.id),
+  );
+  return {
+    root,
+    config: kb.config,
+    entries: kb.entries.map((e) => e.entry),
+    docs: kb.docs,
+    pendingIds,
+  };
 }
 
 const summary = (e: Entry) => ({
@@ -62,7 +76,7 @@ export function runSearch(
   io: Io,
 ): number {
   return guard(io, () => {
-    const { entries } = load(opts, io);
+    const { entries } = load(opts, io, { inForce: true });
     const hits: SearchHit[] = searchEntries(entries, query.join(" "), {
       ...(opts.area ? { area: opts.area } : {}),
       ...(opts.path ? { path: opts.path } : {}),
@@ -88,7 +102,7 @@ export function runSearch(
 
 export function runExplain(id: string, opts: QueryOptions, io: Io): number {
   return guard(io, () => {
-    const { config, entries } = load(opts, io);
+    const { config, entries, pendingIds } = load(opts, io);
     const entry = entries.find((e) => e.frontmatter.id === id);
     if (!entry) {
       const close = searchEntries(entries, id.replace(/-/g, " "), { limit: 3, statuses: STATUSES });
@@ -100,7 +114,11 @@ export function runExplain(id: string, opts: QueryOptions, io: Io): number {
     io.stdout(
       opts.json
         ? `${JSON.stringify({ ...entry.frontmatter, sections: entry.sections }, null, 2)}\n`
-        : `${explainEntry(entry, config)}\n`,
+        : `${explainEntry(entry, config)}\n${
+            pendingIds.has(id)
+              ? "Pending in this clone: it applies to your sessions now; the next daily run decides it for the team.\n"
+              : ""
+          }`,
     );
     return 0;
   });
