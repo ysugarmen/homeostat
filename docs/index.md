@@ -28,4 +28,4 @@ It turns accepted code-review feedback into short, scored rules and team documen
 
 ## Project
 
-[Design](design.md) · [Contributing](https://github.com/ysugarmen/homeostat/blob/main/CONTRIBUTING.md) · [GitHub](https://github.com/ysugarmen/homeostat) · Apache-2.0
+[Architecture](architecture.md) · [Design](design.md) · [Contributing](https://github.com/ysugarmen/homeostat/blob/main/CONTRIBUTING.md) · [GitHub](https://github.com/ysugarmen/homeostat) · Apache-2.0

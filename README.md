@@ -24,7 +24,7 @@ claude plugin install homeostat@homeostat
 
 The [quickstart](docs/guide/quickstart.md) takes you from there to a curator opening its first PR in about ten minutes. The full guide starts at [docs/index.md](docs/index.md).
 
-> Early days: 0.1.0 is the first release. The design and live plan are in [docs/design.md](docs/design.md) and [docs/execution-plan.md](docs/execution-plan.md).
+> Early days: 0.1.0 is the first release. How it works technically: [docs/architecture.md](docs/architecture.md). The market research and live plan are in [docs/design.md](docs/design.md) and [docs/execution-plan.md](docs/execution-plan.md).
 
 ## How it works
 
