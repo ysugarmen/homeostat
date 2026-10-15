@@ -30,7 +30,7 @@ The server is `homeostat mcp` (stdio). It finds the KB from `HOMEOSTAT_DIR`, or 
   "mcpServers": {
     "homeostat": {
       "command": "npx",
-      "args": ["--yes", "homeostat@0.1.0", "mcp"],
+      "args": ["--yes", "homeostat@0.1.1", "mcp"],
       "env": { "HOMEOSTAT_DIR": "/path/to/your/kb-checkout" }
     }
   }

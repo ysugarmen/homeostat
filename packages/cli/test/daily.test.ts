@@ -161,7 +161,8 @@ async function leeLearns(lee: string) {
   await run(["sync", "--dir", lee]);
 }
 
-describe("homeostat daily (automation, step 4)", () => {
+// Each test drives several git repos and CLI runs; under a full parallel run that takes a while.
+describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
   test("one run: the confident lesson merges, the uncertain one goes to a reviewer, state is recorded", async () => {
     const t = team();
     await leeLearns(t.lee);

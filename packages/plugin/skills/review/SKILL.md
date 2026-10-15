@@ -3,7 +3,7 @@ name: review
 description: Walk the homeostat knowledge base review queue with the user, accepting, editing or retiring candidate entries one at a time. Use when the user wants to review pending team knowledge.
 argument-hint: "[area]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Edit, Bash(homeostat validate:*), Bash(npx --yes homeostat@0.1.0 validate:*)
+allowed-tools: Read, Glob, Edit, Bash(homeostat validate:*), Bash(npx --yes homeostat@0.1.1 validate:*)
 ---
 
 # Review candidate entries
@@ -33,6 +33,6 @@ Only edit the frontmatter fields named above and the sections the user asked to 
 
 ## 4. Finish
 
-Run `homeostat validate "<kb>" --fix` (or `npx --yes homeostat@0.1.0 validate "<kb>" --fix`), which recomputes `score` and `tokens`. Report any errors and fix them with the user.
+Run `homeostat validate "<kb>" --fix` (or `npx --yes homeostat@0.1.1 validate "<kb>" --fix`), which recomputes `score` and `tokens`. Report any errors and fix them with the user.
 
 Summarise what was accepted, edited, retired and skipped, and remind the user the changes need committing on a branch and a PR to the KB repo. Do not commit or push unless asked.
