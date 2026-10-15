@@ -25,7 +25,7 @@ export function explainEntry(e: Entry, config: Config): string {
         : []),
     `Applies to: ${fm.scope.join(", ")}`,
     `Source: ${fm.source.type} by ${fm.source.author}${fm.source.url ? ` — ${fm.source.url}` : ""}${fm.source.changedCode ? " (code changed after the comment)" : ""}`,
-    `Created ${fm.created}, last confirmed ${fm.lastConfirmed}`,
+    `Created ${fm.created}, last confirmed ${fm.lastConfirmed}${fm.approvedBy ? `, approved by ${fm.approvedBy}` : ""}`,
     ...(fm.conflictsWith?.length ? [`Conflicts with: ${fm.conflictsWith.join(", ")}`] : []),
     ...(fm.supersedes ? [`Supersedes: ${fm.supersedes}`] : []),
     ...(fm.flags ?? []).map((f) => `Flagged by ${f.by} on ${f.date}: ${f.reason}`),
