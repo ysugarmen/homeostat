@@ -1,4 +1,4 @@
-import type { Config, Weights } from "./config.ts";
+import { type Config, isSenior, type Weights } from "./config.ts";
 import type { Frontmatter, SourceType } from "./schema.ts";
 
 export interface ScoreContext {
@@ -45,7 +45,7 @@ export function score(entry: Frontmatter, ctx: ScoreContext): ScoreResult {
   }
 
   const author = ctx.config.team.members.find((m) => m.id === source.author);
-  if (author?.role === "senior") add("seniorAuthor", `author ${author.id} is senior`);
+  if (author && isSenior(author.role)) add("seniorAuthor", `author ${author.id} is ${author.role}`);
 
   if (entry.conflictsWith?.length) {
     add("conflict", `conflicts with ${entry.conflictsWith.join(", ")}`);

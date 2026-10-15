@@ -67,16 +67,9 @@ export function checkEntry(entry: Entry, ctx: CheckContext): Issue[] {
     }
   }
 
-  const score = ctx.score ?? fm.score;
-  if (fm.status === "accepted" && score < ctx.autoMergeThreshold && !fm.approvedBy) {
-    issues.push(
-      error(
-        "accepted.belowThreshold",
-        `accepted with score ${score} below the auto-merge threshold ${ctx.autoMergeThreshold}; set approvedBy or lower the status`,
-        { path: "status", file },
-      ),
-    );
-  }
+  // No approval field is required: a rule is accepted by the merge that put it on the base
+  // branch, decided by the daily run's confidence score or a reviewer (branch protection makes
+  // sure nothing else can merge).
 
   const tokens = countTokens(entry.body);
   if (fm.tokens !== tokens) {

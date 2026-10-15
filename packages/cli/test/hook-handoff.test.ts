@@ -81,24 +81,12 @@ describe("homeostat hook stop", () => {
     const out = JSON.parse(first.stdout);
     expect(out.decision).toBe("block");
     expect(out.reason).toContain("No handoff note.");
-    expect(out.reason).toContain(
-      `learn --dir "${kbDir}" --source agent-handoff --branch candidates/lee --author lee`,
-    );
+    expect(out.reason).toContain(`learn --dir "${kbDir}" --source agent-handoff --author lee`);
     expect(out.reason).toContain("Areas: core, integrations, frontend");
     expect(out.reason).not.toContain("--push");
 
     const second = await hook("stop", input, kbDir);
     expect(second.stdout).toBe("");
-  });
-
-  test("adds --push when the KB checkout has an origin", async () => {
-    const kbDir = kb();
-    execFileSync("git", ["-C", kbDir, "init", "-q"]);
-    execFileSync("git", ["-C", kbDir, "remote", "add", "origin", "git@example.com:acme/kb.git"]);
-    const input = { session_id: "s1", cwd: codeRepo(), transcript_path: transcript(3) };
-    expect(JSON.parse((await hook("stop", input, kbDir)).stdout).reason).toContain(
-      "--branch candidates/lee --push",
-    );
   });
 
   test("below the edit threshold it lets the session stop", async () => {

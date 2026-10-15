@@ -9,6 +9,7 @@ import {
   logEvent,
   pruneEvents,
   readKbFiles,
+  readKbView,
   renderContext,
   selectEntries,
   validate,
@@ -49,7 +50,7 @@ async function sessionStart(input: HookInput, io: Io) {
   const kbRoot = findKb(io.env, cwd);
   if (!kbRoot) return;
 
-  const { config, entries, docs } = validate(readKbFiles(kbRoot));
+  const { config, entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files);
   if (!config) throw new HookSkip("knowledge base config is invalid; run homeostat validate");
   pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
 
@@ -156,15 +157,14 @@ function homeostatCommand(): string {
 }
 
 function handoffInstructions(kbRoot: string, config: Config, member: string): string {
-  const push = git(kbRoot, "remote", "get-url", "origin") ? " --push" : "";
   const areas = [CORE_AREA, ...Object.keys(config.areas)].join(", ");
   return `homeostat: before you finish, decide whether this session produced a lesson worth a handoff note for teammates' agents: a decision that was made, and what was tried and rejected. If not, reply only "No handoff note." and stop.
 
 If yes, save exactly one note, without asking the user:
 
-${homeostatCommand()} learn --dir "${kbRoot}" --source agent-handoff --branch candidates/${member}${push} --author ${member} --area <area> --title "<imperative title, at most 80 characters>" --rule "<what to do next time, at most 60 words>" --why "<what was tried and rejected, and why, at most 100 words>"
+${homeostatCommand()} learn --dir "${kbRoot}" --source agent-handoff --author ${member} --area <area> --title "<imperative title, at most 80 characters>" --rule "<what to do next time, at most 60 words>" --why "<what was tried and rejected, and why, at most 100 words>"
 
-Areas: ${areas}. Then reply with one line saying the note was saved for review.`;
+Areas: ${areas}. Then reply with one line saying the note was saved; the daily run decides it for the team.`;
 }
 
 async function stop(input: HookInput, io: Io) {

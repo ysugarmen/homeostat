@@ -128,5 +128,5 @@ test("add and remember are learn", async () => {
     { stdout: (s) => (stdout += s), stderr: () => {}, color: false, env: {} },
   );
   expect(code).toBe(0);
-  expect(stdout).toContain("created knowledge/core/do-x.md");
+  expect(stdout).toContain("saved do-x");
 });

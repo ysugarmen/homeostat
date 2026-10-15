@@ -29,8 +29,9 @@ async function run(args: string[], deps: Partial<Io> = {}) {
   return { code, stdout, stderr };
 }
 
+/** A learned entry lands in the developer's pending area, not the tracked files. */
 const entryAt = (dir: string, path: string) => {
-  const { entry, issues } = parseEntry(readFileSync(join(dir, path), "utf8"));
+  const { entry, issues } = parseEntry(readFileSync(join(dir, ".homeostat/pending", path), "utf8"));
   if (!entry) throw new Error(JSON.stringify(issues));
   return entry;
 };
@@ -52,7 +53,10 @@ describe("homeostat learn with flags", () => {
     const { code, stdout } = await run(["learn", "--dir", dir, ...basic]);
     expect(code).toBe(0);
     const path = "knowledge/core/validate-webhook-signatures-before-parsing-the-body.md";
-    expect(stdout).toContain(`created ${path} (candidate, score 2)`);
+    expect(stdout).toContain(
+      "saved validate-webhook-signatures-before-parsing-the-body (candidate, score 2): it applies to your sessions now",
+    );
+    expect(existsSync(join(dir, path))).toBe(false); // the tracked files stay clean
     const entry = entryAt(dir, path);
     expect(entry.frontmatter).toMatchObject({
       id: "validate-webhook-signatures-before-parsing-the-body",

@@ -51,16 +51,8 @@ describe("checkEntry", () => {
     expect(codes(core, { path: "knowledge/core/outbound-http-retry-helper.md" })).toEqual([]);
   });
 
-  test("accepted below threshold needs approvedBy", () => {
-    expect(codes(entry((fm) => (fm.score = 2)))).toEqual(["accepted.belowThreshold"]);
-    expect(
-      codes(
-        entry((fm) => {
-          fm.score = 2;
-          fm.approvedBy = "lee";
-        }),
-      ),
-    ).toEqual([]);
+  test("an accepted entry needs no approval field: the merge that landed it is the approval", () => {
+    expect(codes(entry((fm) => (fm.score = 2)))).toEqual([]);
   });
 
   test("threshold only applies to accepted entries", () => {

@@ -36,7 +36,7 @@ async function learnAccepted(kb: string, id: string, args: string[]) {
     ...args,
   ]);
   expect(r.code, r.stdout + r.stderr).toBe(0);
-  const path = join(kb, `knowledge/integrations/${id}.md`);
+  const path = join(kb, `.homeostat/pending/knowledge/integrations/${id}.md`);
   writeFileSync(
     path,
     readFileSync(path, "utf8").replace("status: candidate", "status: accepted\napprovedBy: sam"),

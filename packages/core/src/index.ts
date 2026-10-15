@@ -37,7 +37,10 @@ export {
   DEFAULT_AGENT_MODEL,
   DEFAULT_WEIGHTS,
   EXPORT_TARGETS,
+  isSenior,
   parseConfig,
+  ROLES,
+  type Role,
   type Weights,
 } from "./config.ts";
 export {
@@ -155,7 +158,15 @@ export {
   OWNED_DIRS,
 } from "./export.ts";
 export { BLOCK_END, BLOCK_START, removeBlock, replaceBlock } from "./export-block.ts";
-export { readKbFiles, writeKbFile } from "./files.ts";
+export {
+  PENDING_DIR,
+  readKbFiles,
+  readKbView,
+  readPendingFiles,
+  removePendingFile,
+  writeKbFile,
+  writePendingFile,
+} from "./files.ts";
 export { applyFixes } from "./fix.ts";
 export { type Flag, flagEntry } from "./flag.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";

@@ -229,7 +229,8 @@ describe("learn --doc (K4)", () => {
       "Refunds wait 30 seconds too.",
     ]);
     expect(r.code, r.out).toBe(0);
-    const appended = readFileSync(join(dir, DOC), "utf8");
+    const pendingDoc = join(dir, ".homeostat/pending", DOC);
+    const appended = readFileSync(pendingDoc, "utf8");
     expect(changedSections(before, appended)).toEqual(["timeouts"]);
     expect(appended).toContain("<!-- homeostat: source=manual author=dana updated=2026-10-14 -->");
 
@@ -242,7 +243,7 @@ describe("learn --doc (K4)", () => {
       "--text",
       "They land on /hooks.",
     ]);
-    expect(changedSections(appended, readFileSync(join(dir, DOC), "utf8"))).toEqual(["webhooks"]);
+    expect(changedSections(appended, readFileSync(pendingDoc, "utf8"))).toEqual(["webhooks"]);
   });
 
   test("on a branch it patches the branch's copy, keeping earlier patches", async () => {

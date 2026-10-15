@@ -1,5 +1,5 @@
 import { CORE_AREA } from "./check.ts";
-import { CONFIG_FILE, type Config } from "./config.ts";
+import { CONFIG_FILE, type Config, isSenior } from "./config.ts";
 import { error, type Issue } from "./issues.ts";
 import type { Frontmatter } from "./schema.ts";
 
@@ -28,7 +28,7 @@ export function generateCodeowners(
       return handle ? [handle] : [];
     });
 
-  const seniors = members.filter((m) => m.role === "senior").map((m) => m.id);
+  const seniors = members.filter((m) => isSenior(m.role)).map((m) => m.id);
   if (seniors.length === 0) {
     issues.push(
       error(

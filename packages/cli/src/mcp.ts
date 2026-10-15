@@ -1,4 +1,4 @@
-import { logEvent, readEvents, readKbFiles } from "@homeostat/core";
+import { logEvent, readEvents, readKbView } from "@homeostat/core";
 import { type LearnInput, type McpDeps, serveStdio } from "@homeostat/mcp";
 import type { Io } from "./cli.ts";
 import { runFlag } from "./flag.ts";
@@ -22,21 +22,17 @@ async function captured(run: (io: Io) => number | Promise<number>, base: Io): Pr
 }
 
 /**
- * The MCP server's host side: reads the KB on every call, and writes learn and flag as commits on
- * the caller's `candidates/<member>` branch (pushed when the KB has an origin), the same path the
- * handoff notes take, so nothing touches the checkout and a reviewer accepts them by PR.
+ * The MCP server's host side: reads the KB (with the caller's pending lessons in force) on every
+ * call, and writes learn and flag to the caller's pending area, the same place `homeostat learn`
+ * writes: they apply to the caller's sessions at once and go to the next daily run.
  */
 export function mcpDeps(io: Io, cwd = process.cwd()): McpDeps {
   const kbRoot = findKb(io.env, cwd);
   const member = () => memberIdFrom(git(cwd, "config", "user.name"));
-  const branchOpts = () => ({
-    branch: `candidates/${member()}`,
-    push: kbRoot !== undefined && git(kbRoot, "remote", "get-url", "origin") !== undefined,
-  });
   const quiet: Io = { ...io, ask: undefined } as Io;
 
   return {
-    readKb: () => (kbRoot ? readKbFiles(kbRoot) : {}),
+    readKb: () => (kbRoot ? readKbView(kbRoot, { inForce: true }).files : {}),
     learn: (input: LearnInput) => {
       if (!kbRoot) return Promise.reject(new Error("no knowledge base configured"));
       return captured(
@@ -51,7 +47,6 @@ export function mcpDeps(io: Io, cwd = process.cwd()): McpDeps {
               ...(input.area ? { area: input.area } : {}),
               ...(input.scope?.length ? { scope: input.scope } : {}),
               author: member(),
-              ...branchOpts(),
             },
             cio,
           ),
@@ -60,10 +55,7 @@ export function mcpDeps(io: Io, cwd = process.cwd()): McpDeps {
     },
     flag: (id, reason) => {
       if (!kbRoot) return Promise.reject(new Error("no knowledge base configured"));
-      return captured(
-        (cio) => runFlag(id, { dir: kbRoot, reason, by: member(), ...branchOpts() }, cio),
-        quiet,
-      );
+      return captured((cio) => runFlag(id, { dir: kbRoot, reason, by: member() }, cio), quiet);
     },
     log: (event) => {
       if (kbRoot) logEvent(kbRoot, event);

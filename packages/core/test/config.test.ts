@@ -61,8 +61,8 @@ describe("parseConfig", () => {
   });
 
   test("malformed config gets a clear, located message", () => {
-    expect(messages((c) => (c.team.members[0].role = "lead"))).toEqual([
-      'team.members.0.role: Invalid option: expected one of "senior"|"member"',
+    expect(messages((c) => (c.team.members[0].role = "admin"))).toEqual([
+      'team.members.0.role: Invalid option: expected one of "junior"|"member"|"senior"|"lead"',
     ]);
   });
 

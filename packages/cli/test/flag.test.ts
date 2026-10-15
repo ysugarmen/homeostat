@@ -41,8 +41,10 @@ describe("homeostat flag", () => {
       "redact() was renamed to scrub()",
     );
     expect(code).toBe(0);
-    expect(stdout).toContain("it is disputed until a reviewer decides");
-    const fm = parseEntry(readFileSync(join(dir, PATH), "utf8")).entry?.frontmatter;
+    expect(stdout).toContain("it is disputed in your sessions now");
+    // The flag goes to the pending area; the tracked file is untouched until the daily run.
+    const fm = parseEntry(readFileSync(join(dir, ".homeostat/pending", PATH), "utf8")).entry
+      ?.frontmatter;
     expect(fm?.flags).toEqual([
       { by: "lee", reason: "redact() was renamed to scrub()", date: "2026-10-14" },
     ]);

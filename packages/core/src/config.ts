@@ -7,6 +7,11 @@ import { fromZod } from "./zod-issues.ts";
 
 export const CONFIG_FILE = "homeostat.yaml";
 
+export const ROLES = ["junior", "member", "senior", "lead"] as const;
+export type Role = (typeof ROLES)[number];
+/** Seniors and leads: they own the config and unclaimed areas, and add the senior-author bonus. */
+export const isSenior = (role: Role) => role === "senior" || role === "lead";
+
 /** Point values for each scoring signal; see `score()`. */
 export const DEFAULT_WEIGHTS = {
   /** pr-feedback where the PR's code changed after the comment: the accepted-feedback signal. */
@@ -58,7 +63,11 @@ export const configSchema = z.strictObject({
       .array(
         z.strictObject({
           id: name,
-          role: z.enum(["senior", "member"]),
+          /**
+           * junior, member, senior or lead (team manager). Seniors and leads own the config and
+           * unclaimed areas; the role also weighs a member's lessons in the daily decision.
+           */
+          role: z.enum(ROLES),
           /** The curator never reads this member's pull requests or review comments. */
           optOut: z.boolean().optional(),
           areas: z.array(z.string()).default([]),

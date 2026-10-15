@@ -17,10 +17,11 @@ import {
   parseCommentUrl,
   type RepoRef,
   type ReviewComment,
-  readKbFiles,
+  readKbView,
   score,
   slugify,
   validate,
+  writePendingFile,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { formatIssues } from "./format.ts";
@@ -108,7 +109,8 @@ export async function runLearn(
 
 async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promise<number> {
   const root = resolve(opts.dir);
-  const files = readKbFiles(root);
+  // The developer's view: their pending lessons count for id clashes and validation.
+  const files = readKbView(root).files;
   const config = loadConfig(files);
   if (opts.doc) return learnDoc(root, files, config, opts, io);
 
@@ -233,12 +235,9 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     return 0;
   }
 
-  const full = join(root, ...path.split("/"));
-  mkdirSync(dirname(full), { recursive: true });
-  writeFileSync(full, text);
+  writePendingFile(root, path, text);
   io.stdout(
-    `created ${path} ${summary}\n` +
-      "Commit it on a branch and open a PR to the KB repo; a reviewer accepts it there.\n",
+    `saved ${id} ${summary}: it applies to your sessions now, and tomorrow's daily run decides it for the team\n`,
   );
   return 0;
 }
@@ -306,9 +305,9 @@ function learnDoc(
     }
     return 0;
   }
-  writeFileSync(join(root, ...path.split("/")), text);
+  writePendingFile(root, path, text);
   io.stdout(
-    `${what}\nCommit it on a branch and open a PR to the KB repo; the owning team reviews it there.\n`,
+    `${what}: it applies to your sessions now, and tomorrow's daily run decides it for the team\n`,
   );
   return 0;
 }

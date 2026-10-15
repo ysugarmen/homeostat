@@ -60,12 +60,12 @@ describe("validate", () => {
     ]);
   });
 
-  test("the threshold check uses the computed score, not the hand-edited one", () => {
+  test("a hand-edited score is caught as stale", () => {
     const files = readKb("starter-kb");
     const path = "knowledge/core/redact-before-logging.md";
     files[path] =
       files[path]?.replace("score: 2", "score: 5").replace("approvedBy: dana\n", "") ?? "";
-    expect(codes(files)).toEqual(["accepted.belowThreshold", "score.mismatch"]);
+    expect(codes(files)).toEqual(["score.mismatch"]);
   });
 
   test("conflicts across entries are reported on the right file", () => {

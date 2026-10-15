@@ -53,7 +53,7 @@ describe("homeostat learn --source", () => {
     const { code, stdout } = await run("learn", "--dir", dir, ...note);
     expect(code).toBe(0);
     expect(stdout).toContain("(candidate, score 0)");
-    const { entry } = parseEntry(readFileSync(join(dir, PATH), "utf8"));
+    const { entry } = parseEntry(readFileSync(join(dir, ".homeostat/pending", PATH), "utf8"));
     expect(entry?.frontmatter.source).toEqual({ type: "agent-handoff", author: "lee" });
   });
 

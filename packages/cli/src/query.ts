@@ -5,7 +5,7 @@ import {
   hitLine,
   kbReport,
   readEvents,
-  readKbFiles,
+  readKbView,
   type SearchHit,
   STATUSES,
   type Status,
@@ -29,7 +29,7 @@ function load(opts: QueryOptions, io: Io) {
       "no knowledge base here: pass --dir, set HOMEOSTAT_DIR, or run inside the KB repo",
     );
   }
-  const kb = validate(readKbFiles(root));
+  const kb = validate(readKbView(root).files);
   if (!kb.config)
     throw new CliError(`homeostat.yaml is missing or invalid in ${root}; run homeostat validate`);
   return { root, config: kb.config, entries: kb.entries.map((e) => e.entry), docs: kb.docs };

@@ -1,6 +1,12 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { flagEntry, logEvent, readKbFiles, scanSecrets, validate } from "@homeostat/core";
+import { resolve } from "node:path";
+import {
+  flagEntry,
+  logEvent,
+  readKbView,
+  scanSecrets,
+  validate,
+  writePendingFile,
+} from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { commitFile, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
@@ -23,7 +29,7 @@ export function runFlag(id: string, opts: FlagOptions, io: Io): number {
     if (leak)
       throw new CliError(`the reason contains a possible ${leak.kind}; remove it before flagging`);
     if (opts.push && !opts.branch) throw new CliError("--push needs --branch");
-    const kb = validate(readKbFiles(root));
+    const kb = validate(readKbView(root).files);
     if (!kb.config) {
       throw new CliError("homeostat.yaml is missing or invalid; run homeostat validate");
     }
@@ -57,13 +63,9 @@ export function runFlag(id: string, opts: FlagOptions, io: Io): number {
       );
       return 0;
     }
-    const full = join(root, ...found.path.split("/"));
-    if (!existsSync(full) || readFileSync(full, "utf8") === text) {
-      throw new CliError(`could not update ${found.path}`);
-    }
-    writeFileSync(full, text);
+    writePendingFile(root, found.path, text);
     io.stdout(
-      `flagged ${id} in ${found.path}; it is ${status} until a reviewer decides. Commit it on a branch and open a PR.\n`,
+      `flagged ${id}: it is ${status} in your sessions now, and tomorrow's daily run takes the flag to the team\n`,
     );
     return 0;
   } catch (e) {
