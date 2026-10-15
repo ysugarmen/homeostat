@@ -51,7 +51,7 @@ distribution:
 # notifications:
 #   slackWebhookEnv: HOMEOSTAT_SLACK_WEBHOOK
 
-# Needed by the curator (homeostat curate): the KB repo and the code repos it reads.
+# Needed by the daily run (homeostat daily): the KB repo and the code repos it reads.
 # sources:
 #   host: github            # or bitbucket
 #   kbRepo: your-org/team-kb
@@ -60,7 +60,7 @@ distribution:
 }
 
 const VALIDATE_STEP = `npx --yes homeostat@${VERSION} validate`;
-const CURATE_STEP = `npx --yes homeostat@${VERSION} curate`;
+const DAILY_STEP = `npx --yes homeostat@${VERSION} daily`;
 const DEEP_DIVE_STEP = `npx --yes homeostat@${VERSION} deep-dive`;
 const DIGEST_STEP = `npx --yes homeostat@${VERSION} digest`;
 
@@ -105,6 +105,7 @@ const githubAgentWorkflow = (
   purpose: string,
   cron: string,
   command: string,
+  extraEnv = "",
 ) => `name: homeostat ${name}
 
 # ${purpose}
@@ -138,14 +139,15 @@ jobs:
           # A Claude Console API key (agents.runtime: api, the default).
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
           # Or, with agents.runtime: claude-code, a token from \`claude setup-token\`:
-          # CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}${extraEnv}
 `;
 
 const GITHUB_CURATOR = githubAgentWorkflow(
   "curator",
-  "The daily curator: drafts entries from merged review feedback and opens one PR here.",
+  "The daily run: one PR per developer from their lessons and the reviews on their PRs, merged, declined or sent to a reviewer by confidence.",
   "0 6 * * *",
-  CURATE_STEP,
+  DAILY_STEP,
+  "\n          # Optional: where the morning review-queue notice goes (notifications.slackWebhookEnv).\n          HOMEOSTAT_SLACK_WEBHOOK: \${{ secrets.HOMEOSTAT_SLACK_WEBHOOK }}",
 );
 const GITHUB_DEEP_DIVE = githubAgentWorkflow(
   "deep-dive",
@@ -227,7 +229,7 @@ pipelines:
             - git config user.name "homeostat curator"
             - git config user.email "homeostat-curator@noreply.invalid"
             # With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}
-            - ${CURATE_STEP}
+            - ${DAILY_STEP}
     # Scheduled weekly the same way.
     homeostat-deep-dive:
       - step:
@@ -256,7 +258,7 @@ pipelines:
       - step:
           name: homeostat curator
           script:
-            - ${CURATE_STEP}`,
+            - ${DAILY_STEP}`,
     },
   ],
 };

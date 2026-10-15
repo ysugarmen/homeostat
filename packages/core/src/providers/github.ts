@@ -162,6 +162,16 @@ export class GitHubProvider implements Provider {
     return { id: created.number, url: created.html_url };
   }
 
+  async requestReviewers(repo: RepoRef, pullRequestId: number, logins: string[]): Promise<void> {
+    if (logins.length === 0) return;
+    await requestJson(
+      "GitHub",
+      this.fetch,
+      `${this.repoUrl(repo)}/pulls/${pullRequestId}/requested_reviewers`,
+      { method: "POST", headers: this.headers(), body: { reviewers: logins } },
+    );
+  }
+
   async mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void> {
     await requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls/${pullRequestId}/merge`, {
       method: "PUT",

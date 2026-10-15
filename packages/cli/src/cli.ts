@@ -5,6 +5,7 @@ import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
+import { type DailyOptions, runDaily } from "./daily.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
 import { type DigestOptions, runDigest } from "./digest.ts";
 import { type ConvertDocsOptions, runConvertDocs } from "./docs.ts";
@@ -244,6 +245,28 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--dry-run", "print the digest instead of posting it")
     .action(async (opts: DigestOptions) => {
       exitCode = await runDigest(opts, io);
+    });
+
+  program
+    .command("daily")
+    .description(
+      "The daily run (CI): one PR per developer from their pending lessons and the reviews on their PRs; merges, declines or asks a reviewer by confidence.",
+    )
+    .option("--dir <dir>", "knowledge base checkout", ".")
+    .option(
+      "--since <date>",
+      "read reviews on PRs merged since this date (default: agents.curator.lookbackHours ago)",
+    )
+    .option("--dry-run", "decide and report, but commit, open and merge nothing")
+    .option(
+      "--no-reviews",
+      "skip drafting from review comments (no model calls): pending lessons only",
+    )
+    .action(async (opts: DailyOptions & { reviews?: boolean }) => {
+      exitCode = await runDaily(
+        { ...opts, ...(opts.reviews === false ? { noReviews: true } : {}) },
+        io,
+      );
     });
 
   program

@@ -68,6 +68,8 @@ export interface Provider {
   openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }>;
   /** Squash-merges a PR on the KB repo; used only for entries that pass every auto-merge gate. */
   mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void>;
+  /** Asks these git-host users (logins, no @) to review; hosts without it mention them instead. */
+  requestReviewers?(repo: RepoRef, pullRequestId: number, logins: string[]): Promise<void>;
 }
 
 export interface ProviderOptions {

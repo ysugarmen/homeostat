@@ -15,6 +15,18 @@ export function git(dir: string, ...args: string[]): string | undefined {
   }
 }
 
+/** A file's exact text on a ref (git() trims, which would change a lesson's hash). */
+export function showFile(dir: string, ref: string, path: string): string | undefined {
+  try {
+    return execFileSync("git", ["-C", dir, "show", `${ref}:${path}`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 /** Runs git in `dir` and throws with git's own message when it fails. */
 function gitOrThrow(
   dir: string,
@@ -90,7 +102,7 @@ export function pushBranch(dir: string, branch: string, remote = "origin") {
  */
 export function commitTree(
   dir: string,
-  base: string,
+  base: string | undefined,
   files: Record<string, string>,
   message: string,
 ): string {
@@ -106,13 +118,16 @@ export function commitTree(
         GIT_COMMITTER_EMAIL: "homeostat@localhost",
       });
     }
-    gitOrThrow(dir, ["read-tree", base], { env });
+    // No base starts a new history (the first state commit).
+    gitOrThrow(dir, base ? ["read-tree", base] : ["read-tree", "--empty"], { env });
     for (const [path, content] of Object.entries(files)) {
       const blob = gitOrThrow(dir, ["hash-object", "-w", "--stdin"], { input: content });
       gitOrThrow(dir, ["update-index", "--add", "--cacheinfo", `100644,${blob},${path}`], { env });
     }
     const tree = gitOrThrow(dir, ["write-tree"], { env });
-    return gitOrThrow(dir, ["commit-tree", tree, "-p", base, "-m", message], { env });
+    return gitOrThrow(dir, ["commit-tree", tree, ...(base ? ["-p", base] : []), "-m", message], {
+      env,
+    });
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

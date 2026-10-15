@@ -32,6 +32,8 @@ export interface CuratedEntry {
   path: string;
   text: string;
   frontmatter: Frontmatter;
+  /** The member whose pull request the review comment was on; the daily run files it under them. */
+  prAuthor?: string;
   /**
    * Risky-content findings (see `risk.ts`). Such an entry stays a candidate and fails `validate`
    * until a member reads it and sets `riskReviewedBy`, so the PR shows it but cannot merge it.
@@ -43,7 +45,7 @@ export interface CuratedEntry {
 export interface DocUpdate {
   path: string;
   text: string;
-  sections: { id: string; reason: string; url: string }[];
+  sections: { id: string; reason: string; url: string; prAuthor?: string }[];
   /** Risky-content findings; such an update fails validate until a member signs it off. */
   risks: string[];
 }
@@ -205,7 +207,8 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         files = { ...files, [entry.path]: entry.text };
         ids.add(entry.frontmatter.id);
         known.add(key);
-        result.entries.push(entry);
+        const prAuthor = config.team.members.find((m) => m.handle === `@${pr.author.id}`)?.id;
+        result.entries.push(prAuthor ? { ...entry, prAuthor } : entry);
       }
     }
   }
@@ -278,7 +281,15 @@ async function docPatchStep(
   }
   const risks = errors.map((i) => i.message);
   const existing = ctx.result.docs.find((d) => d.path === proposal.path);
-  const section = { id: proposal.sectionId, reason: proposal.reason, url };
+  const prAuthor = ctx.config.team.members.find(
+    (m) => m.handle === `@${thread.pullRequest.author.id}`,
+  )?.id;
+  const section = {
+    id: proposal.sectionId,
+    reason: proposal.reason,
+    url,
+    ...(prAuthor ? { prAuthor } : {}),
+  };
   if (existing) {
     existing.text = text;
     existing.sections.push(section);

@@ -135,7 +135,7 @@ function pinnedVersions(root: string): Check[] {
   for (const path of ci) {
     const text = readFileSync(join(root, path), "utf8");
     for (const m of text.matchAll(
-      /\bhomeostat(@[^\s"']*)?\s+(validate|curate|deep-dive|export)\b/g,
+      /\bhomeostat(@[^\s"']*)?\s+(validate|daily|curate|deep-dive|export)\b/g,
     )) {
       const version = m[1]?.slice(1);
       if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {

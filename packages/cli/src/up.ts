@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { type AgentName, digestDue, dueAgents, readKbFiles, validate } from "@homeostat/core";
 import { startDashboard } from "@homeostat/dashboard";
 import type { Io } from "./cli.ts";
-import { runCurate } from "./curate.ts";
+import { runDaily } from "./daily.ts";
 import { runDeepDive } from "./deep-dive.ts";
 import { runDigest } from "./digest.ts";
 import { git } from "./git.ts";
@@ -21,7 +21,7 @@ export interface UpOptions {
 }
 
 const RUNNERS: Record<AgentName, (dir: string, io: Io) => Promise<number>> = {
-  curator: (dir, io) => runCurate({ dir }, io),
+  curator: (dir, io) => runDaily({ dir }, io),
   deepDive: (dir, io) => runDeepDive({ dir }, io),
 };
 

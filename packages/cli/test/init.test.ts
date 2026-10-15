@@ -174,7 +174,7 @@ describe("homeostat init curator schedule", () => {
     expect(workflow).toContain('- cron: "0 6 * * *"');
     expect(workflow).toContain("pull-requests: write");
     expect(workflow).toContain("fetch-depth: 0");
-    expect(workflow).toContain(`npx --yes homeostat@${VERSION} curate`);
+    expect(workflow).toContain(`npx --yes homeostat@${VERSION} daily`);
     expect(workflow).toContain("ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}");
   });
 
