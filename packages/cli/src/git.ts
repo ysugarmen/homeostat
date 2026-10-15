@@ -83,3 +83,42 @@ export function commitFile(
 export function pushBranch(dir: string, branch: string, remote = "origin") {
   gitOrThrow(dir, ["push", "--quiet", remote, `refs/heads/${branch}:refs/heads/${branch}`]);
 }
+
+/**
+ * Builds a commit of `base` plus `files` (path → content) with a throwaway index, without touching
+ * the working tree, the real index or any branch. Returns the commit id.
+ */
+export function commitTree(
+  dir: string,
+  base: string,
+  files: Record<string, string>,
+  message: string,
+): string {
+  const tmp = mkdtempSync(join(tmpdir(), "homeostat-index-"));
+  try {
+    const env: NodeJS.ProcessEnv = { ...process.env, GIT_INDEX_FILE: join(tmp, "index") };
+    if (!git(dir, "config", "user.name")) {
+      Object.assign(env, { GIT_AUTHOR_NAME: "homeostat", GIT_COMMITTER_NAME: "homeostat" });
+    }
+    if (!git(dir, "config", "user.email")) {
+      Object.assign(env, {
+        GIT_AUTHOR_EMAIL: "homeostat@localhost",
+        GIT_COMMITTER_EMAIL: "homeostat@localhost",
+      });
+    }
+    gitOrThrow(dir, ["read-tree", base], { env });
+    for (const [path, content] of Object.entries(files)) {
+      const blob = gitOrThrow(dir, ["hash-object", "-w", "--stdin"], { input: content });
+      gitOrThrow(dir, ["update-index", "--add", "--cacheinfo", `100644,${blob},${path}`], { env });
+    }
+    const tree = gitOrThrow(dir, ["write-tree"], { env });
+    return gitOrThrow(dir, ["commit-tree", tree, "-p", base, "-m", message], { env });
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/** Force-pushes a commit to a branch on origin (for transport branches only). */
+export function forcePush(dir: string, commit: string, branch: string, remote = "origin") {
+  gitOrThrow(dir, ["push", "--quiet", "--force", remote, `${commit}:refs/heads/${branch}`]);
+}

@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import type { ConflictJudge, DocPatcher, Drafter, Merger, Provider, Seeder } from "@homeostat/core";
 import { VERSION } from "@homeostat/core";
@@ -17,6 +18,7 @@ import { type LearnOptions, runLearn } from "./learn.ts";
 import { runMcp } from "./mcp.ts";
 import { runExplain, runList, runSearch, runStatus } from "./query.ts";
 import { runSeed, type SeedOptions } from "./seed.ts";
+import { runSync, type SyncOptions } from "./sync.ts";
 import { runDashboard, runUp, type UpOptions } from "./up.ts";
 import { runValidate } from "./validate.ts";
 
@@ -33,6 +35,11 @@ export interface Io {
   now?: () => Date;
   /** Reads all of stdin; hooks receive their event JSON this way. */
   stdin?: () => Promise<string>;
+  /**
+   * Runs `homeostat <args>` detached, so a hook returns at once while a sync runs. Only the real
+   * process has one; tests and embedded callers leave it out, so nothing runs behind them.
+   */
+  background?: (args: string[]) => void;
   /** Test seams for the agents: a git-host provider and a drafter instead of the real ones. */
   provider?: Provider;
   drafter?: Drafter;
@@ -64,6 +71,15 @@ export const processIo: Io = {
   ...(process.stdin.isTTY ? { ask: askTerminal } : {}),
   env: process.env,
   stdin: readStdin,
+  background: (args) => {
+    const bin = process.argv[1];
+    if (!bin) return;
+    try {
+      spawn(process.execPath, [bin, ...args], { detached: true, stdio: "ignore" }).unref();
+    } catch {
+      // Best effort: the next hook tries again.
+    }
+  },
 };
 
 /** Runs the CLI with `argv` (as in `process.argv`) and returns the exit code. */
@@ -228,6 +244,18 @@ export async function runCli(argv: readonly string[], io: Io = processIo): Promi
     .option("--dry-run", "print the digest instead of posting it")
     .action(async (opts: DigestOptions) => {
       exitCode = await runDigest(opts, io);
+    });
+
+  program
+    .command("sync")
+    .description(
+      "Send your pending lessons to the daily run, pull the KB and clear decided lessons. The plugin runs it for you.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--quiet", "print nothing")
+    .option("--push-only", "send pending lessons, skip the pull")
+    .action(async (opts: SyncOptions) => {
+      exitCode = await runSync(opts, io);
     });
 
   program

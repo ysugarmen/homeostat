@@ -18,6 +18,7 @@ import {
 import type { Io } from "./cli.ts";
 import { git } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
+import { pendingFingerprint, readSyncState, syncDue, takeNotices } from "./sync.ts";
 import { touchedPaths } from "./touched.ts";
 
 /** Claude Code's limit on SessionStart `additionalContext`. */
@@ -100,7 +101,21 @@ async function sessionStart(input: HookInput, io: Io) {
       sections: documents.sections,
     });
   }
-  const context = [rules, documents.text].filter(Boolean).join("\n\n");
+  if (input.session_id) {
+    writeState(kbRoot, input.session_id, {
+      ...readState(kbRoot, input.session_id),
+      injected: selection.items.map((i) => i.entry.frontmatter.id),
+      view: viewKey(kbRoot),
+    });
+  }
+  // Catch up with the daily run in the background; this session starts with what is local now.
+  if (syncDue(kbRoot, io.now?.() ?? new Date(), 0))
+    io.background?.(["sync", "--dir", kbRoot, "--quiet"]);
+  const news = takeNotices(kbRoot);
+  const header = news.length
+    ? `# Homeostat updates\n\n${news.map((n) => `- ${n.text}`).join("\n")}`
+    : "";
+  const context = [rules, documents.text, header].filter(Boolean).join("\n\n");
   if (!context) return;
   io.stdout(
     `${JSON.stringify({
@@ -132,6 +147,10 @@ interface HandoffState {
   asked?: boolean;
   /** Set by PreCompact: a long session, so ask at the next stop whatever the edit count. */
   compacted?: boolean;
+  /** Rule ids this session has been given, so a later update adds only what is new. */
+  injected?: string[];
+  /** The KB view the session last saw (HEAD + pending set); unchanged means nothing to add. */
+  view?: string;
 }
 
 const statePath = (kbRoot: string, session: string) =>
@@ -171,6 +190,10 @@ async function stop(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
   const kbRoot = findKb(io.env, cwd);
   if (!kbRoot || !input.session_id) return;
+  // Lessons written during this reply go up now, not at the next session.
+  if (pendingFingerprint(kbRoot) !== readSyncState(kbRoot).pushed) {
+    io.background?.(["sync", "--dir", kbRoot, "--quiet", "--push-only"]);
+  }
   const { config } = validate(readKbFiles(kbRoot));
   if (!config?.agents.handoff.enabled) return;
 
@@ -196,6 +219,88 @@ async function stop(input: HookInput, io: Io) {
   );
 }
 
+/** What a session's view of the KB depends on: the checked-out commit and the pending set. */
+function viewKey(kbRoot: string): string {
+  return `${git(kbRoot, "rev-parse", "HEAD") ?? "none"}:${pendingFingerprint(kbRoot)}`;
+}
+
+/**
+ * Every message the developer sends (UserPromptSubmit). Sessions can run for days, so this keeps
+ * them current: it starts a background sync at most every few hours, and when the KB view has
+ * changed since the session last looked, it adds only the rules this session has not seen yet,
+ * plus any decisions on the developer's own lessons. Most messages change nothing and print nothing.
+ */
+async function prompt(input: HookInput, io: Io) {
+  const cwd = input.cwd ?? process.cwd();
+  const kbRoot = findKb(io.env, cwd);
+  if (!kbRoot || !input.session_id) return;
+  if (syncDue(kbRoot, io.now?.() ?? new Date(), SYNC_EVERY_HOURS)) {
+    io.background?.(["sync", "--dir", kbRoot, "--quiet"]);
+  }
+  const state = readState(kbRoot, input.session_id);
+  const view = viewKey(kbRoot);
+  const news = takeNotices(kbRoot);
+  if (view === state.view && news.length === 0) return;
+
+  const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files);
+  if (!config) return;
+  const member = memberIdFrom(git(cwd, "config", "user.name"));
+  const seen = new Set(state.injected ?? []);
+  const selection = selectEntries(
+    visibleTo(
+      entries.map((e) => e.entry),
+      config,
+      member,
+    ),
+    {
+      paths: touchedPaths(cwd),
+      tokenBudget: config.distribution.tokenBudget,
+      maxChars: MAX_CONTEXT_CHARS,
+    },
+  );
+  const fresh = selection.items.filter((i) => !seen.has(i.entry.frontmatter.id));
+  writeState(kbRoot, input.session_id, {
+    ...state,
+    injected: [...seen, ...fresh.map((i) => i.entry.frontmatter.id)],
+    view,
+  });
+  if (fresh.length === 0 && news.length === 0) return;
+  if (fresh.length) {
+    logEvent(kbRoot, {
+      ts: (io.now?.() ?? new Date()).toISOString(),
+      type: "injection",
+      session: input.session_id,
+      source: "update",
+      cwd,
+      entries: fresh.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
+    });
+  }
+  const parts = [
+    "# Team knowledge updated (homeostat)",
+    ...(news.length ? [news.map((n) => `- ${n.text}`).join("\n")] : []),
+    ...(fresh.length
+      ? [
+          "New rules for the files in this session, in addition to those you already have:",
+          renderContext({ items: fresh }).replace(
+            /^# Team knowledge \(homeostat\)\n\n[\s\S]*?\n\n(?=## )/,
+            "",
+          ),
+        ]
+      : []),
+  ];
+  io.stdout(
+    `${JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        additionalContext: parts.join("\n\n"),
+      },
+    })}\n`,
+  );
+}
+
+/** How often a long session checks for a new daily run. */
+const SYNC_EVERY_HOURS = 3;
+
 async function preCompact(input: HookInput, io: Io) {
   const kbRoot = findKb(io.env, input.cwd ?? process.cwd());
   if (!kbRoot || !input.session_id) return;
@@ -204,6 +309,7 @@ async function preCompact(input: HookInput, io: Io) {
 
 const HANDLERS: Record<string, (input: HookInput, io: Io) => Promise<void>> = {
   "session-start": sessionStart,
+  prompt,
   stop,
   "pre-compact": preCompact,
 };

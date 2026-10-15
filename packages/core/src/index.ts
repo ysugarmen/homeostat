@@ -1,4 +1,15 @@
 export {
+  candidatesBranch,
+  type Decision,
+  type DecisionRecord,
+  type DecisionsFile,
+  decisionsPath,
+  HEARTBEAT_PATH,
+  type Heartbeat,
+  lessonHash,
+  STATE_BRANCH,
+} from "./automation.ts";
+export {
   type AutoMergeDecision,
   autoMergeDecision,
   type MergeCandidate,

@@ -10,6 +10,7 @@ import {
 import type { Io } from "./cli.ts";
 import { commitFile, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
+import { sendPending } from "./learn.ts";
 import { CliError } from "./provider.ts";
 
 export interface FlagOptions {
@@ -64,6 +65,7 @@ export function runFlag(id: string, opts: FlagOptions, io: Io): number {
       return 0;
     }
     writePendingFile(root, found.path, text);
+    sendPending(root, io);
     io.stdout(
       `flagged ${id}: it is ${status} in your sessions now, and tomorrow's daily run takes the flag to the team\n`,
     );

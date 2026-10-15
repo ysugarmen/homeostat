@@ -236,6 +236,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   }
 
   writePendingFile(root, path, text);
+  sendPending(root, io);
   io.stdout(
     `saved ${id} ${summary}: it applies to your sessions now, and tomorrow's daily run decides it for the team\n`,
   );
@@ -306,8 +307,16 @@ function learnDoc(
     return 0;
   }
   writePendingFile(root, path, text);
+  sendPending(root, io);
   io.stdout(
     `${what}: it applies to your sessions now, and tomorrow's daily run decides it for the team\n`,
   );
   return 0;
+}
+
+/** Sends pending lessons to the daily run in the background, when the KB has an origin. */
+export function sendPending(root: string, io: Io) {
+  if (git(root, "remote", "get-url", "origin") !== undefined) {
+    io.background?.(["sync", "--dir", root, "--quiet", "--push-only"]);
+  }
 }
