@@ -6,7 +6,7 @@ Your reviewers already teach your coding agents, one comment at a time: "use the
 
 Homeostat closes the loop:
 - It turns review feedback that led to a code change into short, scored rules and living team documents.
-- It keeps them in a git repo where every change is a reviewed pull request.
+- It keeps them in a git repo. Every change arrives by pull request, and only the uncertain ones need a human.
 - It gives every agent the ones that matter for the files it is touching.
 
 <!-- demo.gif: render with `vhs docs/demo.tape` -->
@@ -22,14 +22,14 @@ claude plugin marketplace add ysugarmen/homeostat
 claude plugin install homeostat@homeostat
 ```
 
-The [quickstart](docs/guide/quickstart.md) takes you from there to a curator opening its first PR in about ten minutes. The full guide starts at [docs/index.md](docs/index.md).
+The [quickstart](docs/guide/quickstart.md) takes you from there to the first daily run in about ten minutes. The full guide starts at [docs/index.md](docs/index.md).
 
 > Early days: 0.1.0 is the first release. How it works technically: [docs/architecture.md](docs/architecture.md). The market research and live plan are in [docs/design.md](docs/design.md) and [docs/execution-plan.md](docs/execution-plan.md).
 
 ## How it works
 
-1. **Capture.** A daily curator reads merged PRs, keeps review comments that were followed by a code change, and drafts one rule each with Claude. It also proposes one-section updates to the team documents those comments affect. Developers add rules and document sections with `homeostat learn` or `/homeostat:learn`, and sessions leave handoff notes.
-2. **Govern.** Every entry is scored (+3 accepted PR feedback, +2 manual, +1 senior author, −2 conflict) and lands through a PR on the knowledge-base repo, where CODEOWNERS decide who approves it. An entry merges unreviewed only when it passes every gate: the score threshold, a team member's review comment followed by a code change, no secret or risky-content findings, and an area in `scoring.autoMerge` scope. A weekly deep dive merges duplicates, marks contradictions and retires stale entries.
+1. **Capture.** Developers add lessons with `homeostat learn` or `/homeostat:learn`, and sessions leave handoff notes. A lesson applies to its author's sessions at once. Each morning a daily run in CI also reads merged PRs, keeps review comments that were followed by a code change, and drafts one rule each with Claude. It also proposes one-section updates to the team documents those comments affect.
+2. **Govern.** The daily run packs each developer's lessons into one PR a day. It scores every lesson for confidence (its source, the role of whoever vouches for it, how specific it is, flags and conflicts) and decides. Confident lessons merge themselves, weak ones are declined, and the rest go to a review PR for the area's owners. Secrets and risky instructions never merge unreviewed. Developers' sessions sync in the background, with no laptop scheduler and no per-developer setup. The dashboard shows every decision, the review queue, and who is syncing. A weekly deep dive merges duplicates, marks contradictions and retires stale entries.
 3. **Distribute.** The Claude Code plugin injects the rules relevant to the files you are touching at session start, within a token budget, plus an index of the documents that cover them. Any agent can use the MCP server. `homeostat export` writes the same rules and documents as Claude, Cursor, Copilot and AGENTS.md files.
 
 Nothing scheduled runs on a laptop: the agents run in the KB repo's CI (or `homeostat up` on a shared box).
@@ -40,14 +40,16 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 
 | Command | What it does |
 | --- | --- |
-| `homeostat init` | Scaffold `homeostat.yaml`, `knowledge/` and the CI jobs (validate on PRs, daily curator, weekly deep dive) in a KB repo |
+| `homeostat init` | Scaffold `homeostat.yaml`, `knowledge/` and the CI jobs (validate on PRs, the daily run, weekly deep dive) in a KB repo |
 | `homeostat validate [--fix]` | Check the config and every entry; `--fix` rewrites stale scores and token counts |
-| `homeostat learn [comment-url]` | Write one candidate entry from flags, prompts or a PR review comment |
+| `homeostat learn [comment-url]` | Save one lesson from flags, prompts or a PR review comment; it applies to your sessions now and goes to tomorrow's daily run |
 | `homeostat codeowners [--check]` | Generate CODEOWNERS from members, areas and entry owners |
-| `homeostat curate` | The curator run (CI) |
+| `homeostat daily` | The daily run (CI): one scored PR per developer, merged, declined or sent to a reviewer |
+| `homeostat sync` | Pull the team KB and send your pending lessons (the plugin runs it in the background) |
+| `homeostat curate` | Draft rules from review comments on their own, without the daily decisions |
 | `homeostat deep-dive` | The deep-dive run (CI) |
 | `homeostat export --out <repo>` | Write accepted entries into a code repo as each tool's rules files |
-| `homeostat up` | Serve the dashboard and run the curator and deep dive on their schedules (a shared box; also the Docker image) |
+| `homeostat up` | Serve the dashboard and run the daily run and deep dive on their schedules (a shared box; also the Docker image) |
 | `homeostat dashboard` | Serve just the dashboard on localhost:4747 |
 | `homeostat search`, `explain`, `list`, `status` | Read the KB from the terminal (`--json` for agents) |
 | `homeostat events` | The local event log, one line per event |
@@ -62,7 +64,7 @@ The Claude Code plugin is in [`packages/plugin`](packages/plugin).
 
 ## Security and data
 
-The curator reads review comments, never source code. Secrets are redacted before any model call and fail validation, so they cannot be merged. A rule merges unreviewed only when it passes every auto-merge gate, and risky instructions are blocked. Model calls can stay in your own AWS or Google Cloud account. [`docs/data-handling.md`](docs/data-handling.md) is the one-page answer for a security review, [`docs/security.md`](docs/security.md) is the threat model, and [`SECURITY.md`](SECURITY.md) explains how to report a vulnerability.
+The curator reads review comments, never source code. Secrets are redacted before any model call and fail validation, so they cannot be merged. A lesson merges unreviewed only above the confidence threshold and with no secret or risky-content findings; risky instructions always go to a human. Model calls can stay in your own AWS or Google Cloud account. [`docs/data-handling.md`](docs/data-handling.md) is the one-page answer for a security review, [`docs/security.md`](docs/security.md) is the threat model, and [`SECURITY.md`](SECURITY.md) explains how to report a vulnerability.
 
 ## Layout
 

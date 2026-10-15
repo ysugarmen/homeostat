@@ -193,6 +193,30 @@ describe("homeostat sync (automation, step 2)", () => {
     expect((await session(t.lee, "long", "prompt")).stdout).toBe("");
   });
 
+  test("HOMEOSTAT_NO_SYNC=1 starts no background sync", async () => {
+    const t = team();
+    const r = await run(
+      [
+        "learn",
+        "--dir",
+        t.lee,
+        "--author",
+        "lee",
+        "--area",
+        "frontend",
+        "--title",
+        "Use the shared button component",
+        "--rule",
+        "Render buttons with <Button> from apps/web/ui, never a raw button tag.",
+        "--why",
+        "Raw buttons skip the focus ring and the analytics hook.",
+      ],
+      { env: { HOMEOSTAT_NO_SYNC: "1" } },
+    );
+    expect(r.code).toBe(0);
+    expect(r.background).toEqual([]);
+  });
+
   test("local edits to tracked files block the pull safely, with a notice", async () => {
     const t = team();
     writeFileSync(

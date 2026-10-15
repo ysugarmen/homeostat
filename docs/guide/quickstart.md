@@ -64,8 +64,8 @@ Or capture it from a review comment: `homeostat learn <comment URL>`. Commit on 
 - **Cursor, Copilot, AGENTS.md**: from a code repo, run `homeostat export --kb ../team-kb`.
 - **Any MCP client**: run `homeostat mcp`.
 
-## 5. Turn on the curator
+## 5. Turn on the daily run
 
-Add the secrets `init` printed: a git-host token and a Claude credential, or use your cloud account ([runtimes](../runtimes.md)). Run `homeostat curate --show-prompts` once to see exactly what would be sent. From then on the curator opens a PR each morning with what your reviewers taught that day.
+Add the secrets `init` printed: a git-host token and a Claude credential, or use your cloud account ([runtimes](../runtimes.md)). Run `homeostat curate --show-prompts` once to see exactly what would be sent, and `homeostat daily --dry-run` to see what it would decide. From then on, each morning, every developer's lessons and what their reviewers taught them arrive in one PR per developer. Confident lessons merge themselves; only the uncertain ones wait for a reviewer ([how it decides](agents.md#daily)). Developers need nothing beyond the plugin: their sessions sync in the background.
 
 Before you invite the team, run `homeostat doctor --security`.

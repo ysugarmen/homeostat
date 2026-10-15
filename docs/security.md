@@ -10,7 +10,7 @@ Teams will only connect Homeostat to their repos if they can answer four questio
 | --- | --- | --- | --- | --- | --- |
 | Curator | The KB repo's CI (or `up` on a shared box) | Merged-PR metadata, review comments, commit dates, via the git host API. **Not code.** | The comment thread, PR title, file path and line, area globs | A branch and PR on the KB repo | Git-host token (read code repos, write KB repo); Claude credential |
 | Deep dive | Same | KB entries | Entry text (merge, contradiction check) | A branch and PR on the KB repo | Same |
-| Session-start and Stop hooks | Developer laptop, inside Claude Code | `git status`/log paths, KB files, transcript (only to count edits) | **Nothing.** They put KB rules into the session, which then goes to whatever model the developer's Claude Code uses | Local `.homeostat/events.db` (paths count, cwd, session id, rule ids); handoff note pushed to `candidates/<member>` | The developer's own git credentials |
+| Session-start and Stop hooks | Developer laptop, inside Claude Code | `git status`/log paths, KB files, transcript (only to count edits) | **Nothing.** They put KB rules into the session, which then goes to whatever model the developer's Claude Code uses | Local `.homeostat/events.db` (paths count, cwd, session id, rule ids); a background `homeostat sync` pulls the KB and pushes pending lessons and a heartbeat (member, KB commit, pending count, version) to `candidates/<member>` | The developer's own git credentials |
 | MCP server | Developer laptop (stdio) | KB files | Nothing | Local event log; `learn`/`flag` pushed to `candidates/<member>` | The developer's own git credentials |
 | Export | Laptop or code-repo CI | KB files | Nothing | Rules files in the code repo | None |
 | Dashboard | Loopback only | KB files, event log | Nothing | `homeostat.yaml` | None |
@@ -44,6 +44,8 @@ Controls:
    - it is in scope: `scoring.autoMerge: { enabled, areas, maxPerRun }`, so e.g. `core`, which reaches every session, can require a reviewer while area rules auto-merge
 
    Everything else needs a CODEOWNERS approval; `init` prints how to protect the branch and let only the curator's token bypass it. Before merging, the curator validates the whole knowledge base with the new entries, since the required CI check has not run yet. Auto-merged entries go in their own PR titled "auto-merge", are logged as `auto-merged` events (the digest, K8, lists them), and one `flag` sends them back to review. ✅ Built (T1).
+
+   **Revised 2026-10-15 for the daily run.** The score gates became a 0–100 confidence that weighs the source, the role of whoever vouches for a lesson, specificity and flags, with two thresholds (merge at 70, 80 for `core`; decline below 35). The hard gates are unchanged: any validation error declines a lesson; any risky-content finding, conflict, document patch or area outside `scoring.autoMerge` sends it to a human. Agent handoff notes start at 25 points, so they can't reach the merge threshold on source alone. A lesson's author still can't approve it alone: the daily run decides, or a reviewer merges the review PR. Every decision and its score breakdown are in the daily PR body and on the `homeostat/state` branch, and the dashboard's Automation page lists them.
 2. **A risky-content linter in `validate`.** It errors on entries that contain:
    - URLs outside an allowlist, or shell pipes to a shell
    - instructions about credentials, tokens, environment variables or network exfiltration
@@ -121,7 +123,7 @@ Controls:
 1. Writes require Claude Code's tool approval (already the case).
 2. Rate limit ✅: at most `security.mcpWriteLimit` (5) writes per session.
 3. MCP write tools are off ✅ unless `security.mcpWrites: true`; when off they are not even listed.
-4. Everything an agent writes is a candidate on a branch (already the case).
+4. Everything an agent writes is a pending lesson, scored and decided by the daily run, never a direct write to `main`. Pending lessons apply to that developer's own sessions only, and `homeostat flag` or deleting the file under `.homeostat/pending/` undoes them.
 
 ### T8. Dashboard and local data — low
 

@@ -4,11 +4,12 @@
 homeostat dashboard --dir path/to/team-kb     # http://localhost:4747
 ```
 
-A local, read-mostly view of the KB and this machine's event log. It binds to localhost, loads nothing external, and sends nothing anywhere.
+A local, read-mostly view of the KB, the daily run's records (from the clone's copy of the `homeostat/state` branch, as of its last sync) and this machine's event log. It binds to localhost, loads nothing external, and sends nothing anywhere.
 
 | Page | Shows |
 | --- | --- |
 | Overview | Health, agent liveness (last run, failures, next run), recent activity |
+| Automation | The daily run: lessons merged, declined and sent to review per run; the review queue, with lessons waiting over 2 days marked; each developer's sync (last report, clone behind, pending lessons, version) |
 | Entries | Every rule by status, with the full explanation per rule |
 | Members | Who contributes and reviews |
 | Coverage | Areas and repos with and without rules |

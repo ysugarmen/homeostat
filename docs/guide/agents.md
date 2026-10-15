@@ -2,9 +2,24 @@
 
 Homeostat's agents run in your KB repo's CI (or on one shared box with `homeostat up`), never on developers' laptops. They read the git host, call a model through the runtime you choose, and write only to the KB repo, always by pull request.
 
-## Curator (daily)
+## Daily run {#daily}
 
-`homeostat curate` reads pull requests merged in `sources.repos` since its last run. For each review thread that:
+`homeostat daily` is the one scheduled job. It reads only what is already on the git host, so developers' laptops can be closed. For each developer it:
+
+1. **Collects** their pending lessons, which their sessions pushed to `candidates/<member>`, and drafts lessons from review comments on their own merged PRs (below).
+2. **Scores** each lesson for confidence, 0–100: its source, the role of whoever vouches for it (junior less, senior and lead more), whether it is specific, and its flags and conflicts.
+3. **Decides** each one: merge at 70 or above (80 for `core`), decline below 35 or as a duplicate, and a reviewer for anything in between. Risky content, conflicts, document patches and areas outside `scoring.autoMerge` always go to a reviewer.
+4. **Opens one daily PR** with the merged lessons, each decision explained in the body, and merges it.
+5. **Opens one review PR** for the middle band and requests the area's owners as reviewers. Merging it accepts them; closing it declines them.
+6. **Records** the decisions on the `homeostat/state` branch. Developers' sessions pick them up and tell them, and the dashboard's Automation page shows them.
+
+`--dry-run` prints every decision and writes nothing. `--no-reviews` skips the model and decides pending lessons only. Weights and thresholds: `scoring.confidence` ([config](config.md)). If Slack is set up, the run posts the review queue each morning and repeats lessons waiting more than 2 days.
+
+Protect the base branch and let only the daily run's token bypass it (`init` prints how). If the host refuses the merge, the daily PR stays open for a reviewer.
+
+### Lessons from reviews
+
+The daily run reads pull requests merged in `sources.repos` since its last run (`homeostat curate` does the same on its own). For each review thread that:
 - was written by a team member
 - was followed by a code change
 - is not already in the KB
@@ -13,20 +28,13 @@ it does three things:
 
 1. **Redacts secrets** from the thread, then asks the model whether it holds a lasting rule, and drafts one.
 2. **Checks documents.** If a team document covers the file, it asks whether the thread makes one of its sections out of date, and proposes a one-section patch.
-3. **Validates the draft**, including the secret and risky-content checks, and opens pull requests.
+3. **Validates the draft**, including the secret and risky-content checks.
 
-It never reads source code. It skips PRs marked `homeostat:skip`, members with `optOut`, and anything in `sources.exclude`. `--show-prompts` prints every prompt and sends nothing.
+It never reads source code. It skips PRs marked `homeostat:skip`, members with `optOut`, and anything in `sources.exclude`. `homeostat curate --show-prompts` prints every prompt and sends nothing.
 
-### Auto-merge
+### On developers' machines
 
-A drafted rule merges with no reviewer only if **all** of these hold:
-
-- its score reaches `scoring.autoMergeThreshold`
-- it is review feedback from a team member, followed by a code change (never agent-written, never a deep-dive edit)
-- it has no flags and no risky-content findings
-- its area is in `scoring.autoMerge` scope, and the run has not hit `maxPerRun`
-
-Auto-merged rules go in their own PR titled "auto-merge". The curator validates the whole KB before merging, and anyone can `homeostat flag <id>` to send a rule back to review. Everything else, including every document patch, goes to a review PR for the owning team. Protect the base branch and let only the curator's token bypass it (`init` prints how).
+Nothing is scheduled there. The Claude Code plugin's hooks run `homeostat sync` in the background: when a session starts, on a prompt at most every 3 hours (sessions often stay open for days), and when a session stops with new lessons. A sync pulls the team KB, clears lessons the daily run has decided, and pushes new ones. `homeostat learn` lessons apply to the author's own sessions at once and reach the team the next morning.
 
 ## Deep dive (weekly)
 
@@ -69,8 +77,8 @@ Each model call is logged locally by size, never content. Details: [runtimes](..
 
 | Where | How |
 | --- | --- |
-| GitHub Actions | `init` writes `homeostat-curator.yml`, `homeostat-deep-dive.yml` and `homeostat-digest.yml` |
+| GitHub Actions | `init` writes `homeostat-curator.yml` (the daily run), `homeostat-deep-dive.yml` and `homeostat-digest.yml` |
 | Bitbucket Pipelines | `init` writes custom pipelines; schedule them under Repository settings → Pipelines → Schedules |
-| One shared box | `homeostat up` runs the agents on their cron schedules and the digest on `digestDay`, and serves the dashboard. The Docker image does the same |
+| One shared box | `homeostat up` runs the daily run and the deep dive on their cron schedules and the digest on `digestDay`, and serves the dashboard. The Docker image does the same |
 
 Check a setup with `homeostat doctor --security`.

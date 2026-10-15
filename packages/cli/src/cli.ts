@@ -84,7 +84,10 @@ export const processIo: Io = {
 };
 
 /** Runs the CLI with `argv` (as in `process.argv`) and returns the exit code. */
-export async function runCli(argv: readonly string[], io: Io = processIo): Promise<number> {
+export async function runCli(argv: readonly string[], given: Io = processIo): Promise<number> {
+  // HOMEOSTAT_NO_SYNC=1 keeps hooks and learn from syncing in the background (`homeostat sync` by hand still works).
+  const io: Io = { ...given };
+  if (given.env?.HOMEOSTAT_NO_SYNC) delete io.background;
   let exitCode = 0;
   const program = new Command("homeostat")
     .description("Team knowledge base for coding agents.")

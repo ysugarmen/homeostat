@@ -50,7 +50,7 @@ Partner APIs time out often; the helper adds backoff and the request-id header o
 | `owner` | The member who answers for it |
 | `source` | `type` (`pr-feedback`, `manual`, `agent-handoff`, `deep-dive`), `url` (required for pr-feedback), `author`, `changedCode` (did the code change after the comment?) |
 | `created`, `lastConfirmed` | ISO dates; the deep dive retires rules not confirmed for `staleAfterDays` |
-| `approvedBy` | The member who accepted it, when its score is below the auto-merge threshold |
+| `approvedBy` | Optional: who accepted it. Merging is the approval, so nobody needs to set it by hand |
 | `kind` | Optional: `convention`, `anti-pattern`, `review-lesson`, `migration`, `legacy`, `tech-debt`, `practice`, `decision`. Sessions group rules by kind under one line of guidance each |
 | `adopted` | With `kind: decision`: `false` records a proposal the team rejected. Agents see it in search and explain as context and stop re-proposing it, but never get it as a rule |
 | `riskReviewedBy` | A member who read the risky-content findings (see below) and judged the rule safe |

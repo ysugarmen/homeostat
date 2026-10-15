@@ -6,8 +6,8 @@ It turns accepted code-review feedback into short, scored rules and team documen
 
 ## How it works
 
-1. **Capture.** A daily curator in your CI reads merged pull requests. Where a reviewer's comment led to a code change, it drafts a rule and opens a PR on the knowledge-base repo. People and agents add rules and document sections too.
-2. **Govern.** Every entry is scored and reviewed by the team that owns its area. Only entries that pass every safety gate merge on their own. A weekly deep dive merges duplicates, flags contradictions and retires stale rules.
+1. **Capture.** People and agents add lessons, which apply to their author's sessions at once. A daily run in your CI also reads merged pull requests and drafts a rule wherever a reviewer's comment led to a code change. It then packs each developer's lessons into one PR, merges the confident ones, and sends only the uncertain ones to a reviewer.
+2. **Govern.** Every lesson gets a confidence score, which weighs the role of whoever vouches for it. The score merges it, declines it, or sends it to the team that owns its area. Nothing with a safety finding merges on its own. A weekly deep dive merges duplicates, flags contradictions and retires stale rules.
 3. **Deliver.** Each session gets the rules and document sections for the files it touches, within a token budget.
 
 ## Guide
@@ -15,7 +15,7 @@ It turns accepted code-review feedback into short, scored rules and team documen
 - [Quickstart](guide/quickstart.md): a working knowledge base in ten minutes
 - [Rules and documents](guide/entries.md): the file formats
 - [Configuration](guide/config.md): every key in `homeostat.yaml`
-- [The agents](guide/agents.md): curator, deep dive, auto-merge, seeding, the digest, and model runtimes
+- [The agents](guide/agents.md): the daily run, sync, deep dive, seeding, the digest, and model runtimes
 - [Using it from your tools](guide/clients.md): the Claude Code plugin, MCP, and exports
 - [Dashboard](guide/dashboard.md)
 
