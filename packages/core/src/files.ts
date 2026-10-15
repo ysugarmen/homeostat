@@ -53,6 +53,8 @@ export function readKbView(
   const pending = readPendingFiles(root);
   if (opts.inForce) {
     for (const [path, text] of Object.entries(pending)) {
+      // A flagged lesson is out of force until the daily run or a reviewer settles it.
+      if (/^flags:\s*\n\s+-/m.test(text)) continue;
       pending[path] = text.replace(/^status: candidate$/m, "status: accepted");
     }
   }

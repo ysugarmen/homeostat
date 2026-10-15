@@ -67,7 +67,7 @@ export function runFlag(id: string, opts: FlagOptions, io: Io): number {
     writePendingFile(root, found.path, text);
     sendPending(root, io);
     io.stdout(
-      `flagged ${id}: it is ${status} in your sessions now, and tomorrow's daily run takes the flag to the team\n`,
+      `flagged ${id}: it no longer applies to your sessions (${status}), and tomorrow's daily run takes the flag to the team\n`,
     );
     return 0;
   } catch (e) {

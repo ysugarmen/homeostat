@@ -94,6 +94,30 @@ describe("pending lessons (automation, step 1)", () => {
       readFileSync(join(dir, "knowledge/core/redact-before-logging.md"), "utf8"),
     ).not.toContain("flags:");
   });
+
+  test("flagging your own pending lesson takes it out of your sessions", async () => {
+    const dir = kb();
+    await run([
+      "learn",
+      "--dir",
+      dir,
+      "--author",
+      "dana",
+      "--area",
+      "integrations",
+      "--title",
+      "Use the shared retry helper for partner calls",
+      "--rule",
+      "Wrap every partner API call in withRetry() from services/integrations/http.ts.",
+      "--why",
+      "Partner APIs time out; hand-rolled retries skipped the request-id header.",
+    ]);
+    const id = "use-the-shared-retry-helper-for-partner-calls";
+    expect(await session(dir, "services/integrations/a.ts")).toContain(id);
+    const flagged = await run(["flag", id, "--dir", dir, "--by", "lee", "--reason", "it moved"]);
+    expect(flagged.stdout).toContain("it no longer applies to your sessions");
+    expect(await session(dir, "services/integrations/a.ts")).not.toContain(id);
+  });
 });
 
 describe("roles", () => {
