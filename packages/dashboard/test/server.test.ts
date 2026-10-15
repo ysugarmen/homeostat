@@ -161,6 +161,32 @@ describe("settings forms write homeostat.yaml (4.2)", () => {
     expect(res.status).toBe(403);
   });
 
+  test("a browser's own form post, which carries the page's origin, is saved", async () => {
+    const page = await get("/settings/distribution");
+    // A browser sends the page's origin only when the referrer policy allows it.
+    expect(page.headers.get("referrer-policy")).toBe("same-origin");
+    const res = await post(
+      "/settings/distribution",
+      {
+        _token: tokenOf(page.html),
+        "distribution.exports": ["claude"],
+        "distribution.tokenBudget": "1800",
+      },
+      { origin: new URL(url).origin },
+    );
+    expect(res.status).toBe(200);
+    expect(res.html).toContain("Saved to homeostat.yaml");
+  });
+
+  test("an unreadable or null origin is refused, not crashed on", async () => {
+    const token = tokenOf((await get("/settings/scoring")).html);
+    for (const origin of ["null", "not a url"]) {
+      const res = await post("/settings/scoring", { _token: token }, { origin });
+      expect(res.status).toBe(403);
+      expect(res.html).toContain("Cross-origin request refused");
+    }
+  });
+
   test("a request for another Host (DNS rebinding) is refused", async () => {
     const port = new URL(url).port;
     const status = await new Promise<number>((resolve) => {

@@ -82,6 +82,13 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
     "[::1]",
     ...(host === "0.0.0.0" ? [] : [host]),
   ]);
+  const sameSite = (origin: string) => {
+    try {
+      return allowed(new URL(origin).host);
+    } catch {
+      return false;
+    }
+  };
   const allowed = (hostPort: string | undefined) => {
     try {
       return Boolean(hostPort) && allowedNames.has(new URL(`http://${hostPort}`).hostname);
@@ -110,7 +117,9 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
       "content-security-policy":
         "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'",
       "x-content-type-options": "nosniff",
-      "referrer-policy": "no-referrer",
+      // same-origin, not no-referrer: under no-referrer Chrome sends "Origin: null" on this
+      // page's own form posts, which the write check below must refuse.
+      "referrer-policy": "same-origin",
     });
     res.end(html);
   };
@@ -137,9 +146,9 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
     }
 
     if (req.method === "POST") {
+      // Our own pages send their origin; "null" or anything unreadable is refused, never parsed blind.
       const origin = req.headers.origin;
-      if (origin && !allowed(new URL(origin).host))
-        return send(res, 403, "Cross-origin request refused");
+      if (origin && !sameSite(origin)) return send(res, 403, "Cross-origin request refused");
       const m = /^\/settings\/([a-z]+)$/.exec(url.pathname);
       const section = m && SECTIONS.find((s) => s.id === m[1]);
       if (!section)
