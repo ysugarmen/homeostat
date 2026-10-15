@@ -122,6 +122,52 @@ describe("applySection", () => {
     expect(Object.keys(areas ?? {})).toEqual(["integrations", "frontend", "payments"]);
   });
 
+  test("saving one changed field changes only that line (found in the phase 1 run)", () => {
+    const yaml = `version: 1
+team:
+  members:
+    - id: dana
+      handle: "@dana"
+      role: senior
+      areas: [core, web]
+areas:
+  web: ["web/**"]
+distribution:
+  tokenBudget: 2000
+`;
+    // What a browser submits: every field of the section, most of them unchanged.
+    const form = new URLSearchParams([
+      ["distribution.exports", "claude"],
+      ["distribution.exports", "cursor"],
+      ["distribution.exports", "agents-md"],
+      ["distribution.exports", "copilot"],
+      ["distribution.tokenBudget", "1500"],
+      ["distribution.docTokenBudget", "1000"],
+    ]);
+    const text = applySection(yaml, "distribution", form).text ?? "";
+    expect(text).toBe(yaml.replace("tokenBudget: 2000", "tokenBudget: 1500"));
+  });
+
+  test("submitting the team section unchanged leaves the file byte for byte", () => {
+    const yaml = `version: 1
+team:
+  members:
+    - id: dana
+      handle: "@dana"
+      role: senior
+      areas: [core, web]
+areas:
+  web: ["web/**"]
+`;
+    const form = new URLSearchParams({
+      "member.0.id": "dana",
+      "member.0.handle": "@dana",
+      "member.0.role": "senior",
+      "member.0.areas": "core, web",
+    });
+    expect(applySection(yaml, "team", form).text).toBe(yaml);
+  });
+
   test("teams row editor (K3)", () => {
     const form = new URLSearchParams({
       "teamrow.0.name": "partners",

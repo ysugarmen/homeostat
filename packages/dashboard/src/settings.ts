@@ -306,6 +306,22 @@ export function applySection(
       ],
     };
   const doc = parseDocument(yamlText);
+  // A field whose value did not change is left untouched: defaults stay implicit, formatting stays.
+  const before = parseConfig(yamlText).config;
+  const canon = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(canon)
+      : v && typeof v === "object"
+        ? Object.fromEntries(
+            Object.entries(v)
+              .filter(([, x]) => x !== undefined)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([k, x]) => [k, canon(x)]),
+          )
+        : v;
+  const same = (a: unknown, b: unknown) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+  const unchanged = (path: readonly string[], value: unknown) =>
+    before !== undefined && same(value, currentValue(before, { path } as Field));
 
   if (section.rows === "team") {
     const members = rowIndices(form, "member").flatMap((i) => {
@@ -323,7 +339,8 @@ export function applySection(
         },
       ];
     });
-    doc.setIn(["team", "members"], doc.createNode(members));
+    if (!unchanged(["team", "members"], members))
+      doc.setIn(["team", "members"], doc.createNode(members));
   } else if (section.rows === "teams") {
     const teams: Record<string, Record<string, unknown>> = {};
     for (const i of rowIndices(form, "teamrow")) {
@@ -346,7 +363,7 @@ export function applySection(
       if (!name || form.get(`area.${i}.remove`)) continue;
       areas[name] = lines(form.get(`area.${i}.globs`) ?? "");
     }
-    doc.setIn(["areas"], doc.createNode(areas));
+    if (!unchanged(["areas"], areas)) doc.setIn(["areas"], doc.createNode(areas));
   } else {
     for (const field of section.fields ?? []) {
       const name = field.path.join(".");
@@ -355,17 +372,31 @@ export function applySection(
         doc.deleteIn(["sources"]);
         break;
       }
-      if (field.kind === "checkbox") doc.setIn(field.path, form.get(name) === "on");
-      else if (field.kind === "checks") doc.setIn(field.path, doc.createNode(form.getAll(name)));
-      else if (field.kind === "lines") doc.setIn(field.path, doc.createNode(lines(raw ?? "")));
-      else if (field.kind === "number") {
-        // An empty or missing number means "use the default", so the key is removed.
-        if (raw === null || raw === "") {
-          if (doc.hasIn(field.path)) doc.deleteIn(field.path);
-        } else doc.setIn(field.path, Number(raw));
-      } else if (field.optional && !raw?.trim()) {
+      // An empty number or optional text means "use the default", so the key is removed.
+      const clear =
+        (field.kind === "number" && (raw === null || raw === "")) ||
+        (field.kind !== "checkbox" &&
+          field.kind !== "checks" &&
+          field.kind !== "lines" &&
+          field.kind !== "number" &&
+          field.optional &&
+          !raw?.trim());
+      if (clear) {
         if (doc.hasIn(field.path)) doc.deleteIn(field.path);
-      } else if (raw !== null) doc.setIn(field.path, raw.trim());
+        continue;
+      }
+      const value =
+        field.kind === "checkbox"
+          ? form.get(name) === "on"
+          : field.kind === "checks"
+            ? form.getAll(name)
+            : field.kind === "lines"
+              ? lines(raw ?? "")
+              : field.kind === "number"
+                ? Number(raw)
+                : raw?.trim();
+      if (value === undefined || unchanged(field.path, value)) continue;
+      doc.setIn(field.path, Array.isArray(value) ? doc.createNode(value) : value);
     }
   }
 
@@ -375,7 +406,7 @@ export function applySection(
     if (isMap(node) && node.items.length === 0) doc.delete(key);
   }
 
-  const text = doc.toString();
+  const text = doc.toString({ flowCollectionPadding: false });
   const { config, issues } = parseConfig(text);
   return config ? { text, issues: [] } : { issues };
 }
