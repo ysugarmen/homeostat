@@ -62,7 +62,7 @@ describe("pages render from the KB and the event log (4.3)", () => {
       "/",
       [
         "Stability",
-        "Curator",
+        "Daily run",
         "Last run succeeded",
         "1 drafted, 0 skipped",
         "Injections into sessions",

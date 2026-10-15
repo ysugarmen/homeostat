@@ -48,3 +48,31 @@ export interface Heartbeat {
   pending: number;
   version: string;
 }
+
+/** One daily run, written to `runs/<date>.json` on the state branch. */
+export interface RunReport {
+  at: string;
+  members: {
+    member: string;
+    merged: number;
+    declined: number;
+    review: number;
+    dailyPr?: string;
+    reviewPr?: string;
+    mergeError?: string;
+  }[];
+  /** Review PRs from earlier runs that a reviewer merged or closed since. */
+  settled: number;
+  lessons: {
+    member: string;
+    id: string;
+    decision: Decision;
+    confidence?: number;
+    reason: string;
+  }[];
+}
+
+/** Review items older than this are repeated in the morning notice and marked on the dashboard. */
+export const REVIEW_REMINDER_DAYS = 2;
+/** A developer whose sync has not reported for this long is shown as not syncing. */
+export const STALE_HEARTBEAT_HOURS = 48;

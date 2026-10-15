@@ -7,6 +7,9 @@ export {
   HEARTBEAT_PATH,
   type Heartbeat,
   lessonHash,
+  REVIEW_REMINDER_DAYS,
+  type RunReport,
+  STALE_HEARTBEAT_HOURS,
   STATE_BRANCH,
 } from "./automation.ts";
 export {

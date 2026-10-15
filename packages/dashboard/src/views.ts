@@ -87,9 +87,9 @@ header.top { display: flex; align-items: baseline; justify-content: space-betwee
 nav { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 nav a { color: var(--ink-2); text-decoration: none; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 0; border-bottom: 1px solid transparent; }
 nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
-.grid { display: grid; gap: 16px; grid-template-columns: repeat(12, 1fr); }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
 .panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; grid-column: span 12; min-width: 0; }
-.span-4 { grid-column: span 4; } .span-6 { grid-column: span 6; } .span-8 { grid-column: span 8; }
+.span-4 { grid-column: span 4; } .span-6 { grid-column: span 6; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
 @media (max-width: 860px) { .span-4, .span-6, .span-8 { grid-column: span 12; } }
 .label { color: var(--ink-3); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; }
 .lede { color: var(--ink-2); margin: 4px 0 14px; max-width: 70ch; }
@@ -165,6 +165,7 @@ footer { margin-top: 36px; color: var(--ink-3); font-size: 12.5px; border-top: 1
 
 const NAV: [string, string][] = [
   ["/", "Overview"],
+  ["/automation", "Automation"],
   ["/entries", "Entries"],
   ["/members", "Members"],
   ["/coverage", "Coverage"],
@@ -218,7 +219,7 @@ function lampFor(a: AgentLiveness): { cls: string; text: string } {
 
 function unit(a: AgentLiveness): string {
   const lamp = lampFor(a);
-  const name = a.agent === "curator" ? "Curator" : "Deep dive";
+  const name = a.agent === "curator" ? "Daily run" : "Deep dive";
   return `<div class="unit">
   <div class="head"><span class="lamp ${lamp.cls}" aria-hidden="true"></span><h3>${name}</h3><span class="state">${lamp.text}</span></div>
   <div class="mono muted">${esc(a.schedule)} UTC</div>
@@ -258,7 +259,7 @@ ${dial(h.stability, { title: "Share of entries accepted, fresh and unflagged", c
 <section class="panel span-8" aria-labelledby="kb"><h2 id="kb">Knowledge base</h2>
 <div class="stats" style="--cols: 3">${stat(h.total, "entries")}${stat(h.byStatus.accepted, "accepted")}${stat(h.byStatus.candidate, "awaiting review")}${stat(h.flagged.length, "flagged")}${stat(h.stale.length, "stale")}${stat(h.byStatus.disputed, "disputed")}</div>
 <div style="margin-top:14px"><span class="label">Injections into sessions, last 14 days</span>${columns(daily, { title: "Injections per day", labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Injections"])}</div></section>
-<section class="panel span-6" aria-labelledby="agents"><h2 id="agents">Agents</h2><p class="lede">Runs recorded in this checkout's log (shared box or local runs). CI runs show up as their PRs on the KB repo.</p><div class="units">${agents.map(unit).join("")}</div></section>
+<section class="panel span-6" aria-labelledby="agents"><h2 id="agents">Agents</h2><p class="lede">Runs recorded in this checkout's log (shared box or local runs). CI runs show up as their PRs on the KB repo.</p><div class="units">${agents.map(unit).join("")}</div><p><a href="/automation">Daily run decisions, review queue and developer sync</a></p></section>
 <section class="panel span-6" aria-labelledby="recent"><h2 id="recent">Recent events</h2>${recent.length ? recentTable(recent) : '<p class="empty">No events yet. Sessions, MCP calls and captures will appear here.</p>'}<p><a href="/events">All events</a></p></section>
 </div>`;
 }

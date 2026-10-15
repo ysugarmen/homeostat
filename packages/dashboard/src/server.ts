@@ -10,6 +10,7 @@ import {
   sectionUsage,
   validate,
 } from "@homeostat/core";
+import { automationPage, automationView, readAutomation } from "./automation.ts";
 import {
   agentLiveness,
   contributions,
@@ -187,6 +188,11 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
           overviewPage(health(snap), agentLiveness(snap), impact(snap), recent),
         );
       }
+      case "/automation":
+        return page(
+          "Automation",
+          automationPage(automationView(readAutomation(opts.kbRoot), snap.config, snap.now)),
+        );
       case "/entries":
         return page("Entries", entriesPage(snap.entries, url.searchParams.get("status")));
       case "/members":

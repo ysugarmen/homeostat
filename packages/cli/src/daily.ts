@@ -21,7 +21,9 @@ import {
   logEvent,
   type OpenPullRequest,
   parseEntry,
+  REVIEW_REMINDER_DAYS,
   type RepoRef,
+  type RunReport,
   readKbFiles,
   STATE_BRANCH,
   validate,
@@ -72,21 +74,6 @@ interface Lesson {
   reason: string;
   confidence?: Confidence;
   duplicateOf?: string;
-}
-
-export interface RunReport {
-  at: string;
-  members: {
-    member: string;
-    merged: number;
-    declined: number;
-    review: number;
-    dailyPr?: string;
-    reviewPr?: string;
-    mergeError?: string;
-  }[];
-  settled: number;
-  lessons: { member: string; id: string; decision: string; confidence?: number; reason: string }[];
 }
 
 const repoRef = (ref: string): RepoRef => {
@@ -370,7 +357,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     const parent = git(root, "rev-parse", "--verify", "--quiet", remote(STATE_BRANCH));
     const commit = commitTree(root, parent, state, `homeostat: daily run ${today}`);
     forcePush(root, commit, STATE_BRANCH);
-    await notifyReviewQueue(config, report, io);
+    await notifyReviewQueue(config, report, [...decisions.values()], now, io);
   }
 
   logEvent(root, {
@@ -532,17 +519,43 @@ function prBody(member: string, today: string, list: Lesson[], kind: "daily" | "
   ].join("\n");
 }
 
-async function notifyReviewQueue(config: Config, report: RunReport, io: Io) {
+/** The morning notice: today's review PRs, and a reminder for lessons waiting longer. */
+async function notifyReviewQueue(
+  config: Config,
+  report: RunReport,
+  decisions: DecisionsFile[],
+  now: Date,
+  io: Io,
+) {
   const variable = config.notifications.slackWebhookEnv;
   const url = variable ? io.env?.[variable] : undefined;
   const waiting = report.members.filter((m) => m.review > 0 && m.reviewPr);
-  if (!url || !/^https:\/\/hooks\.slack\.com\//.test(url) || waiting.length === 0) return;
+  const cutoff = new Date(now.getTime() - REVIEW_REMINDER_DAYS * 86_400_000).toISOString();
+  const overdue = decisions.flatMap((d) =>
+    d.decided
+      .filter((r) => r.decision === "review" && r.at < cutoff)
+      .map((r) => ({ member: d.member, ...r })),
+  );
+  if (!url || !/^https:\/\/hooks\.slack\.com\//.test(url)) return;
+  if (waiting.length === 0 && overdue.length === 0) return;
   const text = [
-    `*Homeostat: ${plural(
-      waiting.reduce((n, m) => n + m.review, 0),
-      "lesson",
-    )} waiting for review*`,
-    ...waiting.map((m) => `• ${m.member}: ${m.review} — ${m.reviewPr}`),
+    ...(waiting.length
+      ? [
+          `*Homeostat: ${plural(
+            waiting.reduce((n, m) => n + m.review, 0),
+            "lesson",
+          )} waiting for review*`,
+          ...waiting.map((m) => `• ${m.member}: ${m.review} — ${m.reviewPr}`),
+        ]
+      : []),
+    ...(overdue.length
+      ? [
+          `*Still waiting after ${REVIEW_REMINDER_DAYS} days: ${plural(overdue.length, "lesson")}*`,
+          ...overdue.map(
+            (r) => `• ${r.id} (${r.member}, since ${r.at.slice(0, 10)}) — ${r.pr ?? ""}`,
+          ),
+        ]
+      : []),
   ].join("\n");
   try {
     await (io.fetch ?? fetch)(url, {

@@ -210,7 +210,7 @@ export const SECTIONS: Section[] = [
         optional: true,
         help: "global, us, eu or a region",
       },
-      ...agentFields("curator", "Curator"),
+      ...agentFields("curator", "Daily run (curator)"),
       ...agentFields("deepDive", "Deep dive"),
       {
         path: ["agents", "deepDive", "staleAfterDays"],

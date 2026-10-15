@@ -232,6 +232,31 @@ describe("homeostat daily (automation, step 4)", () => {
     expect(existsSync(join(t.lee, ".homeostat/pending", MINE))).toBe(false);
   });
 
+  test("Slack gets the morning queue, and a reminder for lessons waiting more than 2 days", async () => {
+    const t = team();
+    await leeLearns(t.lee);
+    const provider = new FakeProvider();
+    const posts: string[] = [];
+    const slack = {
+      provider,
+      env: { GITHUB_TOKEN: "t", HOMEOSTAT_SLACK_WEBHOOK: "https://hooks.slack.com/services/x" },
+      fetch: (async (_u: string, init: RequestInit) => {
+        posts.push(JSON.parse(String(init.body)).text);
+        return new Response("ok");
+      }) as typeof fetch,
+    };
+    await run(["daily", "--dir", t.ci, "--no-reviews"], slack);
+    expect(posts[0]).toContain("*Homeostat: 1 lesson waiting for review*");
+    expect(posts[0]).toContain("• lee: 1 — https://github.com/acme/team-kb/pull/10");
+    // Three days on, the review PR is still open.
+    await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      ...slack,
+      now: () => new Date("2026-10-19T06:00:00Z"),
+    });
+    expect(posts[1]).toContain("*Still waiting after 2 days: 1 lesson*");
+    expect(posts[1]).toContain("• use-the-shared-button-component (lee, since 2026-10-16)");
+  });
+
   test("a refused merge leaves the daily PR open and records its lessons for review", async () => {
     const t = team();
     const provider = new FakeProvider();
