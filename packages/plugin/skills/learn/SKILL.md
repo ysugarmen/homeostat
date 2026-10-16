@@ -7,7 +7,7 @@ allowed-tools: Bash(homeostat learn:*), Bash(npx --yes homeostat@0.1.1 learn:*),
 
 # Capture a lesson for the team
 
-Turn one lesson into a candidate knowledge entry with `homeostat learn`. A reviewer accepts it later through a PR; you never mark it accepted.
+Turn one lesson into a knowledge entry with `homeostat learn`. It is saved in the developer's clone (`.homeostat/pending/`, git-ignored) and applies to their sessions at once. The next daily run decides it for the team: it merges confident lessons, declines weak ones, and sends the rest to a reviewer. You never mark a lesson accepted, and nobody needs to commit it or open a PR.
 
 Input: $ARGUMENTS
 
@@ -67,4 +67,4 @@ If the CLI reports validation errors, fix the draft (usually length) and run it 
 
 ## 4. Hand back
 
-Tell the user the file that was created and its score, and that it needs committing on a branch and a PR to the KB repo. Offer to do the commit; do not push or open the PR unless they ask.
+Tell the user the lesson's id and score, and pass on what the CLI said: it applies to their sessions now, and tomorrow's daily run decides it for the team. If the CLI printed warnings, pass those on too. There is nothing to commit or push: the plugin's session hooks send the lesson to the daily run in the background.

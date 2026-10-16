@@ -45,7 +45,8 @@ describe("Claude Code plugin", () => {
 
   test.each([
     ["learn", "learn"],
-    ["validate", "review"],
+    ["explain", "explain"],
+    ["search", "explain"],
   ])("every homeostat %s flag the %s skill uses exists", async (command, name) => {
     const used = new Set(
       [...skill(name).matchAll(new RegExp(`homeostat(?:@0)? ${command}[^\\n\`)]*`, "g"))].flatMap(
