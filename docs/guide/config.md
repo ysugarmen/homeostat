@@ -23,7 +23,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `scoring.weights.seniorAuthor` | `1` | Bonus when a senior wrote it |
 | `scoring.weights.conflict` | `-2` | Per conflict with another rule |
 | `scoring.weights.flag` | `-2` | Per open flag |
-| `scoring.autoMergeThreshold` | `3` | Score at which a curator rule may merge without a reviewer, if it passes every [gate](agents.md#auto-merge) |
+| `scoring.autoMergeThreshold` | `3` | Legacy: used only by `homeostat curate` run on its own. The [daily run](agents.md#daily) decides by `scoring.confidence` |
 | `scoring.autoMerge.enabled` | `true` | Turn auto-merge off entirely |
 | `scoring.autoMerge.areas` | `[]` | Areas that may auto-merge; empty means all |
 | `scoring.autoMerge.excludeAreas` | `[]` | Areas that always need a reviewer, e.g. `core` |

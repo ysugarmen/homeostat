@@ -69,7 +69,7 @@ The body has `## Rule` (at most 60 words), `## Why` (at most 100) and an optiona
 | Conflicts with another rule | −2 |
 | Each flag | −2 |
 
-At the threshold (3 by default) a curator-drafted rule may merge on its own, but only if it passes every gate in [auto-merge](agents.md#auto-merge). Everything else waits for its area's reviewers.
+The score orders rules in a session when the token budget is tight. It does not decide what merges: the [daily run](agents.md#daily) gives each new lesson a separate 0–100 confidence, which also weighs the role of whoever vouches for it, and merges, declines or sends it to a reviewer by that.
 
 ### What validate refuses
 

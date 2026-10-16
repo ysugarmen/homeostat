@@ -127,7 +127,12 @@ export const SECTIONS: Section[] = [
       ...Object.keys(DEFAULT_WEIGHTS).map(
         (k): Field => ({ path: ["scoring", "weights", k], label: `Weight: ${k}`, kind: "number" }),
       ),
-      { path: ["scoring", "autoMergeThreshold"], label: "Auto-merge threshold", kind: "number" },
+      {
+        path: ["scoring", "autoMergeThreshold"],
+        label:
+          "Score threshold for homeostat curate on its own (legacy; the daily run uses confidence)",
+        kind: "number",
+      },
       { path: ["scoring", "confidence", "accept"], label: "Merge at confidence", kind: "number" },
       {
         path: ["scoring", "confidence", "coreAccept"],

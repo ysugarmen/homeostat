@@ -41,8 +41,10 @@ ${handleLine}
 #   payments: ["services/payments/**"]
 areas: {}
 
-scoring:
-  autoMergeThreshold: 3
+# The daily run decides each lesson by a 0-100 confidence: it merges at 70+ (80+ for core),
+# declines below 35, and sends the rest to a reviewer. Tune it under scoring.confidence.
+# scoring:
+#   confidence: { accept: 70, coreAccept: 80, decline: 35 }
 
 distribution:
   tokenBudget: 2000
