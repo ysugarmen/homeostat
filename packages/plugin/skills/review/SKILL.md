@@ -3,7 +3,7 @@ name: review
 description: Walk the homeostat review queue with the user: the lessons the daily run could not decide on its own, in its open review PRs. Merge a PR to accept its lessons, close it to decline them. Use when the user wants to review pending team knowledge.
 argument-hint: "[area or member]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr merge:*), Bash(gh pr close:*), Bash(gh pr comment:*), Bash(homeostat explain:*), Bash(npx --yes homeostat@0.1.1 explain:*)
+allowed-tools: Read, Glob, Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr merge:*), Bash(gh pr close:*), Bash(gh pr comment:*), Bash(homeostat explain:*), Bash(npx --yes homeostat@0.1.2 explain:*)
 ---
 
 # Review the queue

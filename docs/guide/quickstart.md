@@ -6,7 +6,7 @@ You need Node 22.18 or later and a git repo for the knowledge base (KB). It can 
 
 ```sh
 git clone git@github.com:your-org/team-kb.git && cd team-kb
-npx --yes homeostat@0.1.1 init --member your-id --handle @your-github-user
+npx --yes homeostat@0.1.2 init --member your-id --handle @your-github-user
 ```
 
 `init` writes `homeostat.yaml`, `knowledge/core/`, and CI jobs for your git host (GitHub Actions or Bitbucket Pipelines):
@@ -37,14 +37,14 @@ sources:
 Then generate CODEOWNERS, so each area's owners review its changes:
 
 ```sh
-npx --yes homeostat@0.1.1 codeowners
-npx --yes homeostat@0.1.1 validate
+npx --yes homeostat@0.1.2 codeowners
+npx --yes homeostat@0.1.2 validate
 ```
 
 ## 3. Write a first rule
 
 ```sh
-npx --yes homeostat@0.1.1 learn --area integrations \
+npx --yes homeostat@0.1.2 learn --area integrations \
   --title "Use the shared retry helper for partner calls" \
   --rule "Wrap every outbound partner call in withRetry() from @acme/http-client." \
   --why "Hand-rolled retries skipped the request-id header partners ask for."
