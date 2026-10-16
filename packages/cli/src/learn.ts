@@ -203,9 +203,9 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   frontmatter.score = score(frontmatter, { config }).score;
   const text = formatEntry(frontmatter, body);
 
-  const issues = validate({ ...files, [path]: text }).issues.filter(
-    (i) => i.file === path && i.severity === "error",
-  );
+  const found = validate({ ...files, [path]: text }).issues.filter((i) => i.file === path);
+  const issues = found.filter((i) => i.severity === "error");
+  const warnings = found.filter((i) => i.severity !== "error");
   if (issues.length > 0) {
     io.stdout(`${formatIssues(issues, io).text}nothing written\n`);
     return 1;
@@ -240,6 +240,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   io.stdout(
     `saved ${id} ${summary}: it applies to your sessions now, and tomorrow's daily run decides it for the team\n`,
   );
+  if (warnings.length) io.stdout(formatIssues(warnings, io).text);
   return 0;
 }
 
@@ -285,9 +286,9 @@ function learnDoc(
     if (e instanceof PatchError) throw new LearnError(e.message);
     throw e;
   }
-  const issues = validate({ ...files, [path]: text }).issues.filter(
-    (i) => i.file === path && i.severity === "error",
-  );
+  const found = validate({ ...files, [path]: text }).issues.filter((i) => i.file === path);
+  const issues = found.filter((i) => i.severity === "error");
+  const warnings = found.filter((i) => i.severity !== "error");
   if (issues.length > 0) {
     io.stdout(`${formatIssues(issues, io).text}nothing written\n`);
     return 1;
@@ -311,6 +312,7 @@ function learnDoc(
   io.stdout(
     `${what}: it applies to your sessions now, and tomorrow's daily run decides it for the team\n`,
   );
+  if (warnings.length) io.stdout(formatIssues(warnings, io).text);
   return 0;
 }
 

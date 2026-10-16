@@ -123,6 +123,31 @@ describe("pending lessons (automation, step 1)", () => {
     expect(stdout).toContain("knowledge/integrations/retry.md");
   });
 
+  test("learn shows warnings after saving, and validate checks pending lessons", async () => {
+    const dir = kb();
+    const saved = await run([
+      "learn",
+      "--dir",
+      dir,
+      "--author",
+      "dana",
+      "--area",
+      "integrations",
+      "--title",
+      "Ask about partner keys",
+      "--rule",
+      "Ask dana@example.com before rotating partner keys.",
+      "--why",
+      "She owns the vault.",
+    ]);
+    expect(saved.code).toBe(0);
+    expect(saved.stdout).toContain("saved ask-about-partner-keys");
+    expect(saved.stdout).toMatch(/warning.*email/i);
+    const checked = await run(["validate", dir]);
+    expect(checked.stdout).toMatch(/warning.*email/i);
+    expect(checked.stdout).toContain("(including 1 pending lesson from .homeostat/pending");
+  });
+
   test("flagging your own pending lesson takes it out of your sessions", async () => {
     const dir = kb();
     await run([
