@@ -115,9 +115,11 @@ export function runExplain(id: string, opts: QueryOptions, io: Io): number {
       opts.json
         ? `${JSON.stringify({ ...entry.frontmatter, sections: entry.sections }, null, 2)}\n`
         : `${explainEntry(entry, config)}\n${
-            pendingIds.has(id)
-              ? "Pending in this clone: it applies to your sessions now; the next daily run decides it for the team.\n"
-              : ""
+            !pendingIds.has(id)
+              ? ""
+              : entry.frontmatter.flags?.length
+                ? "Pending in this clone, flagged: it is out of your sessions until the next daily run takes the flag to the team.\n"
+                : "Pending in this clone: it applies to your sessions now; the next daily run decides it for the team.\n"
           }`,
     );
     return 0;

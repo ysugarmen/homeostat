@@ -116,6 +116,10 @@ describe("pending lessons (automation, step 1)", () => {
     expect(await session(dir, "services/integrations/a.ts")).toContain(id);
     const flagged = await run(["flag", id, "--dir", dir, "--by", "lee", "--reason", "it moved"]);
     expect(flagged.stdout).toContain("it no longer applies to your sessions");
+    const explained = await run(["explain", "--dir", dir, id]);
+    expect(explained.stdout).toContain(
+      "Pending in this clone, flagged: it is out of your sessions",
+    );
     expect(await session(dir, "services/integrations/a.ts")).not.toContain(id);
   });
 });
