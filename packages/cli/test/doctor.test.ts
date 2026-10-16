@@ -27,6 +27,11 @@ function kb(version: string) {
     join(dir, ".github/workflows/homeostat.yml"),
     `- run: npx --yes ${version} validate\n`,
   );
+  // The deep-dive workflow names itself "homeostat deep-dive" twice; only the npx line runs it.
+  writeFileSync(
+    join(dir, ".github/workflows/homeostat-deep-dive.yml"),
+    `name: homeostat deep-dive\n      - run: |\n          git config user.name "homeostat deep-dive"\n      - run: npx --yes ${version} deep-dive\n`,
+  );
   return dir;
 }
 
@@ -102,7 +107,9 @@ describe("homeostat doctor --security (T8)", () => {
     );
     expect(stdout).toContain("! the KB repo acme/team-kb is public");
     expect(stdout).toContain("! no CODEOWNERS file");
-    expect(stdout).toContain("3 to fix, 2 to review");
+    // Once for the deep-dive workflow's npx line, never for its name or git user lines.
+    expect(stdout.split("homeostat-deep-dive.yml runs").length - 1).toBe(1);
+    expect(stdout).toContain("4 to fix, 2 to review");
   });
 
   test("the public check never sends the token", async () => {

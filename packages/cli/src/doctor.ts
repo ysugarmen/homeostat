@@ -134,8 +134,10 @@ function pinnedVersions(root: string): Check[] {
   const checks: Check[] = [];
   for (const path of ci) {
     const text = readFileSync(join(root, path), "utf8");
+    // Only command lines (npx, dlx, a run: step or a script list item): a job's `name:` or a
+    // `git config user.name "homeostat deep-dive"` line reads the same but runs nothing.
     for (const m of text.matchAll(
-      /\bhomeostat(@[^\s"']*)?\s+(validate|daily|curate|deep-dive|export)\b/g,
+      /(?:\bnpx(?:\s+(?:--yes|-y))?|\bdlx|\brun:|^\s*-)\s+homeostat(@[^\s"']*)?\s+(validate|daily|curate|deep-dive|digest|export)\b/gm,
     )) {
       const version = m[1]?.slice(1);
       if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
@@ -186,9 +188,9 @@ export async function securityReport(root: string, config: Config, io: Io): Prom
     ...access,
     am.enabled
       ? info(
-          `auto-merge: on for review feedback scoring ${config.scoring.autoMergeThreshold}+ with a code change and no findings; ${am.areas.length ? `areas ${am.areas.join(", ")}` : "all areas"}${am.excludeAreas.length ? ` except ${am.excludeAreas.join(", ")}` : ""}; at most ${am.maxPerRun} per run`,
+          `the daily run merges lessons at confidence ${config.scoring.confidence.accept}+ (${config.scoring.confidence.coreAccept}+ for core), declines below ${config.scoring.confidence.decline}, and asks a reviewer in between; risky content, conflicts and document edits always go to a reviewer; ${am.areas.length ? `areas ${am.areas.join(", ")}` : "all areas"}${am.excludeAreas.length ? ` except ${am.excludeAreas.join(", ")}` : ""}`,
         )
-      : ok("auto-merge is off: every entry needs a reviewer"),
+      : ok("auto-merge is off: the daily run sends every lesson to a reviewer"),
     existsSync(join(root, ".github/CODEOWNERS")) || existsSync(join(root, "CODEOWNERS"))
       ? ok("CODEOWNERS routes each area to its reviewers")
       : warn("no CODEOWNERS file: run homeostat codeowners"),
