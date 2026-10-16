@@ -95,6 +95,34 @@ describe("pending lessons (automation, step 1)", () => {
     ).not.toContain("flags:");
   });
 
+  test("status reports a pending copy under another file name as a duplicate id", async () => {
+    const dir = kb();
+    await run([
+      "learn",
+      "--dir",
+      dir,
+      "--author",
+      "dana",
+      "--area",
+      "integrations",
+      "--title",
+      "Use the shared retry helper for partner calls",
+      "--rule",
+      "Wrap every partner API call in withRetry() from services/integrations/http.ts.",
+      "--why",
+      "Partner APIs time out; hand-rolled retries skipped the request-id header.",
+    ]);
+    const pending = join(dir, ".homeostat/pending/knowledge/integrations");
+    const text = readFileSync(
+      join(pending, "use-the-shared-retry-helper-for-partner-calls.md"),
+      "utf8",
+    );
+    writeFileSync(join(pending, "retry.md"), text);
+    const { stdout } = await run(["status", "--dir", dir]);
+    expect(stdout).toMatch(/- Problems: \d+, including pending lessons/);
+    expect(stdout).toContain("knowledge/integrations/retry.md");
+  });
+
   test("flagging your own pending lesson takes it out of your sessions", async () => {
     const dir = kb();
     await run([

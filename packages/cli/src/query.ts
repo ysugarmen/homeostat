@@ -42,6 +42,7 @@ function load(opts: QueryOptions, io: Io, view: { inForce?: boolean } = {}) {
   );
   return {
     root,
+    issues: kb.issues,
     config: kb.config,
     entries: kb.entries.map((e) => e.entry),
     docs: kb.docs,
@@ -155,7 +156,7 @@ export function runList(opts: QueryOptions & { area?: string; status?: string },
 
 export function runStatus(opts: QueryOptions & { days?: string }, io: Io): number {
   return guard(io, () => {
-    const { root, config, entries, docs } = load(opts, io);
+    const { root, config, entries, docs, issues } = load(opts, io);
     const days = opts.days ? Number(opts.days) : 7;
     const now = io.now?.() ?? new Date();
     // The report counts its own window; document decay looks back 90 days.
@@ -163,6 +164,16 @@ export function runStatus(opts: QueryOptions & { days?: string }, io: Io): numbe
       since: new Date(now.getTime() - Math.max(days, 90) * 86_400_000).toISOString(),
     });
     io.stdout(`${kbReport(entries, config, { days, now, events, docs })}\n`);
+    // Includes pending lessons, which CI's validate never sees: say so here, before the daily run.
+    const errors = issues.filter((i) => i.severity === "error");
+    if (errors.length) {
+      io.stdout(
+        `- Problems: ${errors.length}, including pending lessons\n${errors
+          .slice(0, 5)
+          .map((i) => `  ${i.file ?? ""}: ${i.message}\n`)
+          .join("")}`,
+      );
+    }
     return 0;
   });
 }
