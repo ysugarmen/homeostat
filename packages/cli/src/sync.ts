@@ -81,7 +81,9 @@ const idOf = (path: string) => path.split("/").at(-1)?.replace(/\.md$/, "") ?? p
 
 export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   const root = resolve(opts.dir ?? io.env?.HOMEOSTAT_DIR ?? ".");
+  let said = false;
   const say = (s: string) => {
+    said = true;
     if (!opts.quiet) io.stdout(s);
   };
   const config = validate(readKbFiles(root)).config;
@@ -192,6 +194,17 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   }
 
   for (const n of notices) say(`${n.text}\n`);
+  // A sync by hand that changed nothing still says so, rather than printing nothing.
+  if (!said) {
+    const count = Object.keys(readPendingFiles(root)).length;
+    say(
+      !isMember
+        ? `up to date with ${base}; "${member}" is not a member in homeostat.yaml, so lessons stay local\n`
+        : count
+          ? `up to date: ${count} pending lesson(s) already on ${candidatesBranch(member)}\n`
+          : `up to date with ${base}; no pending lessons\n`,
+    );
+  }
   writeSyncState(root, {
     lastSync: now,
     ...(lastHeartbeat ? { lastHeartbeat } : {}),

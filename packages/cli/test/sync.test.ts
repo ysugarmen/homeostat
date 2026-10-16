@@ -133,8 +133,10 @@ describe("homeostat sync (automation, step 2)", () => {
       t.g(t.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json"),
     );
     expect(heartbeat).toMatchObject({ member: "lee", pending: 1, behind: 0 });
-    // Nothing changed: a second sync pushes nothing.
-    expect((await run(["sync", "--dir", t.lee])).stdout).not.toContain("sent");
+    // Nothing changed: a second sync pushes nothing, and says so.
+    const again = (await run(["sync", "--dir", t.lee])).stdout;
+    expect(again).not.toContain("sent");
+    expect(again).toContain("up to date: 1 pending lesson(s) already on candidates/lee");
   });
 
   test("after the daily run merges a lesson, sync pulls it, clears it, and the next session says so", async () => {
