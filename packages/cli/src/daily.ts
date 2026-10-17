@@ -242,7 +242,12 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       (l) => l !== doc && l.kind === "doc" && l.path === doc.path && l.member === doc.member,
     );
     if (!mine) continue;
-    const merged = mergeText(onBase(doc.path) ?? "", mine.text, doc.text);
+    // Each side stamps the document's `updated:` line with its own day; take the later one, or
+    // that single line would make every pair of edits from different days conflict.
+    const day = (t: string) => /^updated: (.*)$/m.exec(t)?.[1] ?? "";
+    const latest = [day(mine.text), day(doc.text)].sort().at(-1) ?? "";
+    const stamp = (t: string) => (latest ? t.replace(/^updated: .*$/m, `updated: ${latest}`) : t);
+    const merged = mergeText(onBase(doc.path) ?? "", stamp(mine.text), stamp(doc.text));
     lessons.splice(lessons.indexOf(doc), 1);
     if (merged === undefined) {
       mine.reason = `document edits go to the owning team; a section patch from review (${doc.url ?? "a review thread"}) touched the same lines and was left out`;

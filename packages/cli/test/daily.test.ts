@@ -326,18 +326,21 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
 
   test("a pending document edit and a review patch to the same document become one change", async () => {
     const t = team();
-    await run([
-      "learn",
-      "--dir",
-      t.lee,
-      "--doc",
-      "integrations/partner-calls",
-      "--section",
-      "timeouts",
-      "--append",
-      "--text",
-      "Booking confirmation waits up to 30 seconds.",
-    ]);
+    await run(
+      [
+        "learn",
+        "--dir",
+        t.lee,
+        "--doc",
+        "integrations/partner-calls",
+        "--section",
+        "timeouts",
+        "--append",
+        "--text",
+        "Booking confirmation waits up to 30 seconds.",
+      ],
+      { now: () => new Date("2026-10-15T17:00:00Z") },
+    ); // the day before the run: dates differ
     await run(["sync", "--dir", t.lee]);
     const patcher: DocPatcher = {
       propose: async () => ({
@@ -363,5 +366,6 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     );
     expect(doc).toContain("Booking confirmation waits up to 30 seconds.");
     expect(doc).toContain("Wrap partner calls in withRetry().");
+    expect(doc).toContain("updated: 2026-10-16");
   });
 });
