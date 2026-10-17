@@ -182,7 +182,7 @@ function healthRow(h: SyncHealth): string {
   const kb = !hb ? "—" : hb.behind > 0 ? `${hb.behind} behind` : "current";
   const t = h.today;
   const outcome = t
-    ? `${t.merged} merged · ${t.review} to review · ${t.declined} declined${t.mergeError ? " · merge refused" : ""}`
+    ? `${t.merged} merged, ${t.review} to review, ${t.declined} declined${t.mergeError ? ", merge refused" : ""}`
     : "—";
   return `<tr><td class="mono">${esc(h.member)}</td><td>${esc(h.role)}</td><td><span class="lamp ${lamp}" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-right:6px"></span>${esc(state)}</td><td class="num">${age(h.ageHours)}</td><td class="mono">${esc(kb)}</td><td class="num">${hb?.pending ?? "—"}</td><td class="mono">${esc(hb?.version ?? "—")}</td><td>${esc(outcome)} ${prLink(t?.dailyPr, "daily")} ${prLink(t?.reviewPr, "review")}</td></tr>`;
 }
@@ -205,7 +205,7 @@ export function automationPage(v: AutomationView): string {
   }));
   return `<div class="grid">
 <section class="panel span-8" aria-labelledby="last"><h2 id="last">Last daily run</h2>
-${r ? `<p class="lede mono">${esc(r.at.replace("T", " ").slice(0, 16))} UTC</p>` : ""}
+${r ? `<p class="lede">${esc(r.at.replace("T", " ").slice(0, 16))} UTC</p>` : ""}
 <div class="stats" style="--cols: 4">${stat(total("merged"), "merged")}${stat(total("review"), "to review")}${stat(total("declined"), "declined")}${stat(r?.settled ?? 0, "settled by reviewers")}</div>
 ${daily.length > 1 ? `<div style="margin-top:14px"><span class="label">Lessons decided per day</span>${columns(daily, { title: "Lessons decided per day", labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Lessons"])}</div>` : ""}
 ${r?.skipped?.length ? `<details style="margin-top:12px"><summary>${r.skipped.length} review thread${r.skipped.length === 1 ? "" : "s"} read with no lesson</summary><ul>${r.skipped.map((s) => `<li>${prLink(s.url, s.url.replace(/^https:\/\/[^/]+\//, ""))}: ${esc(s.reason)}</li>`).join("")}</ul></details>` : ""}</section>
@@ -265,6 +265,11 @@ export function lamps(
   const last = v.lastRun;
   const ageH = last ? (now.getTime() - Date.parse(last.at)) / 3_600_000 : undefined;
   const refused = last?.members.some((m) => m.mergeError || m.reviewError);
+  const when = (iso: string) => {
+    const days = Math.floor((now.getTime() - Date.parse(iso)) / 86_400_000);
+    return `${days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`} at ${hhmm(iso)}`;
+  };
+  const next = nextRun ? ` Next at ${hhmm(nextRun)} UTC.` : "";
   const daily: Lamp = {
     key: "daily",
     label: "Daily run",
@@ -272,14 +277,18 @@ export function lamps(
     ...(!last
       ? {
           state: "off",
-          value: "none yet",
-          detail: nextRun ? `first at ${hhmm(nextRun)} UTC` : "not scheduled here",
+          value: "Not run yet",
+          detail: nextRun ? `First run at ${hhmm(nextRun)} UTC.` : "Not scheduled here.",
         }
-      : {
-          state: (ageH ?? 0) > 30 ? "critical" : refused ? "warning" : "good",
-          value: (ageH ?? 0) > 30 ? "late" : refused ? "needs a look" : "ok",
-          detail: `last ${last.at.slice(5, 10)} ${hhmm(last.at)}${nextRun ? ` · next ${hhmm(nextRun)}` : ""} UTC`,
-        }),
+      : (ageH ?? 0) > 30
+        ? { state: "critical", value: "Late", detail: `Last ran ${when(last.at)}.${next}` }
+        : refused
+          ? {
+              state: "warning",
+              value: "Needs a look",
+              detail: `The host refused a merge or a review request ${when(last.at)}.`,
+            }
+          : { state: "good", value: "Steady", detail: `Ran ${when(last.at)}.${next}` }),
   };
   const overdue = v.queue.filter((q) => q.overdue).length;
   const oldest = v.queue[0];
@@ -288,10 +297,12 @@ export function lamps(
     label: "Review queue",
     href: "/automation#queue",
     state: !v.present ? "off" : overdue ? "critical" : v.queue.length ? "warning" : "good",
-    value: String(v.queue.length),
-    detail: !v.queue.length
-      ? "nothing waiting"
-      : `oldest ${Math.floor(oldest?.ageDays ?? 0)}d${overdue ? ` · ${overdue} overdue` : ""}`,
+    value: !v.present ? "Unknown" : v.queue.length ? `${v.queue.length} waiting` : "Clear",
+    detail: !v.present
+      ? "No daily run recorded yet."
+      : !v.queue.length
+        ? "Nothing needs a reviewer."
+        : `The oldest has waited ${Math.floor(oldest?.ageDays ?? 0)} days${overdue ? `, ${overdue} past the reminder` : ""}.`,
   };
   const syncing = v.health.filter((h) => h.state === "ok").length;
   const silent = v.health.filter((h) => h.state !== "ok").map((h) => h.member);
@@ -306,17 +317,20 @@ export function lamps(
         : syncing === 0
           ? "critical"
           : "warning",
-    value: `${syncing}/${v.health.length}`,
-    detail: silent.length ? `not syncing: ${silent.join(", ")}` : "everyone current",
+    value: `${syncing} of ${v.health.length}`,
+    detail: silent.length
+      ? `${silent.join(", ")} ${silent.length === 1 ? "has" : "have"} not synced in two days.`
+      : "Everyone's clone is current.",
   };
   const pct = Math.round(kb.stability * 100);
+  const issues = kb.flagged + kb.disputed;
   const kbLamp: Lamp = {
     key: "kb",
     label: "Knowledge",
     href: "/entries",
     state: kb.accepted === 0 ? "off" : pct >= 80 ? "good" : pct >= 50 ? "warning" : "critical",
-    value: `${pct}%`,
-    detail: `${kb.accepted} rules in force${kb.flagged + kb.disputed ? ` · ${kb.flagged + kb.disputed} disputed or flagged` : ""}`,
+    value: kb.accepted === 0 ? "Empty" : `${pct}% sound`,
+    detail: `${kb.accepted} ${kb.accepted === 1 ? "rule" : "rules"} in force${issues ? `, ${issues} flagged or disputed` : ""}.`,
   };
   return [daily, queue, sync, kbLamp];
 }

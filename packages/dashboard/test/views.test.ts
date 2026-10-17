@@ -1,6 +1,6 @@
 import { parseConfig, parseEntry } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
-import { entryPage, eventsPage, schedule } from "../src/views.ts";
+import { entryPage, eventsPage, gauge, schedule } from "../src/views.ts";
 
 describe("schedule", () => {
   test("common cron shapes read as words; anything else is shown as is", () => {
@@ -59,5 +59,17 @@ Partners change shapes weekly and the gateway schema would lag.
     expect(html).toContain('<span class="label">Proposal</span>');
     expect(html).toContain('<span class="label">Why not</span>');
     expect(html).not.toContain('<span class="label">Rule</span>');
+  });
+});
+
+describe("gauge", () => {
+  test("the needle stands upright when steady and swings further the further things drift", () => {
+    expect(gauge("good")).toContain("rotate(0 60 66)");
+    expect(gauge("warning")).toContain("rotate(30 60 66)");
+    expect(gauge("critical")).toContain("rotate(62 60 66)");
+    expect(gauge("off")).toContain("rotate(-66 60 66)");
+    expect(gauge("warning", 120, "Developer sync: needs attention")).toContain(
+      'aria-label="Developer sync: needs attention"',
+    );
   });
 });

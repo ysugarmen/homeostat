@@ -16,210 +16,242 @@ import { currentValue, type Field, SECTIONS, type Section } from "./settings.ts"
 
 const CSS = `
 :root {
-  /* Dark first: a console is read at a glance, often beside an editor. Light on request. */
-  color-scheme: dark;
-  --paper: #0b1120;
-  --surface: #111a2e;
-  --inset: #0d1526;
-  --ink: #f8fafc;
-  --ink-2: #cbd5e1;
-  --ink-3: #94a3b8;
-  --rule: #233049;
-  --rule-strong: #334155;
-  --grid: rgba(148, 163, 184, 0.045);
-  --series: #60a5fa;
-  --series-soft: #1e3a5f;
-  --good: #22c55e;
-  --warning: #f59e0b;
-  --critical: #ef4444;
-  --focus: #93c5fd;
-  --mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-  --sans: "IBM Plex Sans", "Avenir Next", "Segoe UI Variable Text", "Helvetica Neue", sans-serif;
-  --fs-xs: 12px; --fs-sm: 14px; --fs-md: 16px; --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 32px;
-}
-:root[data-theme="light"] {
   color-scheme: light;
-  --paper: #f1f5f9;
-  --surface: #ffffff;
-  --inset: #f8fafc;
-  --ink: #0f172a;
-  --ink-2: #334155;
-  --ink-3: #64748b;
-  --rule: #e2e8f0;
-  --rule-strong: #cbd5e1;
-  --grid: rgba(15, 23, 42, 0.035);
-  --series: #2563eb;
-  --series-soft: #dbeafe;
-  --good: #15803d;
-  --warning: #b45309;
-  --critical: #dc2626;
-  --focus: #2563eb;
+  --paper: #eceff1;
+  --sheet: #fafbfb;
+  --surface: #fafbfb;
+  --ink: #18222c;
+  --ink-2: #56636f;
+  --ink-3: #6f7c87;
+  --rule: #c9d1d7;
+  --rule-soft: #dde3e7;
+  --brass: #a9772a;
+  --trough: #d5e0e5;
+  --series: #3d5a73;
+  --series-soft: #d3dde6;
+  --good: #2e6b5a;
+  --warning: #b0621c;
+  --critical: #b03a3a;
+  --focus: #a9772a;
+  --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+  --sans: "Gill Sans", "Gill Sans MT", Seravek, Calibri, "Trebuchet MS", sans-serif;
+  --code: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0f161c;
+    --sheet: #151f27;
+    --surface: #151f27;
+    --ink: #e2e8ec;
+    --ink-2: #a9b5be;
+    --ink-3: #8794a0;
+    --rule: #2b3843;
+    --rule-soft: #22303a;
+    --brass: #d6a352;
+    --trough: #223744;
+    --series: #8fb2cf;
+    --series-soft: #2a4357;
+    --good: #5fb39a;
+    --warning: #e0954e;
+    --critical: #e77b7b;
+    --focus: #d6a352;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0f161c;
+  --sheet: #151f27;
+  --surface: #151f27;
+  --ink: #e2e8ec;
+  --ink-2: #a9b5be;
+  --ink-3: #8794a0;
+  --rule: #2b3843;
+  --rule-soft: #22303a;
+  --brass: #d6a352;
+  --trough: #223744;
+  --series: #8fb2cf;
+  --series-soft: #2a4357;
+  --good: #5fb39a;
+  --warning: #e0954e;
+  --critical: #e77b7b;
+  --focus: #d6a352;
 }
 * { box-sizing: border-box; }
-body {
-  margin: 0;
-  background-color: var(--paper);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 24px 24px;
-  color: var(--ink);
-  font: var(--fs-md)/1.5 var(--sans);
-}
-.mono, code, pre, td.num, .num, .chip, .stat .n, nav a, .label { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-h1, h2, h3 { font-family: var(--sans); font-weight: 600; letter-spacing: -0.01em; margin: 0; }
-h1 { font-size: var(--fs-2xl); }
-h2 { font-size: var(--fs-lg); margin-bottom: 10px; }
-a { color: var(--series); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.shell { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
-header.top { border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 18px; display: grid; gap: 12px; }
-.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
-.brand .word { font: 600 var(--fs-md) var(--mono); letter-spacing: 0.28em; }
-.brand .mark { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--ink-2); position: relative; flex: none; }
-.brand .mark::after { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 1.5px; background: var(--good); transform-origin: 0 50%; transform: rotate(-35deg); }
-.brand .sub { color: var(--ink-3); font: var(--fs-sm) var(--mono); }
-.strip.compact { display: flex; flex-wrap: wrap; gap: 6px; }
-.strip.compact a { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; color: var(--ink-2); font: var(--fs-xs) var(--mono); text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px 3px 8px; background: var(--surface); }
-.strip.compact a:hover { border-color: var(--ink-3); color: var(--ink); }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.55 var(--serif); font-variant-numeric: lining-nums tabular-nums; }
+code, .mono { font-family: var(--code); font-size: 0.86em; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: var(--sans); font-weight: 600; letter-spacing: 0; margin: 0; line-height: 1.2; }
+h2 { font-size: 22px; margin-bottom: 6px; }
+h3 { font-size: 17px; }
+a { color: var(--ink); text-decoration-color: var(--brass); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+a:hover { color: var(--brass); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 2px; }
+a, button, summary, select, input[type=checkbox] { cursor: pointer; }
+.shell { max-width: 1100px; margin: 0 auto; padding: 28px 24px 72px; }
+@media (max-width: 600px) { .shell { padding: 20px 16px 56px; } }
+
+/* Header: the wordmark, the four small needles, then the sections. */
+header.top { display: grid; gap: 14px; padding-bottom: 14px; margin-bottom: 28px; border-bottom: 1px solid var(--rule); }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 12px; text-decoration: none; color: var(--ink); }
+.brand .word { font: 600 26px/1 var(--sans); letter-spacing: 0.01em; }
+.brand .sub { color: var(--ink-2); font: 15px var(--sans); }
+.brand .mark { display: none; }
+.strip.compact { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.strip.compact a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--ink-2); font: 15px var(--sans); }
+.strip.compact a:hover { color: var(--ink); }
 .strip.compact b { color: var(--ink); font-weight: 600; }
-.console { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
-@media (max-width: 860px) { .console { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.cell { background: var(--surface); padding: 14px 16px 16px; display: grid; gap: 6px; text-decoration: none; color: var(--ink); position: relative; }
-.cell:hover { background: color-mix(in srgb, var(--surface) 92%, var(--ink)); }
-.cell .k { display: flex; align-items: center; gap: 8px; font: var(--fs-xs) var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); }
-.cell .v { font: 600 var(--fs-2xl)/1 var(--mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.cell .d { color: var(--ink-2); font-size: var(--fs-sm); }
-.cell.critical { box-shadow: inset 0 3px 0 var(--critical); } .cell.warning { box-shadow: inset 0 3px 0 var(--warning); } .cell.good { box-shadow: inset 0 3px 0 var(--good); }
-.mini { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 4px 0 12px; }
-.mini .n { font: 600 24px/1.1 var(--mono); display: block; font-variant-numeric: tabular-nums; }
-.mini .k { color: var(--ink-3); font-size: var(--fs-xs); }
-.legend { display: flex; gap: 14px; font: var(--fs-xs) var(--mono); color: var(--ink-3); margin: -4px 0 8px; }
-.sym { display: inline-block; width: 1.2em; text-align: center; }
-.sym.learn { color: var(--good); } .sym.alert { color: var(--critical); } .sym.run { color: var(--series); }
-nav { display: flex; flex-wrap: wrap; gap: 4px 14px; }
-nav a { color: var(--ink-2); text-decoration: none; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 0; border-bottom: 1px solid transparent; }
-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
-.grid { display: grid; gap: 16px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
-.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; grid-column: span 12; min-width: 0; }
+nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+nav a { color: var(--ink-2); text-decoration: none; font: 16px var(--sans); padding: 2px 0; border-bottom: 2px solid transparent; }
+nav a:hover { color: var(--ink); }
+nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--brass); }
+
+/* Sections sit on the paper, separated by space and one rule; only grouped data gets a sheet. */
+.grid { display: grid; gap: 40px 48px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.panel { grid-column: span 12; min-width: 0; }
+.panel + .panel, .grid > .panel { border-top: 1px solid var(--rule); padding-top: 18px; }
 .span-4 { grid-column: span 4; } .span-6 { grid-column: span 6; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
-@media (max-width: 860px) { .span-4, .span-6, .span-8 { grid-column: span 12; } }
-.label { color: var(--ink-3); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; }
-.lede { color: var(--ink-2); margin: 4px 0 14px; max-width: 70ch; }
-.stats { display: grid; grid-template-columns: repeat(var(--cols, 3), 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
-.stat { background: var(--surface); padding: 12px 14px; }
+@media (max-width: 860px) { .span-4, .span-6, .span-8 { grid-column: span 12; } .grid { column-gap: 0; } }
+.lede { color: var(--ink-2); margin: 2px 0 14px; max-width: 64ch; }
+.label { display: block; color: var(--ink-2); font: 15px var(--sans); margin: 14px 0 4px; }
+.muted { color: var(--ink-2); }
+.empty { color: var(--ink-2); font-style: italic; }
+
+/* The homeostat units: the one memorable thing. */
+.units-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+@media (max-width: 860px) { .units-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hunit { display: grid; justify-items: start; align-content: start; gap: 2px; padding: 18px 20px 20px; text-decoration: none; color: var(--ink); border-left: 1px solid var(--rule-soft); }
+.hunit:first-child { border-left: 0; padding-left: 0; }
+@media (max-width: 860px) { .hunit:nth-child(3) { border-left: 0; padding-left: 0; } .hunit:nth-child(n+3) { border-top: 1px solid var(--rule-soft); } }
+.hunit:hover .gauge .needle { stroke: var(--ink); }
+.hunit .name { font: 600 17px var(--sans); margin-top: 6px; }
+.hunit .reading { font: 28px/1.15 var(--serif); }
+.hunit .reading.good { color: var(--good); } .hunit .reading.warning { color: var(--warning); } .hunit .reading.critical { color: var(--critical); } .hunit .reading.off { color: var(--ink-3); }
+.hunit .detail { color: var(--ink-2); font-size: 15px; max-width: 30ch; }
+.gauge { display: block; overflow: visible; }
+.gauge .trough { fill: none; stroke: var(--trough); stroke-linecap: round; }
+.gauge .rim { fill: none; stroke: var(--ink-3); stroke-width: 1; }
+.gauge .zero { stroke: var(--ink-3); stroke-width: 1.2; }
+.gauge .needle { stroke: var(--brass); stroke-width: 2.4; stroke-linecap: round; transition: stroke .2s; }
+.gauge .pivot { fill: var(--ink); }
+.gauge.off .needle { stroke: var(--ink-3); }
+
+/* Small multiples of data. */
+.stats, .mini { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 12px 28px; margin: 8px 0 12px; }
 @media (max-width: 600px) { .stats { --cols: 2 !important; } }
-.recent { table-layout: fixed; font-size: var(--fs-sm); }
-.recent td { padding: 5px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.recent .when { width: 116px; color: var(--ink-3); }
-.recent .what { width: 118px; color: var(--ink-2); }
-.stat .n { font-size: var(--fs-xl); line-height: 1.1; display: block; }
-.stat .k { color: var(--ink-2); font-size: var(--fs-sm); }
-.units { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-@media (max-width: 600px) { .units { grid-template-columns: 1fr; } }
-.unit { border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; display: grid; gap: 4px; }
-.unit .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.unit .head h3 { white-space: nowrap; }
-.unit .head .state { flex-basis: 100%; padding-left: 18px; }
-.lamp { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); color: var(--ink-3); flex: none; }
-.lamp { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent), 0 0 10px color-mix(in srgb, currentColor 45%, transparent); }
-.lamp.off { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink-3) 15%, transparent); }
-.lamp.good { background: var(--good); color: var(--good); } .lamp.warning { background: var(--warning); color: var(--warning); } .lamp.critical { background: var(--critical); color: var(--critical); }
-.state { font-size: var(--fs-sm); color: var(--ink-2); }
-.chart { width: 100%; height: auto; display: block; overflow: visible; }
-.chart path { fill: var(--series); }
-.chart .hit { fill: transparent; }
-.chart .m:hover path { fill: color-mix(in srgb, var(--series) 80%, var(--ink)); }
-.chart .base { stroke: var(--rule); stroke-width: 1; }
-.chart text { font: var(--fs-xs) var(--mono); fill: var(--ink-3); }
-.chart text.v { fill: var(--ink-2); }
-.dial { width: 100%; max-width: 260px; display: block; margin: 0 auto; }
-.dial .track { fill: none; stroke: var(--rule); stroke-width: 10; stroke-linecap: round; }
-.dial .fill { fill: none; stroke: var(--series); stroke-width: 10; stroke-linecap: round; }
-.dial .tick { stroke: var(--ink-3); stroke-width: 1; } .dial .tick.major { stroke: var(--ink-2); stroke-width: 1.5; }
-.dial .needle { stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
-.dial .hub { fill: var(--ink); }
-.dial-value { font: 600 var(--fs-xl) var(--mono); fill: var(--ink); }
-.dial-caption { font: var(--fs-xs) var(--mono); fill: var(--ink-3); text-transform: uppercase; letter-spacing: 0.02em; }
-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-th { text-align: left; font: var(--fs-xs) var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 500; border-bottom: 1px solid var(--rule); padding: 6px 8px; }
-td { border-bottom: 1px solid var(--rule); padding: 7px 8px; vertical-align: top; }
+.stat .n, .mini .n { display: block; font: 30px/1.1 var(--serif); }
+.stat .k, .mini .k { color: var(--ink-2); font: 15px var(--sans); }
+.console { display: none; }
+
+/* Tables: ruled lists, no boxes. */
+table { width: 100%; border-collapse: collapse; font-size: 16px; }
+th { text-align: left; font: 600 14px var(--sans); color: var(--ink-2); border-bottom: 1px solid var(--rule); padding: 6px 10px 6px 0; }
+td { border-bottom: 1px solid var(--rule-soft); padding: 8px 10px 8px 0; vertical-align: top; }
 tr:last-child td { border-bottom: 0; }
-.num { text-align: right; }
 .table-wrap { overflow-x: auto; }
 .table-wrap > table { min-width: 620px; }
-.chip { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); padding: 1px 7px; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); white-space: nowrap; }
-.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+.recent { table-layout: fixed; font-size: 15px; }
+.recent td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 6px 10px 6px 0; }
+.recent .when { width: 104px; color: var(--ink-2); }
+.recent .what { width: 150px; }
+.log { font-size: 15px; }
+.log:not(.recent) .when { white-space: nowrap; color: var(--ink-2); width: 1%; }
+.log:not(.recent) .what { white-space: nowrap; width: 1%; }
+.log .detail { overflow-wrap: anywhere; }
+.kind { font: 15px var(--sans); color: var(--ink-2); }
+.sym { display: inline-block; width: 1.3em; color: var(--ink-3); }
+.sym.learn { color: var(--good); } .sym.alert { color: var(--critical); } .sym.run { color: var(--series); }
+.legend { display: flex; gap: 18px; font: 15px var(--sans); color: var(--ink-2); margin: 0 0 6px; }
+.filters { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 15px var(--sans); margin: 0 0 12px; }
+.filters a { color: var(--ink-2); text-decoration: none; }
+.filters a[aria-current="page"] { color: var(--ink); border-bottom: 2px solid var(--brass); }
+
+/* State, always in words and shape as well as colour. */
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 15px var(--sans); color: var(--ink-2); white-space: nowrap; }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
 .chip.accepted::before { background: var(--good); } .chip.disputed::before { background: var(--critical); } .chip.candidate::before { background: var(--warning); }
-.muted { color: var(--ink-3); }
-.empty { color: var(--ink-3); font-style: italic; }
-.entry-head { display: grid; gap: 6px; margin: 6px 0 16px; }
-.entry-head h2 { font-size: var(--fs-xl); margin: 0; }
-.entry-head .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.tag { font: var(--fs-xs) var(--mono); color: var(--ink-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 7px; }
-.tag.no { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 45%, var(--rule)); }
-.statement { border-left: 3px solid var(--series); padding: 2px 0 2px 14px; margin: 0 0 14px; }
-.statement.rejected { border-left-color: var(--critical); }
-.statement .label { display: block; margin-bottom: 2px; }
-.statement p { margin: 0; max-width: 72ch; }
-.statement.rule p { font: var(--fs-lg)/1.5 var(--mono); color: var(--ink); }
-.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--rule); font-size: var(--fs-sm); }
-.facts dt { color: var(--ink-3); font: var(--fs-xs)/1.9 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; }
+.lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.lamp.good { background: var(--good); } .lamp.warning { background: var(--warning); } .lamp.critical { background: var(--critical); }
+.icon { flex: none; } .icon.good { color: var(--good); } .icon.warning { color: var(--warning); } .icon.critical { color: var(--critical); } .icon.off { color: var(--ink-3); }
+.state { font: 15px var(--sans); color: var(--ink-2); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tag { font: 15px var(--sans); color: var(--ink-2); border-bottom: 1px dotted var(--rule); }
+.tag.no { color: var(--critical); border-bottom-color: var(--critical); }
+
+/* Agent units on older pages. */
+.units { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 600px) { .units { grid-template-columns: 1fr; } }
+.unit { display: grid; gap: 4px; }
+.unit .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Charts. */
+.chart { width: 100%; max-width: 640px; height: auto; display: block; overflow: visible; }
+.chart path { fill: var(--series); }
+.chart .hit { fill: transparent; }
+.chart .m:hover path { fill: var(--brass); }
+.chart .base { stroke: var(--rule); stroke-width: 1; }
+.chart text { font: 13px var(--sans); fill: var(--ink-2); }
+.chart text.v { fill: var(--ink); }
+.dial { width: 100%; max-width: 220px; display: block; margin: 0 auto; }
+.dial .track { fill: none; stroke: var(--trough); stroke-width: 10; stroke-linecap: round; }
+.dial .fill { fill: none; stroke: var(--series); stroke-width: 10; stroke-linecap: round; }
+.dial .tick { stroke: var(--ink-3); stroke-width: 1; } .dial .tick.major { stroke: var(--ink-2); stroke-width: 1.5; }
+.dial .needle { stroke: var(--brass); stroke-width: 2.4; stroke-linecap: round; }
+.dial .hub { fill: var(--ink); }
+.dial-value { font: 26px var(--serif); fill: var(--ink); }
+.dial-caption { font: 14px var(--sans); fill: var(--ink-2); }
+details.table-view { margin-top: 6px; } details.table-view summary { color: var(--ink-2); font: 15px var(--sans); }
+
+/* Entry pages. */
+.entry-head { display: grid; gap: 6px; margin: 8px 0 18px; }
+.entry-head h2 { font-size: 30px; margin: 0; max-width: 32ch; }
+.entry-head .tags { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.statement { padding: 0; margin: 0 0 18px; max-width: 64ch; }
+.statement .label { margin: 0 0 2px; }
+.statement p { margin: 0; }
+.statement.rule p { font-size: 22px; line-height: 1.45; }
+.statement.rejected p { font-size: 22px; line-height: 1.45; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--critical) 60%, transparent); text-decoration-thickness: 1.5px; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 22px; margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--rule); }
+.facts dt { color: var(--ink-2); font: 15px/1.7 var(--sans); }
 .facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.reasons { list-style: none; padding: 0; margin: 0; }
-.reasons li { font: var(--fs-sm) var(--mono); }
+.reasons { list-style: none; padding: 0; margin: 2px 0 0; }
 .reasons .d { display: inline-block; width: 3ch; text-align: right; margin-right: 8px; }
 .reasons .d.pos { color: var(--good); } .reasons .d.neg { color: var(--critical); }
-.flag { border-left: 3px solid var(--warning); padding-left: 10px; margin: 4px 0; }
-.log { font-size: var(--fs-sm); }
-.log td { padding: 5px 8px; }
-.log:not(.recent) .when { white-space: nowrap; color: var(--ink-3); width: 1%; }
-.log:not(.recent) .what { white-space: nowrap; width: 1%; }
-.log .detail { color: var(--ink-2); overflow-wrap: anywhere; }
-.kind { font: var(--fs-xs) var(--mono); padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--ink-3) 14%, transparent); color: var(--ink-2); }
-.kind.learn { background: color-mix(in srgb, var(--good) 16%, transparent); }
-.kind.alert { background: color-mix(in srgb, var(--critical) 16%, transparent); }
-.kind.run { background: color-mix(in srgb, var(--series) 16%, transparent); }
-.filters { display: flex; flex-wrap: wrap; gap: 4px 12px; font: var(--fs-sm) var(--mono); margin: 0 0 12px; }
-.filters a[aria-current="page"] { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--ink); }
-pre.entry { white-space: pre-wrap; background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; font-size: var(--fs-sm); line-height: 1.55; }
-details.table-view { margin-top: 8px; } details.table-view summary { cursor: pointer; color: var(--ink-3); font: var(--fs-xs) var(--mono); }
-.events { font: var(--fs-sm)/1.7 var(--mono); color: var(--ink-2); white-space: pre-wrap; margin: 0; overflow-x: auto; }
-form.settings { display: grid; gap: 14px; max-width: 760px; }
-.field { display: grid; grid-template-columns: 240px 1fr; gap: 6px 16px; align-items: start; }
+.flag { border-left: 3px solid var(--warning); padding-left: 12px; margin: 6px 0; }
+pre.entry { white-space: pre-wrap; }
+.events { white-space: pre-wrap; }
+
+/* Settings. */
+form.settings { display: grid; gap: 16px; max-width: 760px; }
+.field { display: grid; grid-template-columns: 240px 1fr; gap: 6px 18px; align-items: start; }
 @media (max-width: 700px) { .field { grid-template-columns: 1fr; } }
-.field label { padding-top: 6px; color: var(--ink-2); font-size: var(--fs-sm); }
-.field .help { grid-column: 2; color: var(--ink-3); font-size: var(--fs-sm); margin-top: -2px; }
+.field label { padding-top: 6px; color: var(--ink); font: 16px var(--sans); }
+.field .help { grid-column: 2; color: var(--ink-2); font-size: 15px; margin-top: -2px; }
 @media (max-width: 700px) { .field .help { grid-column: 1; } }
-input[type=text], input[type=number], select, textarea { font: var(--fs-sm) var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 5px; padding: 6px 8px; width: 100%; }
+input[type=text], input[type=number], select, textarea { font: 15px var(--code); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px; padding: 7px 9px; width: 100%; }
 textarea { min-height: 84px; resize: vertical; }
-.checks { display: flex; flex-wrap: wrap; gap: 6px 16px; padding-top: 6px; }
-.rows td { padding: 4px 6px; }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 18px; padding-top: 6px; }
+.rows td { padding: 4px 8px 4px 0; }
 .rows input[type=text] { min-width: 90px; }
 .rows select { min-width: 104px; }
-button { font: 600 var(--fs-sm) var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--surface); background: var(--ink); border: 0; border-radius: 5px; padding: 9px 16px; cursor: pointer; justify-self: start; }
-.notice { border: 1px solid var(--rule); border-left: 3px solid var(--good); background: var(--surface); padding: 10px 14px; border-radius: 4px; margin-bottom: 14px; }
+button { font: 600 16px var(--sans); color: var(--sheet); background: var(--ink); border: 0; border-radius: 3px; padding: 9px 18px; justify-self: start; }
+button:hover { background: var(--brass); }
+.notice { border-left: 3px solid var(--good); background: var(--sheet); padding: 10px 14px; margin-bottom: 16px; }
 .notice.error { border-left-color: var(--critical); }
 .notice ul { margin: 6px 0 0; padding-left: 18px; }
-footer { margin-top: 36px; color: var(--ink-3); font-size: var(--fs-sm); border-top: 1px solid var(--rule); padding-top: 12px; }
-.icon { flex: none; } .icon.good { color: var(--good); } .icon.warning { color: var(--warning); } .icon.critical { color: var(--critical); } .icon.off { color: var(--ink-3); }
-.cell .v { display: flex; align-items: center; gap: 10px; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-a, button, summary, select, input[type=checkbox] { cursor: pointer; }
-a.cell, .strip.compact a, nav a, .filters a { transition: background-color .18s ease, border-color .18s ease, color .18s ease; }
-a.cell:focus-visible, .strip.compact a:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.themes { display: flex; gap: 12px; margin-top: 8px; font: var(--fs-xs) var(--mono); text-transform: uppercase; letter-spacing: 0.06em; }
-.themes a { color: var(--ink-3); }
+footer { margin-top: 48px; color: var(--ink-2); font-size: 15px; border-top: 1px solid var(--rule); padding-top: 14px; max-width: 80ch; }
+.themes { display: flex; gap: 14px; margin-top: 8px; font: 15px var(--sans); }
+.themes a { color: var(--ink-2); }
 .themes a[aria-current="true"] { color: var(--ink); text-decoration: none; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+.dial .needle { transform-origin: 110px 104px; }
+/* One moment of motion: the needles settle into place, as the machine finds equilibrium. */
 @media (prefers-reduced-motion: no-preference) {
-  .dial .needle { transform-origin: 110px 104px; animation: settle 1.1s cubic-bezier(.2,.9,.2,1.15) both; }
-  @keyframes settle { from { transform: rotate(-90deg); } }
-  .panel { animation: rise .35s ease-out both; }
-  .grid > .panel:nth-child(2) { animation-delay: .04s; } .grid > .panel:nth-child(3) { animation-delay: .08s; } .grid > .panel:nth-child(4) { animation-delay: .12s; }
-  @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+  .gauge .needle, .dial .needle { transform-box: view-box; animation: settle 1.4s cubic-bezier(.25,1.6,.4,1) both; }
+  @keyframes settle { from { transform: rotate(var(--from, -40deg)); } }
 }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 `;
 
 const NAV: [string, string][] = [
@@ -257,7 +289,7 @@ export function layout(opts: {
 <body>
 <div class="shell">
 <header class="top">
-  <div class="bar"><a class="brand" href="/" aria-label="Homeostat overview"><span class="mark" aria-hidden="true"></span><span class="word">HOMEOSTAT</span><span class="sub" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}</span></a>${opts.status?.length ? `<div class="strip compact" aria-label="Status">${opts.status.map((l) => `<a href="${l.href}" title="${esc(`${l.label}: ${l.value} · ${l.detail}`)}">${stateIcon(l.state, 13)}${esc(l.label)} <b>${esc(l.value)}</b><span class="sr"> (${STATE_WORD[l.state]})</span></a>`).join("")}</div>` : ""}</div>
+  <div class="bar"><a class="brand" href="/" aria-label="Homeostat overview"><span class="word">Homeostat</span><span class="sub" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}</span></a>${opts.status?.length ? `<div class="strip compact" aria-label="Status">${opts.status.map((l) => `<a href="${l.href}" title="${esc(`${l.label}: ${l.detail}`)}">${gauge(l.state, 26)}${esc(l.label)} <b>${esc(l.value)}</b></a>`).join("")}</div>` : ""}</div>
   <nav aria-label="Sections">${NAV.map(([href, label]) => `<a href="${href}"${current(href) ? ' aria-current="page"' : ""}>${label}</a>`).join("")}</nav>
 </header>
 <main>${opts.body}</main>
@@ -302,7 +334,7 @@ const ROUTINE = new Set(["model-call", "mcp-call", "doc-injection"]);
 
 const eventRow = (e: Event, when: string) => {
   const detail = describeEvent(e);
-  return `<tr><td class="when mono">${esc(when)}</td><td class="what"><span class="sym ${KIND[e.type] ?? ""}" aria-hidden="true">${SYMBOL[KIND[e.type] ?? ""] ?? "·"}</span><span class="kind ${KIND[e.type] ?? ""}">${esc(e.type)}</span></td><td class="detail" title="${esc(detail)}">${esc(detail)}</td></tr>`;
+  return `<tr><td class="when">${esc(when)}</td><td class="what"><span class="sym ${KIND[e.type] ?? ""}" aria-hidden="true">${SYMBOL[KIND[e.type] ?? ""] ?? "·"}</span><span class="kind ${KIND[e.type] ?? ""}">${esc(e.type)}</span></td><td class="detail" title="${esc(detail)}">${esc(detail)}</td></tr>`;
 };
 
 function unit(a: AgentLiveness): string {
@@ -340,12 +372,36 @@ export function stateIcon(state: Lamp["state"], size = 16): string {
   return `<svg class="icon ${state}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shape}</svg>`;
 }
 
+/** How far the needle swings from upright for each state, in degrees. */
+const SWING: Record<Lamp["state"], number> = { good: 0, warning: 30, critical: 62, off: -66 };
+
+/**
+ * One homeostat unit: Ashby's trough of water with a needle on a pivot. Upright is steady; the
+ * further the needle swings, the further the loop has drifted from equilibrium.
+ */
+export function gauge(state: Lamp["state"], width = 120, title = ""): string {
+  const cx = 60;
+  const cy = 66;
+  const pt = (deg: number, r: number) => {
+    const a = (deg * Math.PI) / 180;
+    return `${(cx + r * Math.sin(a)).toFixed(1)},${(cy - r * Math.cos(a)).toFixed(1)}`;
+  };
+  const arc = (r: number) => `M${pt(-70, r)} A${r},${r} 0 0 1 ${pt(70, r)}`;
+  const swing = SWING[state];
+  const small = width < 60;
+  return `<svg class="gauge ${state}" width="${width}" height="${Math.round((width * 72) / 120)}" viewBox="0 0 120 72" role="img" aria-label="${esc(title || STATE_WORD[state])}">
+<path class="trough" d="${arc(48)}" stroke-width="${small ? 14 : 9}"/>${small ? "" : `<path class="rim" d="${arc(54)}"/>`}
+<line class="zero" x1="${cx}" y1="${cy - 58}" x2="${cx}" y2="${cy - 40}"/>
+<g transform="rotate(${swing} ${cx} ${cy})"><line class="needle" x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - 52}" style="transform-origin:${cx}px ${cy}px;--from:${swing > 0 ? -40 : 40}deg" stroke-width="${small ? 6 : 2.4}"/></g>
+<circle class="pivot" cx="${cx}" cy="${cy}" r="${small ? 7 : 3.5}"/></svg>`;
+}
+
 /** The console: four lamps, large, each a link to where its detail lives. */
 function consoleRow(ls: readonly Lamp[]): string {
-  return `<div class="console" aria-label="Status">${ls
+  return `<div class="units-row" aria-label="Status">${ls
     .map(
       (l) =>
-        `<a class="cell ${l.state}" href="${l.href}"><span class="k"><span class="lamp ${l.state}" aria-hidden="true"></span>${esc(l.label)}</span><span class="v">${esc(l.value)}${stateIcon(l.state, 22)}</span><span class="sr">${STATE_WORD[l.state]}</span><span class="d">${esc(l.detail)}</span></a>`,
+        `<a class="hunit" href="${l.href}">${gauge(l.state, 120, `${l.label}: ${STATE_WORD[l.state]}`)}<span class="name">${esc(l.label)}</span><span class="reading ${l.state}">${esc(l.value)}</span><span class="detail">${esc(l.detail)}</span></a>`,
     )
     .join("")}</div>`;
 }
@@ -376,26 +432,30 @@ export function overviewPage(
   const r = v.lastRun;
   const sum = (k: "merged" | "review" | "declined") =>
     r?.members.reduce((n, m) => n + m[k], 0) ?? 0;
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   const prs = (r?.members ?? []).flatMap((m) => [
-    ...(m.dailyPr ? [`<a href="${esc(m.dailyPr)}">${esc(m.member)} daily</a>`] : []),
-    ...(m.reviewPr ? [`<a href="${esc(m.reviewPr)}">${esc(m.member)} review</a>`] : []),
+    ...(m.dailyPr ? [`<a href="${esc(m.dailyPr)}">${esc(m.member)}'s daily PR</a>`] : []),
+    ...(m.reviewPr ? [`<a href="${esc(m.reviewPr)}">${esc(m.member)}'s review PR</a>`] : []),
   ]);
   const run = r
-    ? `<p class="lede mono">${esc(r.at.replace("T", " ").slice(0, 16))} UTC</p><div class="mini">${mini(sum("merged"), "merged")}${mini(sum("review"), "to review")}${mini(sum("declined"), "declined")}${mini(r.settled, "settled by reviewers")}</div>${prs.length ? `<p class="mono" style="font-size:12.5px">${prs.join(" · ")}</p>` : ""}`
-    : '<p class="empty">No daily run on record in this clone yet. It runs in the KB repo\'s CI and writes to the homeostat/state branch.</p>';
-  const agentLine = (a: AgentLiveness) =>
-    `<li><span class="lamp ${lampFor(a).cls || "off"}" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-right:8px"></span>${a.agent === "curator" ? "Daily run" : "Deep dive"} <span class="muted mono" style="margin-left:6px">${esc(schedule(a.schedule))}</span></li>`;
+    ? `<p class="lede">On ${esc(r.at.slice(0, 10))} at ${esc(r.at.slice(11, 16))} UTC the daily run merged ${plural(sum("merged"), "lesson")}, sent ${sum("review")} to a reviewer and declined ${sum("declined")}. Reviewers settled ${r.settled} from earlier runs.</p>${prs.length ? `<p>${prs.join(", ")}</p>` : ""}`
+    : '<p class="empty">No daily run on record in this clone yet. It runs in the KB repo\'s CI and records its decisions on the homeostat/state branch.</p>';
+  // "The daily run is scheduled daily at 06:00 UTC and the deep dive on Mondays at 07:00 UTC."
+  const when = (a: AgentLiveness) => esc(schedule(a.schedule).replace(/^(\w+days) at/, "on $1 at"));
+  const schedules = agents
+    .map(
+      (a, i) =>
+        `${i === 0 ? "The" : "the"} ${a.agent === "curator" ? "daily run" : "deep dive"}${i === 0 ? " is scheduled" : ""} ${when(a)}`,
+    )
+    .join(" and ");
   return `<div class="grid">
-<section class="span-12" aria-label="Console">${consoleRow(ls)}</section>
-<section class="panel span-4" aria-labelledby="run"><h2 id="run">Last daily run</h2>${run}<p><a href="/automation">Decisions, queue and sync</a></p></section>
-<section class="panel span-4" aria-labelledby="kb"><h2 id="kb">Knowledge base</h2>
-<div class="mini">${mini(h.byStatus.accepted, "rules in force")}${mini(h.byStatus.candidate, "awaiting review")}${mini(h.flagged.length + h.byStatus.disputed, "flagged or disputed")}${mini(h.stale.length, "stale")}</div>
-<div style="max-width:210px;margin:0 auto">${dial(h.stability, { title: "Share of entries accepted, fresh and unflagged", caption: "accepted · fresh · unflagged" })}</div></section>
-<section class="panel span-4" aria-labelledby="use"><h2 id="use">Sessions</h2>
-<div class="mini">${mini(imp.sessions, "sessions with rules")}${mini(imp.rulesPerInjection.toFixed(1), "rules per session")}</div>
-<span class="label">Injections, last 14 days</span>${columns(daily, { title: "Injections per day", height: 90, labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Injections"])}
-<ul style="list-style:none;padding:0;margin:12px 0 0;display:grid;gap:4px;font-size:13.5px">${agents.map(agentLine).join("")}</ul></section>
-<section class="panel span-12" aria-labelledby="recent"><h2 id="recent">Recent</h2><div class="legend"><span><span class="sym learn">◆</span>learned</span><span><span class="sym alert">▲</span>alert</span><span><span class="sym run">▶</span>run</span></div>${recent.length ? recentTable(recent) : '<p class="empty">No events yet. Sessions, MCP calls and captures will appear here.</p>'}<p><a href="/events">All events</a></p></section>
+<section class="span-12" aria-label="Status">${consoleRow(ls)}</section>
+<section class="panel span-6" aria-labelledby="run"><h2 id="run">Last daily run</h2>${run}<p class="muted">${schedules}.</p><p><a href="/automation">Decisions, review queue and sync</a></p></section>
+<section class="panel span-6" aria-labelledby="kb"><h2 id="kb">Knowledge base</h2>
+<div class="mini">${mini(h.byStatus.accepted, "rules in force")}${mini(h.byStatus.candidate, "awaiting review")}${mini(h.flagged.length + h.byStatus.disputed, "flagged or disputed")}${mini(h.stale.length, "not confirmed in 180 days")}</div></section>
+<section class="panel span-12" aria-labelledby="use"><h2 id="use">Sessions</h2><p class="lede">${plural(imp.sessions, "session")} started with team rules in the last 14 days, ${imp.rulesPerInjection.toFixed(1)} rules each on average.</p>
+${columns(daily, { title: "Sessions given rules, per day", height: 110, labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Sessions"])}</section>
+<section class="panel span-12" aria-labelledby="recent"><h2 id="recent">Recent activity</h2><div class="legend"><span><span class="sym learn">◆</span>learned</span><span><span class="sym alert">▲</span>needs attention</span><span><span class="sym run">▶</span>a run</span></div>${recent.length ? recentTable(recent) : '<p class="empty">Nothing yet. Sessions, MCP calls and saved lessons will show up here.</p>'}<p><a href="/events">All events</a></p></section>
 </div>`;
 }
 
@@ -412,13 +472,13 @@ export function entriesPage(entries: readonly Entry[], status: string | null): s
       const active = (s === "all" && !status) || s === status;
       return `<a href="/entries${s === "all" ? "" : `?status=${s}`}"${active ? ' aria-current="page"' : ""}>${s}</a>`;
     })
-    .join(" · ");
-  return `<section class="panel"><h2>Entries</h2><p class="lede mono">${filters}</p>
+    .join("");
+  return `<section class="panel"><h2>Entries</h2><nav class="filters" aria-label="Status">${filters}</nav>
 <div class="table-wrap"><table><thead><tr><th>Status</th><th class="num">Score</th><th>Entry</th><th>Area</th><th>Owner</th><th>Confirmed</th></tr></thead><tbody>
 ${shown
   .map(
     (e) =>
-      `<tr><td><span class="chip ${e.frontmatter.status}">${e.frontmatter.status}</span></td><td class="num">${e.frontmatter.score}</td><td><a href="/entries/${esc(e.frontmatter.id)}">${esc(e.frontmatter.title)}</a><div class="mono muted">${esc(e.frontmatter.id)}${e.frontmatter.flags?.length ? ` · ${e.frontmatter.flags.length} flag(s)` : ""}</div></td><td>${esc(e.frontmatter.area)}</td><td>${esc(e.frontmatter.owner)}</td><td class="mono">${esc(e.frontmatter.lastConfirmed)}</td></tr>`,
+      `<tr><td><span class="chip ${e.frontmatter.status}">${e.frontmatter.status}</span></td><td class="num">${e.frontmatter.score}</td><td><a href="/entries/${esc(e.frontmatter.id)}">${esc(e.frontmatter.title)}</a><div class="mono muted">${esc(e.frontmatter.id)}${e.frontmatter.flags?.length ? `, ${e.frontmatter.flags.length} open ${e.frontmatter.flags.length === 1 ? "flag" : "flags"}` : ""}</div></td><td>${esc(e.frontmatter.area)}</td><td>${esc(e.frontmatter.owner)}</td><td class="mono">${esc(e.frontmatter.lastConfirmed)}</td></tr>`,
   )
   .join("")}
 </tbody></table></div>${shown.length ? "" : '<p class="empty">No entries with this status.</p>'}</section>`;
@@ -430,10 +490,10 @@ export function entryPage(entry: Entry, config: Config): string {
   const reasons = score(fm, { config }).reasons;
   const link = (url?: string) =>
     url && /^https:\/\//.test(url)
-      ? ` · <a href="${esc(url)}">${esc(url.replace(/^https:\/\/[^/]+\//, ""))}</a>`
+      ? `, <a href="${esc(url)}">${esc(url.replace(/^https:\/\/[^/]+\//, ""))}</a>`
       : "";
   const fact = (k: string, v: string) => `<dt>${k}</dt><dd>${v}</dd>`;
-  return `<section class="panel"><p class="mono"><a href="/entries">← Entries</a></p>
+  return `<section class="panel"><p><a href="/entries">Back to entries</a></p>
 <header class="entry-head"><h2>${esc(fm.title)}</h2>
 <div class="tags"><span class="chip ${fm.status}">${fm.status}</span>${rejected ? '<span class="tag no">decided against</span>' : fm.kind ? `<span class="tag">${esc(fm.kind)}</span>` : ""}<span class="tag">${esc(fm.area)}</span><span class="mono muted">${esc(fm.id)}</span></div></header>
 ${rejected ? '<p class="lede">Considered and not adopted. Agents see it as context, never as an instruction, so they stop proposing it unless something below no longer holds.</p>' : ""}
@@ -444,9 +504,9 @@ ${(fm.flags ?? []).map((f) => `<p class="flag">Flagged by <span class="mono">${e
 <dl class="facts">
 ${fact("Applies to", fm.scope.map((s) => `<code>${esc(s)}</code>`).join(", "))}
 ${fact("Owner", `<span class="mono">${esc(fm.owner)}</span>`)}
-${fact("Source", `${esc(fm.source.type)} by <span class="mono">${esc(fm.source.author)}</span>${fm.source.changedCode ? " · code changed after the comment" : ""}${link(fm.source.url)}`)}
+${fact("Source", `${esc(fm.source.type)} by <span class="mono">${esc(fm.source.author)}</span>${fm.source.changedCode ? ", and the code changed after the comment" : ""}${link(fm.source.url)}`)}
 ${fact("Score", `<span class="mono">${fm.score}</span>${reasons.length ? `<ul class="reasons">${reasons.map((r) => `<li><span class="d ${r.delta > 0 ? "pos" : "neg"}">${r.delta > 0 ? "+" : ""}${r.delta}</span>${esc(r.note)}</li>`).join("")}</ul>` : ""}`)}
-${fact("Dates", `created <span class="mono">${esc(fm.created)}</span> · last confirmed <span class="mono">${esc(fm.lastConfirmed)}</span>${fm.approvedBy ? ` · approved by <span class="mono">${esc(fm.approvedBy)}</span>` : ""}`)}
+${fact("Dates", `created ${esc(fm.created)}, last confirmed ${esc(fm.lastConfirmed)}${fm.approvedBy ? `, approved by <span class="mono">${esc(fm.approvedBy)}</span>` : ""}`)}
 ${fm.conflictsWith?.length ? fact("Conflicts with", fm.conflictsWith.map((c) => `<a href="/entries/${esc(c)}">${esc(c)}</a>`).join(", ")) : ""}
 ${fm.supersedes ? fact("Supersedes", `<a href="/entries/${esc(fm.supersedes)}">${esc(fm.supersedes)}</a>`) : ""}
 </dl>

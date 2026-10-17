@@ -72,12 +72,12 @@ describe("pages render from the KB and the event log (4.3)", () => {
     [
       "/",
       [
-        'class="console"',
+        'class="units-row"',
+        'class="gauge off"',
         "Review queue",
         "Developer sync",
         "No daily run on record in this clone yet",
-        "daily at 06:00 UTC",
-        "Injections, last 14 days",
+        "The daily run is scheduled daily at 06:00 UTC",
       ],
     ],
     ["/entries", ["Use the shared retry helper for outbound HTTP calls", "candidate"]],
