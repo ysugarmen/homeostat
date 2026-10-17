@@ -450,7 +450,8 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   }
   if (!opts.dryRun) {
     const state: Record<string, string> = {
-      [`runs/${today}.json`]: `${JSON.stringify(report, null, 1)}\n`,
+      // One file per run (a day can have several: the schedule, a manual run, a rerun).
+      [`runs/${runName(now)}.json`]: `${JSON.stringify(report, null, 1)}\n`,
     };
     for (const [m, d] of decisions)
       if (d.decided.length) state[decisionsPath(m)] = `${JSON.stringify(d, null, 1)}\n`;
@@ -472,6 +473,9 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   if (opts.dryRun) io.stdout("dry run: nothing committed, opened or merged\n");
   return 0;
 }
+
+/** `2026-10-17T10-26-28Z`: sortable, and safe in a file name. */
+export const runName = (at: Date) => `${at.toISOString().slice(0, 19).replace(/:/g, "-")}Z`;
 
 function pendingLesson(
   member: string,

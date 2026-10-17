@@ -3,6 +3,7 @@ import {
   type Config,
   type DecisionRecord,
   type DecisionsFile,
+  HEARTBEAT_PATH,
   type Heartbeat,
   REVIEW_REMINDER_DAYS,
   type RunReport,
@@ -25,6 +26,7 @@ export interface AutomationState {
 }
 
 const REF = `refs/remotes/origin/${STATE_BRANCH}`;
+const CANDIDATES = "refs/remotes/origin/candidates/";
 
 function git(dir: string, ...args: string[]): string | undefined {
   try {
@@ -56,7 +58,24 @@ export function readAutomation(kbRoot: string, maxRuns = 30): AutomationState {
     .sort()
     .slice(-maxRuns)
     .flatMap((p) => json<RunReport>(kbRoot, p) ?? []);
-  const heartbeats = under("heartbeats").flatMap((p) => json<Heartbeat>(kbRoot, p) ?? []);
+  // The daily run's copy of each heartbeat is as old as the run; each developer's candidates
+  // branch has the latest one their sync pushed (sync fetches them all). Keep the newer.
+  const latest = new Map<string, Heartbeat>();
+  const fresher = (h: Heartbeat | undefined) => {
+    if (!h?.member) return;
+    const known = latest.get(h.member);
+    if (!known || h.at > known.at) latest.set(h.member, h);
+  };
+  for (const p of under("heartbeats")) fresher(json<Heartbeat>(kbRoot, p));
+  const branches = git(kbRoot, "for-each-ref", "--format=%(refname)", CANDIDATES) ?? "";
+  for (const ref of branches.split("\n").filter(Boolean)) {
+    try {
+      fresher(JSON.parse(git(kbRoot, "show", `${ref}:${HEARTBEAT_PATH}`) ?? "") as Heartbeat);
+    } catch {
+      // A candidates branch without a heartbeat: skip it.
+    }
+  }
+  const heartbeats = [...latest.values()];
   const decisions = under("decisions").flatMap((p) => json<DecisionsFile>(kbRoot, p) ?? []);
   return { present: true, runs, heartbeats, decisions };
 }

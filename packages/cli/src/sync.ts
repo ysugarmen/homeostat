@@ -111,6 +111,14 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
     "origin",
     `+refs/heads/${STATE_BRANCH}:refs/remotes/origin/${STATE_BRANCH}`,
   );
+  // Teammates' heartbeats, for the dashboard's sync health (each branch is small and shares main).
+  git(
+    root,
+    "fetch",
+    "--quiet",
+    "origin",
+    "+refs/heads/candidates/*:refs/remotes/origin/candidates/*",
+  );
 
   // 2. Clear what the daily run has decided.
   const raw = git(root, "show", `refs/remotes/origin/${STATE_BRANCH}:${decisionsPath(member)}`);

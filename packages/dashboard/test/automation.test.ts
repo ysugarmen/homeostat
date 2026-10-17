@@ -15,7 +15,7 @@ afterAll(() => {
 });
 
 /** A KB clone whose origin has a homeostat/state branch, as a sync would have fetched it. */
-function clone(state?: Record<string, unknown>) {
+function clone(state?: Record<string, unknown>, candidates: Record<string, unknown> = {}) {
   const kb = mkdtempSync(join(tmpdir(), "homeostat-dash-auto-"));
   cpSync(starter, kb, { recursive: true });
   const g = (dir: string, ...a: string[]) =>
@@ -37,8 +37,19 @@ function clone(state?: Record<string, unknown>) {
   g(work, "add", "-A");
   g(work, "commit", "-qm", "state");
   g(work, "push", "-q", origin, "homeostat/state");
+  // Each developer's candidates branch carries the heartbeat their last sync pushed.
+  for (const [member, heartbeat] of Object.entries(candidates)) {
+    const c = mkdtempSync(join(tmpdir(), "homeostat-dash-auto-cand-"));
+    g(c, "init", "-q", "-b", `candidates/${member}`);
+    mkdirSync(join(c, ".homeostat-sync"));
+    writeFileSync(join(c, ".homeostat-sync/heartbeat.json"), JSON.stringify(heartbeat));
+    g(c, "add", "-A");
+    g(c, "commit", "-qm", "heartbeat");
+    g(c, "push", "-q", origin, `candidates/${member}`);
+  }
   g(kb, "remote", "add", "origin", origin);
   g(kb, "fetch", "-q", "origin", "+refs/heads/homeostat/state:refs/remotes/origin/homeostat/state");
+  g(kb, "fetch", "-q", "origin", "+refs/heads/candidates/*:refs/remotes/origin/candidates/*");
   return kb;
 }
 
@@ -178,5 +189,29 @@ describe("the Automation page (automation, step 5)", () => {
     closers.push(() => started.server.close());
     const html = await (await fetch(`${started.url}/automation`)).text();
     expect(html).toContain("No daily run on record in this clone yet");
+  });
+
+  test("a developer's newest heartbeat comes from their candidates branch", () => {
+    const kb = clone(STATE, {
+      lee: heartbeat("lee", "2026-10-16T11:30:00Z", { pending: 0, version: "0.1.6" }),
+    });
+    const lee = readAutomation(kb).heartbeats.find((h) => h.member === "lee");
+    expect(lee).toMatchObject({
+      at: "2026-10-16T11:30:00Z",
+      pending: 0,
+      version: "0.1.6",
+      behind: 0,
+    });
+  });
+
+  test("every run of a day is kept and listed", () => {
+    const kb = clone({
+      "runs/2026-10-16T06-00-00Z.json": run("2026-10-16T06:00:00Z", []),
+      "runs/2026-10-16T12-54-00Z.json": run("2026-10-16T12:54:00Z", [], 2),
+    });
+    expect(readAutomation(kb).runs.map((r) => r.at)).toEqual([
+      "2026-10-16T06:00:00Z",
+      "2026-10-16T12:54:00Z",
+    ]);
   });
 });

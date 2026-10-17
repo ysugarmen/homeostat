@@ -222,7 +222,9 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
         ["use-the-shared-button-component", "review"],
       ]),
     );
-    const report = JSON.parse(t.g(t.origin, "show", "homeostat/state:runs/2026-10-16.json"));
+    const report = JSON.parse(
+      t.g(t.origin, "show", "homeostat/state:runs/2026-10-16T06-00-00Z.json"),
+    );
     expect(report.members).toEqual([
       expect.objectContaining({ member: "lee", merged: 1, review: 1, declined: 0 }),
     ]);
@@ -394,7 +396,9 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
       "could not request @sam: Reviews may only be requested from collaborators",
     );
     expect(stdout).toContain("reviewers must be collaborators on acme/team-kb");
-    const report = JSON.parse(t.g(t.origin, "show", "homeostat/state:runs/2026-10-16.json"));
+    const report = JSON.parse(
+      t.g(t.origin, "show", "homeostat/state:runs/2026-10-16T06-00-00Z.json"),
+    );
     expect(report.members[0].reviewError).toContain("could not request @sam");
   });
 
@@ -433,7 +437,9 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(stdout).toContain(
       "https://github.com/acme/web-app/pull/120#discussion_r9001: no lasting rule in the thread",
     );
-    const report = JSON.parse(t.g(t.origin, "show", "homeostat/state:runs/2026-10-16.json"));
+    const report = JSON.parse(
+      t.g(t.origin, "show", "homeostat/state:runs/2026-10-16T06-00-00Z.json"),
+    );
     expect(report.skipped).toEqual([
       {
         url: "https://github.com/acme/web-app/pull/120#discussion_r9001",
