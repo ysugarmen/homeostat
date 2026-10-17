@@ -3,11 +3,11 @@ import {
   describeEvent,
   type Entry,
   type Event,
-  explainEntry,
-  formatEvent,
   type Issue,
+  isRejectedDecision,
   type SectionUsage,
   STATUSES,
+  score,
 } from "@homeostat/core";
 import { columns, type Datum, dataTable, dial, esc, rows } from "./charts.ts";
 import type { AgentLiveness, Contribution, DesirePath, Health, Impact } from "./metrics.ts";
@@ -59,6 +59,7 @@ const CSS = `
   --grid: rgba(255, 255, 255, 0.03);
   --series: #3987e5;
   --series-soft: #184f95;
+  --good: #0ca30c;
   --warning: #fab219;
   --critical: #e66767;
   --focus: #3987e5;
@@ -105,7 +106,9 @@ nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink);
 .units { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 600px) { .units { grid-template-columns: 1fr; } }
 .unit { border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; display: grid; gap: 4px; }
-.unit .head { display: flex; align-items: center; gap: 8px; }
+.unit .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.unit .head h3 { white-space: nowrap; }
+.unit .head .state { flex-basis: 100%; padding-left: 18px; }
 .lamp { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); color: var(--ink-3); flex: none; }
 .lamp.good { background: var(--good); color: var(--good); } .lamp.warning { background: var(--warning); color: var(--warning); } .lamp.critical { background: var(--critical); color: var(--critical); }
 .state { font-size: 12.5px; color: var(--ink-2); }
@@ -130,11 +133,41 @@ td { border-bottom: 1px solid var(--rule); padding: 7px 8px; vertical-align: top
 tr:last-child td { border-bottom: 0; }
 .num { text-align: right; }
 .table-wrap { overflow-x: auto; }
+.table-wrap > table { min-width: 620px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 1px 7px; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); white-space: nowrap; }
 .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
 .chip.accepted::before { background: var(--good); } .chip.disputed::before { background: var(--critical); } .chip.candidate::before { background: var(--warning); }
 .muted { color: var(--ink-3); }
 .empty { color: var(--ink-3); font-style: italic; }
+.entry-head { display: grid; gap: 6px; margin: 6px 0 16px; }
+.entry-head h2 { font-size: 24px; margin: 0; }
+.entry-head .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tag { font: 11.5px ui-monospace, Menlo, monospace; color: var(--ink-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 7px; }
+.tag.no { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 45%, var(--rule)); }
+.statement { border-left: 3px solid var(--series); padding: 2px 0 2px 14px; margin: 0 0 14px; }
+.statement.rejected { border-left-color: var(--critical); }
+.statement .label { display: block; margin-bottom: 2px; }
+.statement p { margin: 0; max-width: 72ch; }
+.statement.rule p { font: 18px/1.45 "Iowan Old Style", Charter, Cambria, serif; color: var(--ink); }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 14px; }
+.facts dt { color: var(--ink-3); font: 11.5px/1.9 ui-monospace, Menlo, monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.reasons { list-style: none; padding: 0; margin: 0; }
+.reasons li { font: 13px ui-monospace, Menlo, monospace; }
+.reasons .d { display: inline-block; width: 3ch; text-align: right; margin-right: 8px; }
+.reasons .d.pos { color: var(--good); } .reasons .d.neg { color: var(--critical); }
+.flag { border-left: 3px solid var(--warning); padding-left: 10px; margin: 4px 0; }
+.log { font-size: 13px; }
+.log td { padding: 5px 8px; }
+.log:not(.recent) .when { white-space: nowrap; color: var(--ink-3); width: 1%; }
+.log:not(.recent) .what { white-space: nowrap; width: 1%; }
+.log .detail { color: var(--ink-2); overflow-wrap: anywhere; }
+.kind { font: 11.5px ui-monospace, Menlo, monospace; padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--ink-3) 14%, transparent); color: var(--ink-2); }
+.kind.learn { background: color-mix(in srgb, var(--good) 16%, transparent); }
+.kind.alert { background: color-mix(in srgb, var(--critical) 16%, transparent); }
+.kind.run { background: color-mix(in srgb, var(--series) 16%, transparent); }
+.filters { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 12.5px ui-monospace, Menlo, monospace; margin: 0 0 12px; }
+.filters a[aria-current="page"] { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--ink); }
 pre.entry { white-space: pre-wrap; background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; font-size: 13px; line-height: 1.55; }
 details.table-view { margin-top: 8px; } details.table-view summary { cursor: pointer; color: var(--ink-3); font: 12px ui-monospace, Menlo, monospace; }
 .events { font: 12.5px/1.7 ui-monospace, Menlo, monospace; color: var(--ink-2); white-space: pre-wrap; margin: 0; overflow-x: auto; }
@@ -149,6 +182,7 @@ textarea { min-height: 84px; resize: vertical; }
 .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; padding-top: 6px; }
 .rows td { padding: 4px 6px; }
 .rows input[type=text] { min-width: 90px; }
+.rows select { min-width: 104px; }
 button { font: 600 13px ui-monospace, Menlo, monospace; text-transform: uppercase; letter-spacing: 0.06em; color: var(--surface); background: var(--ink); border: 0; border-radius: 5px; padding: 9px 16px; cursor: pointer; justify-self: start; }
 .notice { border: 1px solid var(--rule); border-left: 3px solid var(--good); background: var(--surface); padding: 10px 14px; border-radius: 4px; margin-bottom: 14px; }
 .notice.error { border-left-color: var(--critical); }
@@ -217,12 +251,39 @@ function lampFor(a: AgentLiveness): { cls: string; text: string } {
     : { cls: "critical", text: "Last run failed" };
 }
 
+/** Cron as words for the common shapes (`0 6 * * *` → daily at 06:00 UTC); anything else as is. */
+export function schedule(expr: string): string {
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const m = /^(\d{1,2}) (\d{1,2}) \* \* (\*|[0-6])$/.exec(expr.trim());
+  if (!m) return `${expr} UTC`;
+  const at = `${(m[2] ?? "").padStart(2, "0")}:${(m[1] ?? "").padStart(2, "0")} UTC`;
+  return m[3] === "*" ? `daily at ${at}` : `${days[Number(m[3])]}s at ${at}`;
+}
+
+/** Event families, for colour: what was learned, what went wrong, what ran. Rest is plain. */
+const KIND: Record<string, string> = {
+  "entry-created": "learn",
+  "entry-flagged": "alert",
+  "handoff-requested": "learn",
+  "mcp-unknown-tool": "alert",
+  "agent-run": "run",
+  "seed-run": "run",
+  "auto-merged": "learn",
+};
+/** Routine plumbing: kept in the log, left out of the overview's short list. */
+const ROUTINE = new Set(["model-call", "mcp-call", "doc-injection"]);
+
+const eventRow = (e: Event, when: string) => {
+  const detail = describeEvent(e);
+  return `<tr><td class="when mono">${esc(when)}</td><td class="what"><span class="kind ${KIND[e.type] ?? ""}">${esc(e.type)}</span></td><td class="detail" title="${esc(detail)}">${esc(detail)}</td></tr>`;
+};
+
 function unit(a: AgentLiveness): string {
   const lamp = lampFor(a);
   const name = a.agent === "curator" ? "Daily run" : "Deep dive";
   return `<div class="unit">
   <div class="head"><span class="lamp ${lamp.cls}" aria-hidden="true"></span><h3>${name}</h3><span class="state">${lamp.text}</span></div>
-  <div class="mono muted">${esc(a.schedule)} UTC</div>
+  <div class="mono muted" title="${esc(a.schedule)}">${esc(schedule(a.schedule))}</div>
   <div>Last run <span class="mono">${fmtTime(a.lastRun?.ts)}</span>${a.lastRun?.summary ? ` · ${esc(a.lastRun.summary)}` : ""}</div>
   <div>Next run <span class="mono">${fmtTime(a.nextRun)}</span></div>
   <div>Failures this week <span class="mono">${a.failures7d}</span></div>
@@ -231,11 +292,10 @@ function unit(a: AgentLiveness): string {
 
 /** The latest events as a compact table: when, what, and the detail cut to one line. */
 function recentTable(events: Event[]): string {
-  return `<table class="recent"><tbody>${events
-    .map((e) => {
-      const detail = describeEvent(e);
-      return `<tr><td class="when mono">${esc(e.ts.slice(5, 16).replace("T", " "))}</td><td class="what mono">${esc(e.type)}</td><td title="${esc(detail)}">${esc(detail)}</td></tr>`;
-    })
+  return `<table class="recent log"><tbody>${events
+    .filter((e) => !ROUTINE.has(e.type))
+    .slice(0, 10)
+    .map((e) => eventRow(e, e.ts.slice(5, 16).replace("T", " ")))
     .join("")}</tbody></table>`;
 }
 
@@ -290,8 +350,32 @@ ${shown
 }
 
 export function entryPage(entry: Entry, config: Config): string {
-  return `<section class="panel"><p class="mono"><a href="/entries">← Entries</a></p><pre class="entry">${esc(explainEntry(entry, config))}</pre>
-<p class="lede">To dispute it, run <code>homeostat flag ${esc(entry.frontmatter.id)} --reason "…"</code> or use the flag tool from any agent.</p></section>`;
+  const fm = entry.frontmatter;
+  const rejected = isRejectedDecision(fm);
+  const reasons = score(fm, { config }).reasons;
+  const link = (url?: string) =>
+    url && /^https:\/\//.test(url)
+      ? ` · <a href="${esc(url)}">${esc(url.replace(/^https:\/\/[^/]+\//, ""))}</a>`
+      : "";
+  const fact = (k: string, v: string) => `<dt>${k}</dt><dd>${v}</dd>`;
+  return `<section class="panel"><p class="mono"><a href="/entries">← Entries</a></p>
+<header class="entry-head"><h2>${esc(fm.title)}</h2>
+<div class="tags"><span class="chip ${fm.status}">${fm.status}</span>${rejected ? '<span class="tag no">decided against</span>' : fm.kind ? `<span class="tag">${esc(fm.kind)}</span>` : ""}<span class="tag">${esc(fm.area)}</span><span class="mono muted">${esc(fm.id)}</span></div></header>
+${rejected ? '<p class="lede">Considered and not adopted. Agents see it as context, never as an instruction, so they stop proposing it unless something below no longer holds.</p>' : ""}
+<div class="statement ${rejected ? "rejected" : "rule"}"><span class="label">${rejected ? "Proposal" : "Rule"}</span><p>${esc(entry.sections.rule ?? "")}</p></div>
+<div class="statement"><span class="label">${rejected ? "Why not" : "Why"}</span><p>${esc(entry.sections.why ?? "")}</p></div>
+${entry.sections.example ? `<div class="statement"><span class="label">Example</span><p class="mono">${esc(entry.sections.example)}</p></div>` : ""}
+${(fm.flags ?? []).map((f) => `<p class="flag">Flagged by <span class="mono">${esc(f.by)}</span> on <span class="mono">${esc(f.date)}</span>: ${esc(f.reason)}</p>`).join("")}
+<dl class="facts">
+${fact("Applies to", fm.scope.map((s) => `<code>${esc(s)}</code>`).join(", "))}
+${fact("Owner", `<span class="mono">${esc(fm.owner)}</span>`)}
+${fact("Source", `${esc(fm.source.type)} by <span class="mono">${esc(fm.source.author)}</span>${fm.source.changedCode ? " · code changed after the comment" : ""}${link(fm.source.url)}`)}
+${fact("Score", `<span class="mono">${fm.score}</span>${reasons.length ? `<ul class="reasons">${reasons.map((r) => `<li><span class="d ${r.delta > 0 ? "pos" : "neg"}">${r.delta > 0 ? "+" : ""}${r.delta}</span>${esc(r.note)}</li>`).join("")}</ul>` : ""}`)}
+${fact("Dates", `created <span class="mono">${esc(fm.created)}</span> · last confirmed <span class="mono">${esc(fm.lastConfirmed)}</span>${fm.approvedBy ? ` · approved by <span class="mono">${esc(fm.approvedBy)}</span>` : ""}`)}
+${fm.conflictsWith?.length ? fact("Conflicts with", fm.conflictsWith.map((c) => `<a href="/entries/${esc(c)}">${esc(c)}</a>`).join(", ")) : ""}
+${fm.supersedes ? fact("Supersedes", `<a href="/entries/${esc(fm.supersedes)}">${esc(fm.supersedes)}</a>`) : ""}
+</dl>
+<p class="lede" style="margin-top:16px">Wrong or out of date? <code>homeostat flag ${esc(fm.id)} --reason "…"</code> takes it out of sessions and sends it back for review.</p></section>`;
 }
 
 export function membersPage(rowsData: Contribution[]): string {
@@ -385,8 +469,26 @@ ${
 }</section>`;
 }
 
-export function eventsPage(events: Event[]): string {
-  return `<section class="panel"><h2>Events, last 7 days</h2>${events.length ? `<pre class="events">${esc(events.map(formatEvent).join("\n"))}</pre>` : '<p class="empty">No events in the last 7 days.</p>'}</section>`;
+export function eventsPage(events: Event[], type: string | null = null): string {
+  const counts = new Map<string, number>();
+  for (const e of events) counts.set(e.type, (counts.get(e.type) ?? 0) + 1);
+  const filters = [
+    `<a href="/events"${type ? "" : ' aria-current="page"'}>all ${events.length}</a>`,
+    ...[...counts]
+      .sort((a, b) => b[1] - a[1])
+      .map(
+        ([t, n]) =>
+          `<a href="/events?type=${encodeURIComponent(t)}"${t === type ? ' aria-current="page"' : ""}>${esc(t)} ${n}</a>`,
+      ),
+  ].join("");
+  const shown = type ? events.filter((e) => e.type === type) : events;
+  return `<section class="panel"><h2>Events, last 7 days</h2>${
+    events.length
+      ? `<nav class="filters" aria-label="Event types">${filters}</nav><div class="table-wrap"><table class="log"><tbody>${shown
+          .map((e) => eventRow(e, e.ts.replace("T", " ").slice(0, 19)))
+          .join("")}</tbody></table></div>`
+      : '<p class="empty">No events in the last 7 days.</p>'
+  }</section>`;
 }
 
 export function settingsIndex(): string {

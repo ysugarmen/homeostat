@@ -71,7 +71,12 @@ describe("pages render from the KB and the event log (4.3)", () => {
     ["/entries", ["Use the shared retry helper for outbound HTTP calls", "candidate"]],
     [
       "/entries/outbound-http-retry-helper",
-      ["score 4 (+3 review comment led to a code change", "owner dana"],
+      [
+        '<span class="d pos">+3</span>review comment led to a code change',
+        '<dt>Owner</dt><dd><span class="mono">dana</span>',
+        "Use the shared retry helper for outbound HTTP calls",
+        '<span class="label">Rule</span>',
+      ],
     ],
     ["/members", ["not a ranking", "dana", "lee", "sam"]],
     ["/coverage", ["Accepted rules by area", "No accepted rules yet for:", "frontend"]],

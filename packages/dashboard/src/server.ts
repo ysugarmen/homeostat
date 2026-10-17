@@ -182,7 +182,7 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
     const week = new Date(snap.now.getTime() - 7 * 86_400_000).toISOString();
     switch (url.pathname) {
       case "/": {
-        const recent: Event[] = snap.events.slice(-12).reverse();
+        const recent: Event[] = snap.events.slice(-60).reverse();
         return page(
           "Overview",
           overviewPage(health(snap), agentLiveness(snap), impact(snap), recent),
@@ -209,7 +209,13 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
       case "/desire-paths":
         return page("Desire paths", desirePathsPage(desirePaths(snap)));
       case "/events":
-        return page("Events", eventsPage(snap.events.filter((e) => e.ts >= week).reverse()));
+        return page(
+          "Events",
+          eventsPage(
+            snap.events.filter((e) => e.ts >= week).reverse(),
+            url.searchParams.get("type"),
+          ),
+        );
       case "/settings":
         return page("Settings", settingsIndex());
     }
