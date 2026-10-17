@@ -94,6 +94,18 @@ describe("homeostat hook stop", () => {
     expect((await hook("stop", input, kb())).stdout).toBe("");
   });
 
+  test("edits made through the shell count: files changed since the session started", async () => {
+    const kbDir = kb(3);
+    const cwd = codeRepo();
+    writeFileSync(join(cwd, "already-dirty.txt"), "x"); // changed before the session: not counted
+    const input = { session_id: "sh", cwd, transcript_path: transcript(0) };
+    await hook("session-start", input, kbDir);
+    for (const f of ["a.ts", "b.ts"]) writeFileSync(join(cwd, f), "x");
+    expect((await hook("stop", input, kbDir)).stdout).toBe(""); // 2 new files, below 3
+    writeFileSync(join(cwd, "c.ts"), "x");
+    expect(JSON.parse((await hook("stop", input, kbDir)).stdout).decision).toBe("block");
+  });
+
   test("after a compaction it asks even below the threshold", async () => {
     const kbDir = kb();
     const input = { session_id: "s3", cwd: codeRepo(), transcript_path: transcript(0) };

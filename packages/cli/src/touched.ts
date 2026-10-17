@@ -6,7 +6,7 @@ const RECENT_COMMITS = 10;
 const lines = (text: string | undefined) => (text ?? "").split("\n").filter(Boolean);
 
 /** Paths from `git status --porcelain`, using the new name for renames. */
-function uncommitted(dir: string): string[] {
+export function uncommitted(dir: string): string[] {
   return lines(git(dir, "status", "--porcelain=v1", "--untracked-files=all")).map((line) => {
     const path = line.slice(3);
     const arrow = path.indexOf(" -> ");

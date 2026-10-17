@@ -19,7 +19,7 @@ import type { Io } from "./cli.ts";
 import { git } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { pendingFingerprint, readSyncState, syncDue, takeNotices } from "./sync.ts";
-import { touchedPaths } from "./touched.ts";
+import { touchedPaths, uncommitted } from "./touched.ts";
 
 /** Claude Code's limit on SessionStart `additionalContext`. */
 const MAX_CONTEXT_CHARS = 10_000;
@@ -102,10 +102,13 @@ async function sessionStart(input: HookInput, io: Io) {
     });
   }
   if (input.session_id) {
+    const previous = readState(kbRoot, input.session_id);
     writeState(kbRoot, input.session_id, {
-      ...readState(kbRoot, input.session_id),
+      ...previous,
       injected: selection.items.map((i) => i.entry.frontmatter.id),
       view: viewKey(kbRoot),
+      // Kept from the first start: resume, clear and compact start the same session again.
+      dirtyAtStart: previous.dirtyAtStart ?? uncommitted(cwd),
     });
   }
   // Catch up with the daily run in the background; this session starts with what is local now.
@@ -151,6 +154,8 @@ interface HandoffState {
   injected?: string[];
   /** The KB view the session last saw (HEAD + pending set); unchanged means nothing to add. */
   view?: string;
+  /** Files already changed when the session started, so the Stop hook counts only its own. */
+  dirtyAtStart?: string[];
 }
 
 const statePath = (kbRoot: string, session: string) =>
@@ -199,7 +204,11 @@ async function stop(input: HookInput, io: Io) {
 
   const state = readState(kbRoot, input.session_id);
   if (state.asked) return;
-  const edits = countEdits(input.transcript_path);
+  // Edit tool calls, or files changed since the session started, whichever is more: agents also
+  // edit through the shell (sed, scripts), which no tool call shows.
+  const before = new Set(state.dirtyAtStart ?? []);
+  const changed = state.dirtyAtStart ? uncommitted(cwd).filter((p) => !before.has(p)).length : 0;
+  const edits = Math.max(countEdits(input.transcript_path), changed);
   if (edits < config.agents.handoff.minEdits && !state.compacted) return;
 
   const member = memberIdFrom(git(cwd, "config", "user.name"));
