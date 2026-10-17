@@ -1,3 +1,4 @@
+import type { Entry } from "./entry.ts";
 import type { Severity } from "./issues.ts";
 import type { Frontmatter } from "./schema.ts";
 
@@ -161,4 +162,25 @@ export function scopesOverlap(a: readonly string[], b: readonly string[]): boole
       return pa.slice(0, n).every((s, i) => s === pb[i]);
     }),
   );
+}
+
+/** Functions, file paths and code spans a rule names: `withRetry()`, `services/http.ts`. */
+export function codeReferences(text: string): Set<string> {
+  const found = text.match(/[A-Za-z_$][\w$.]*\(\)|[\w.-]+(?:\/[\w.-]+)+\.\w{1,5}|`[^`\n]+`/g) ?? [];
+  return new Set(found.map((s) => s.replace(/`/g, "").toLowerCase()));
+}
+
+/**
+ * Whether two rules teach the same lesson, for the daily run: near-identical titles, or the same
+ * code named in both (two people rarely word a lesson alike, but they name the same function).
+ * Scopes must overlap either way.
+ */
+export function sameLesson(a: Entry, b: Entry): boolean {
+  if (!scopesOverlap(a.frontmatter.scope, b.frontmatter.scope)) return false;
+  if (titleSimilarity(a.frontmatter.title, b.frontmatter.title) >= TITLE_SIMILARITY) return true;
+  const ra = codeReferences(a.sections.rule ?? "");
+  const rb = codeReferences(b.sections.rule ?? "");
+  if (ra.size === 0 || rb.size === 0) return false;
+  const shared = [...ra].filter((r) => rb.has(r)).length;
+  return shared / new Set([...ra, ...rb]).size >= 0.5;
 }

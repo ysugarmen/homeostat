@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  DocPatcher,
   Draft,
   Drafter,
   NewPullRequest,
@@ -68,6 +69,10 @@ class FakeProvider implements Provider {
   reviewers: { id: number; logins: string[] }[] = [];
   open: OpenPullRequest[] = [];
   mergeError?: Error;
+  commentPath: string;
+  constructor(commentPath = "apps/web/src/Button.css") {
+    this.commentPath = commentPath;
+  }
   async listMergedPullRequests(_repo: RepoRef, _since: Date): Promise<PullRequest[]> {
     return [
       {
@@ -92,7 +97,7 @@ class FakeProvider implements Provider {
         author: { id: "sam" },
         createdAt: "2026-10-15T08:00:00Z",
         url: "https://github.com/acme/web-app/pull/120#discussion_r9001",
-        path: "apps/web/src/Button.css",
+        path: this.commentPath,
         line: 4,
       },
     ];
@@ -116,14 +121,20 @@ class FakeProvider implements Provider {
   }
 }
 
+const COLOUR_DRAFT: Draft = {
+  title: "Use colour tokens instead of hex values",
+  rule: "Reference colours through var(--color-*) tokens in apps/web component styles, never hex values.",
+  why: "Hex values do not change with the theme, which broke dark mode.",
+  area: "frontend",
+};
+
 class FakeDrafter implements Drafter {
-  async draft(_t: ReviewThread): Promise<Draft> {
-    return {
-      title: "Use colour tokens instead of hex values",
-      rule: "Reference colours through var(--color-*) tokens in apps/web component styles, never hex values.",
-      why: "Hex values do not change with the theme, which broke dark mode.",
-      area: "frontend",
-    };
+  result: Draft | null;
+  constructor(result: Draft | null = COLOUR_DRAFT) {
+    this.result = result;
+  }
+  async draft(_t: ReviewThread): Promise<Draft | null> {
+    return this.result;
   }
 }
 
@@ -277,5 +288,80 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(stdout).toContain("dry run");
     expect(provider.opened).toEqual([]);
     expect(() => t.g(t.origin, "rev-parse", "--verify", "homeostat/state")).toThrow();
+  });
+
+  test("the same lesson from a developer and from a review is decided once", async () => {
+    const t = team();
+    await run([
+      "learn",
+      "--dir",
+      t.lee,
+      "--author",
+      "lee",
+      "--area",
+      "integrations",
+      "--title",
+      "Use the shared retry helper for partner calls",
+      "--rule",
+      "Wrap every partner API call in withRetry() from services/integrations/http.ts.",
+      "--why",
+      "Partner APIs time out; hand-rolled retries skipped the request-id header.",
+    ]);
+    await run(["sync", "--dir", t.lee]);
+    const drafter = new FakeDrafter({
+      title: "Use withRetry instead of hand-rolled retry loops",
+      rule: "Call withRetry() from services/integrations/http.ts instead of writing retry loops.",
+      why: "Hand-rolled loops dropped the request-id header.",
+      area: "integrations",
+    });
+    const { stdout } = await run(["daily", "--dir", t.ci, "--dry-run"], {
+      provider: new FakeProvider("services/integrations/partner.ts"),
+      drafter,
+      patcher: { propose: async () => null },
+    });
+    expect(
+      stdout.match(/the same lesson as [a-z0-9-]+ in this run, which carries it/g),
+    ).toHaveLength(1);
+  });
+
+  test("a pending document edit and a review patch to the same document become one change", async () => {
+    const t = team();
+    await run([
+      "learn",
+      "--dir",
+      t.lee,
+      "--doc",
+      "integrations/partner-calls",
+      "--section",
+      "timeouts",
+      "--append",
+      "--text",
+      "Booking confirmation waits up to 30 seconds.",
+    ]);
+    await run(["sync", "--dir", t.lee]);
+    const patcher: DocPatcher = {
+      propose: async () => ({
+        path: "knowledge/integrations/docs/partner-calls.md",
+        sectionId: "http-client",
+        op: "append",
+        body: "Wrap partner calls in withRetry().",
+        reason: "the review moved partner calls to withRetry()",
+      }),
+    };
+    const provider = new FakeProvider("services/integrations/partner.ts");
+    const { stdout } = await run(["daily", "--dir", t.ci], {
+      provider,
+      drafter: new FakeDrafter(null),
+      patcher,
+    });
+    expect(stdout.match(/knowledge\/integrations\/docs\/partner-calls\.md/g)).toHaveLength(1);
+    expect(stdout).toContain("includes a section patch from review");
+    const doc = t.g(
+      t.origin,
+      "show",
+      "homeostat/review-lee-2026-10-16:knowledge/integrations/docs/partner-calls.md",
+    );
+    expect(doc).toContain("Booking confirmation waits up to 30 seconds.");
+    expect(doc).toContain("Wrap partner calls in withRetry().");
   });
 });

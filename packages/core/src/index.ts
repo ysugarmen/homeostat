@@ -66,7 +66,9 @@ export {
 export {
   type Conflict,
   type ConflictKind,
+  codeReferences,
   detectConflicts,
+  sameLesson,
   scopesOverlap,
   TITLE_SIMILARITY,
   titleSimilarity,

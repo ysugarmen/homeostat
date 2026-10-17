@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -136,4 +136,26 @@ export function commitTree(
 /** Force-pushes a commit to a branch on origin (for transport branches only). */
 export function forcePush(dir: string, commit: string, branch: string, remote = "origin") {
   gitOrThrow(dir, ["push", "--quiet", "--force", remote, `${commit}:refs/heads/${branch}`]);
+}
+
+/**
+ * Three-way merge of two edits to one file (`git merge-file`), or undefined when they conflict.
+ * Section edits to different sections of a document merge cleanly.
+ */
+export function mergeText(base: string, ours: string, theirs: string): string | undefined {
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-merge-"));
+  try {
+    const [o, b, t] = ["ours", "base", "theirs"].map((n) => join(dir, n));
+    writeFileSync(o as string, ours);
+    writeFileSync(b as string, base);
+    writeFileSync(t as string, theirs);
+    return execFileSync("git", ["merge-file", "-p", o as string, b as string, t as string], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return undefined; // a non-zero exit is the number of conflicts
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }

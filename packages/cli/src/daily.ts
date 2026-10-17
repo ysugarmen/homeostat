@@ -11,10 +11,8 @@ import {
   type DecisionRecord,
   type DecisionsFile,
   decisionsPath,
-  detectConflicts,
   type Entry,
   explainConfidence,
-  type Frontmatter,
   HEARTBEAT_PATH,
   isDocPath,
   lessonHash,
@@ -26,12 +24,13 @@ import {
   type RunReport,
   readKbFiles,
   STATE_BRANCH,
+  sameLesson,
   validate,
 } from "@homeostat/core";
 import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
-import { commitTree, forcePush, git, showFile } from "./git.ts";
+import { commitTree, forcePush, git, mergeText, showFile } from "./git.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { type FileChange, publish } from "./publish.ts";
 
@@ -229,20 +228,56 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
         kind: "doc",
         origin: "review",
         originator: d.sections[0]?.prAuthor ?? "",
+        ...(d.sections[0]?.url ? { url: d.sections[0].url } : {}),
         decision: "review",
         reason: "document edits go to the owning team",
       });
     }
   }
 
+  // A developer's pending edit and a review-drafted patch to the same document become one change:
+  // merged three ways against the base branch, or the developer's edit alone if they conflict.
+  for (const doc of lessons.filter((l) => l.kind === "doc" && l.origin === "review")) {
+    const mine = lessons.find(
+      (l) => l !== doc && l.kind === "doc" && l.path === doc.path && l.member === doc.member,
+    );
+    if (!mine) continue;
+    const merged = mergeText(onBase(doc.path) ?? "", mine.text, doc.text);
+    lessons.splice(lessons.indexOf(doc), 1);
+    if (merged === undefined) {
+      mine.reason = `document edits go to the owning team; a section patch from review (${doc.url ?? "a review thread"}) touched the same lines and was left out`;
+    } else {
+      mine.text = merged;
+      mine.reason = "document edits go to the owning team; includes a section patch from review";
+    }
+  }
+
   // 2. Decide each lesson.
-  const acceptedFms = kb.entries
+  const inForce = kb.entries
     .filter((e) => e.entry.frontmatter.status === "accepted")
-    .map((e) => e.entry.frontmatter);
-  const newFms = lessons.flatMap((l) =>
-    l.kind === "new" ? [parseEntry(l.text).entry?.frontmatter ?? []].flat() : [],
-  );
-  for (const l of lessons) decide(l, files, config, acceptedFms, newFms);
+    .map((e) => e.entry);
+  // New lessons that teach the same thing, from anyone in this run, are decided together.
+  const fresh = lessons.flatMap((l) => {
+    const entry = l.kind === "new" ? parseEntry(l.text).entry : undefined;
+    return entry ? [{ l, entry }] : [];
+  });
+  const groups = new Map<Lesson, Lesson[]>();
+  for (const a of fresh) {
+    groups.set(
+      a.l,
+      fresh.filter((b) => b === a || sameLesson(a.entry, b.entry)).map((b) => b.l),
+    );
+  }
+  for (const l of lessons) decide(l, files, config, inForce, groups.get(l)?.length ?? 1);
+  for (const [l, group] of groups) {
+    if (group.length < 2) continue;
+    const winner = group.reduce((best, x) =>
+      (x.confidence?.score ?? -1) > (best.confidence?.score ?? -1) ? x : best,
+    );
+    if (winner === l || l.decision === "declined") continue;
+    l.decision = "declined";
+    l.reason = `the same lesson as ${winner.id} in this run, which carries it (${winner.decision})`;
+  }
 
   // 3–4. Per developer: one daily PR (merged), one review PR (assigned).
   const report: RunReport = { at: now.toISOString(), members: [], settled, lessons: [] };
@@ -405,8 +440,8 @@ function decide(
   l: Lesson,
   files: Record<string, string>,
   config: Config,
-  acceptedFms: Frontmatter[],
-  newFms: Frontmatter[],
+  inForce: Entry[],
+  occurrences: number,
 ) {
   if (l.kind === "doc") {
     l.decision = "review";
@@ -431,14 +466,10 @@ function decide(
     return;
   }
   const fm = entry.frontmatter;
-  const others = acceptedFms.filter((x) => x.id !== fm.id);
-  const dup = detectConflicts([...others, fm]).find(
-    (c) => c.kind === "possible-duplicate" && c.ids.includes(fm.id),
-  );
-  const occurrences =
-    1 +
-    detectConflicts(newFms).filter((c) => c.kind === "possible-duplicate" && c.ids.includes(fm.id))
-      .length;
+  const dupOf =
+    l.kind === "new"
+      ? inForce.find((x) => x.frontmatter.id !== fm.id && sameLesson(x, entry))?.frontmatter.id
+      : undefined;
   const c = confidence({
     entry,
     config,
@@ -446,13 +477,13 @@ function decide(
     occurrences,
     risks: issues.filter((i) => i.code.startsWith("risk.")).map((i) => i.message),
     errors: issues.filter((i) => !i.code.startsWith("risk.")).map((i) => i.message),
-    ...(dup && l.kind === "new" ? { duplicateOf: dup.ids.find((i) => i !== fm.id) ?? "" } : {}),
+    ...(dupOf ? { duplicateOf: dupOf } : {}),
     ...(fm.conflictsWith?.length ? { conflictsWith: fm.conflictsWith } : {}),
   });
   l.confidence = c;
   l.decision = c.decision;
   l.reason = c.reason;
-  if (dup && l.kind === "new") l.duplicateOf = dup.ids.find((i) => i !== fm.id);
+  if (dupOf) l.duplicateOf = dupOf;
 }
 
 const change = (l: Lesson, kind: "merge" | "review"): FileChange => ({

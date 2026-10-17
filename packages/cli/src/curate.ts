@@ -227,7 +227,14 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
   for (const d of result.docs) {
     io.stdout(`~ ${d.path} (${d.sections.map((s) => `#${s.id}`).join(", ")})\n`);
   }
-  for (const s of result.skipped) io.stdout(`- ${s.url}: ${s.reason}\n`);
+  for (const s of result.skipped) {
+    // With --show-prompts nothing was sent, so the empty answer is not the model's verdict.
+    const reason =
+      opts.showPrompts && s.reason === "no lasting rule in the thread"
+        ? "prompt shown above; nothing sent"
+        : s.reason;
+    io.stdout(`- ${s.url}: ${reason}\n`);
+  }
   if (result.redacted) {
     io.stdout(`redacted ${result.redacted} secret(s) from review threads before drafting\n`);
   }

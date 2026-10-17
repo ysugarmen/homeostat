@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { detectConflicts } from "../src/conflicts.ts";
+import { detectConflicts, sameLesson } from "../src/conflicts.ts";
+import type { Entry } from "../src/entry.ts";
 import type { Frontmatter } from "../src/schema.ts";
 import { validFrontmatter } from "./helpers.ts";
 
@@ -99,5 +100,41 @@ describe("detectConflicts", () => {
       e("b", { title: "Same title here", scope: ["**"] }),
     ]);
     expect(similar?.severity).toBe("warning");
+  });
+});
+
+describe("sameLesson", () => {
+  const entry = (title: string, rule: string, scope = ["services/integrations/**"]) =>
+    ({ frontmatter: { title, scope }, sections: { rule } }) as unknown as Entry;
+
+  test("rules naming the same code are the same lesson, whatever their titles", () => {
+    expect(
+      sameLesson(
+        entry(
+          "Use the shared retry helper for partner calls",
+          "Wrap every partner API call in withRetry() from services/integrations/http.ts.",
+        ),
+        entry(
+          "Use withRetry instead of hand-rolled retry loops",
+          "Call withRetry() from services/integrations/http.ts instead of writing retry loops.",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test("different code, or scopes that do not overlap, are different lessons", () => {
+    const retry = entry(
+      "Use the retry helper",
+      "Wrap calls in withRetry() from services/integrations/http.ts.",
+    );
+    expect(
+      sameLesson(
+        retry,
+        entry("Parse responses", "Parse every response with schema.parse() first."),
+      ),
+    ).toBe(false);
+    expect(
+      sameLesson(retry, entry("Use the retry helper", "Wrap calls in withRetry().", ["web/**"])),
+    ).toBe(false);
   });
 });

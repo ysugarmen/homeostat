@@ -143,6 +143,8 @@ describe("data controls (T5): what the curator never reads or sends", () => {
       "--- prompt for https://bitbucket.org/acme/web-app/pull-requests/120#comment-9001 ---",
     );
     expect(stdout).toContain("sam: Wrap this call in withRetry().");
+    expect(stdout).toContain("prompt shown above; nothing sent");
+    expect(stdout).not.toContain("no lasting rule");
     expect(stdout).toContain("dry run: nothing committed");
   });
 });
