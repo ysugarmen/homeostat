@@ -148,6 +148,22 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     }
   }
 
+  // Lessons still waiting in an open review PR: a new lesson that repeats one waits with it.
+  git(
+    root,
+    "fetch",
+    "--quiet",
+    "origin",
+    "+refs/heads/homeostat/review-*:refs/remotes/origin/homeostat/review-*",
+  );
+  const inReview = [...decisions.values()].flatMap((d) =>
+    d.decided.flatMap((r) => {
+      if (r.decision !== "review" || !r.pr || !open.has(r.pr)) return [];
+      const entry = parseEntry(showFile(root, remote(r.pr), r.path) ?? "").entry;
+      return entry ? [entry] : [];
+    }),
+  );
+
   const lessons: Lesson[] = [];
   const decidedHashes = (m: string) => new Set(decisions.get(m)?.decided.map((r) => r.hash));
   const heartbeats: Record<string, string> = {};
@@ -274,6 +290,14 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     );
   }
   for (const l of lessons) decide(l, files, config, inForce, groups.get(l)?.length ?? 1);
+  for (const { l, entry } of fresh) {
+    const twin = inReview.find(
+      (r) => r.frontmatter.id === entry.frontmatter.id || sameLesson(r, entry),
+    );
+    if (!twin || l.decision === "declined") continue;
+    l.decision = "review";
+    l.reason = `the same lesson as ${twin.frontmatter.id}, which is waiting in review: decide them together`;
+  }
   for (const [l, group] of groups) {
     if (group.length < 2) continue;
     const winner = group.reduce((best, x) =>
@@ -357,8 +381,18 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       if (pr.pr) {
         row.reviewPr = pr.pr.url;
         const logins = reviewerLogins(config, review, member);
-        if (logins.length)
-          await provider.requestReviewers?.(kbRepo, pr.pr.id, logins).catch(() => undefined);
+        if (logins.length && provider.requestReviewers) {
+          try {
+            await provider.requestReviewers(kbRepo, pr.pr.id, logins);
+            io.stdout(`  asked ${logins.map((l) => `@${l}`).join(", ")} to review ${pr.pr.url}\n`);
+          } catch (e) {
+            // Usually: they are not collaborators on the KB repo. The PR still waits in the queue.
+            row.reviewError = `could not request ${logins.map((l) => `@${l}`).join(", ")}: ${(e as Error).message}`;
+            io.stdout(
+              `  ${row.reviewError}; reviewers must be collaborators on ${sources.kbRepo}\n`,
+            );
+          }
+        }
       }
       for (const l of review) Object.assign(l, { pr: pr.branch });
     }

@@ -60,6 +60,8 @@ export interface RunReport {
     dailyPr?: string;
     reviewPr?: string;
     mergeError?: string;
+    /** Why the host refused to request the reviewers, e.g. they are not collaborators. */
+    reviewError?: string;
   }[];
   /** Review PRs from earlier runs that a reviewer merged or closed since. */
   settled: number;

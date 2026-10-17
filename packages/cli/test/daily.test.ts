@@ -116,7 +116,9 @@ class FakeProvider implements Provider {
     this.merged.push(id);
     this.open = this.open.filter((p) => p.id !== id);
   }
+  reviewError?: Error;
   async requestReviewers(_repo: RepoRef, id: number, logins: string[]) {
+    if (this.reviewError) throw this.reviewError;
     this.reviewers.push({ id, logins });
   }
 }
@@ -367,5 +369,44 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(doc).toContain("Booking confirmation waits up to 30 seconds.");
     expect(doc).toContain("Wrap partner calls in withRetry().");
     expect(doc).toContain("updated: 2026-10-16");
+  });
+
+  test("a refused review request is reported, not swallowed", async () => {
+    const t = team();
+    await leeLearns(t.lee);
+    const provider = new FakeProvider();
+    provider.reviewError = new Error("Reviews may only be requested from collaborators");
+    const { stdout } = await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
+    expect(stdout).toContain(
+      "could not request @sam: Reviews may only be requested from collaborators",
+    );
+    expect(stdout).toContain("reviewers must be collaborators on acme/team-kb");
+    const report = JSON.parse(t.g(t.origin, "show", "homeostat/state:runs/2026-10-16.json"));
+    expect(report.members[0].reviewError).toContain("could not request @sam");
+  });
+
+  test("a new lesson that repeats one waiting in review waits with it", async () => {
+    const t = team();
+    await leeLearns(t.lee);
+    const provider = new FakeProvider();
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
+    expect(provider.opened.map((o) => o.pr.sourceBranch)).toEqual([
+      "homeostat/review-lee-2026-10-16",
+    ]);
+    // The next day a review drafts the same lesson; its twin is still waiting in review.
+    const { stdout } = await run(["daily", "--dir", t.ci, "--dry-run"], {
+      provider,
+      now: () => new Date("2026-10-17T06:00:00Z"),
+      drafter: new FakeDrafter({
+        title: "Use the shared button component",
+        rule: "Use the Button component from apps/web/ui for every button.",
+        why: "Raw buttons miss the focus ring.",
+        area: "frontend",
+      }),
+      patcher: { propose: async () => null },
+    });
+    expect(stdout).toContain(
+      "the same lesson as use-the-shared-button-component, which is waiting in review: decide them together",
+    );
   });
 });
