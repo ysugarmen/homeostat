@@ -72,8 +72,19 @@ async function hostChecks(config: Config, io: Io): Promise<{ access: Check[]; bl
   // Branch protection: without it, anything can merge into what every session reads.
   if (gh) {
     const b = await api.get(`/${sources.kbRepo}/branches/${sources.baseBranch}`, true);
+    // `protected` reflects classic branch protection; rulesets show up in the branch's rules.
+    const rules =
+      b.body?.protected === true
+        ? undefined
+        : await api.get(`/${sources.kbRepo}/rules/branches/${sources.baseBranch}`, true);
+    const ruleTypes = Array.isArray(rules?.body)
+      ? (rules.body as { type?: string }[]).map((r) => r.type)
+      : [];
+    const guarded = ruleTypes.some((t) => t === "pull_request" || t === "required_status_checks");
     if (b.body?.protected === true)
       access.push(ok(`${sources.baseBranch} is protected on ${sources.kbRepo}`));
+    else if (guarded)
+      access.push(ok(`${sources.baseBranch} is protected by a ruleset on ${sources.kbRepo}`));
     else if (b.body)
       access.push(
         fail(

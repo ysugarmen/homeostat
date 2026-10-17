@@ -112,6 +112,16 @@ describe("homeostat doctor --security (T8)", () => {
     expect(stdout).toContain("4 to fix, 2 to review");
   });
 
+  test("a ruleset that requires pull requests counts as protection", async () => {
+    const { fetch } = github({
+      "/acme/team-kb/branches/main": { protected: false },
+      "/acme/team-kb/rules/branches/main": [{ type: "pull_request" }, { type: "deletion" }],
+    });
+    const { stdout } = await doctor(kb(`homeostat@${VERSION}`), { fetch });
+    expect(stdout).toContain("✓ main is protected by a ruleset on acme/team-kb");
+    expect(stdout).not.toContain("main is not protected");
+  });
+
   test("the public check never sends the token", async () => {
     const { fetch, calls } = github({});
     await doctor(kb(`homeostat@${VERSION}`), { fetch });
