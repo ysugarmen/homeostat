@@ -10,7 +10,7 @@ import {
   sectionUsage,
   validate,
 } from "@homeostat/core";
-import { automationPage, automationView, readAutomation } from "./automation.ts";
+import { automationPage, automationView, type Lamp, lamps, readAutomation } from "./automation.ts";
 import {
   agentLiveness,
   contributions,
@@ -131,8 +131,20 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     const t = url.searchParams.get("theme");
     const theme = t === "light" || t === "dark" ? { theme: t as "light" | "dark" } : {};
+    let lampsNow: Lamp[] = [];
     const page = (title: string, body: string, status = 200) =>
-      send(res, status, layout({ title, path: url.pathname, kbRoot: opts.kbRoot, body, ...theme }));
+      send(
+        res,
+        status,
+        layout({
+          title,
+          path: url.pathname,
+          kbRoot: opts.kbRoot,
+          body,
+          status: lampsNow,
+          ...theme,
+        }),
+      );
 
     const snap = snapshot();
     if (!snap) {
@@ -145,6 +157,20 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
         500,
       );
     }
+    // The console lamps on every page: the daily run, the review queue, sync and the KB.
+    const auto = automationView(readAutomation(opts.kbRoot), snap.config, snap.now);
+    const kbHealth = health(snap);
+    lampsNow = lamps(
+      auto,
+      {
+        stability: kbHealth.stability,
+        accepted: kbHealth.byStatus.accepted,
+        flagged: kbHealth.flagged.length,
+        disputed: kbHealth.byStatus.disputed,
+      },
+      snap.now,
+      agentLiveness(snap).find((a) => a.agent === "curator")?.nextRun,
+    );
 
     if (req.method === "POST") {
       // Our own pages send their origin; "null" or anything unreadable is refused, never parsed blind.
@@ -185,14 +211,11 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
         const recent: Event[] = snap.events.slice(-60).reverse();
         return page(
           "Overview",
-          overviewPage(health(snap), agentLiveness(snap), impact(snap), recent),
+          overviewPage(kbHealth, agentLiveness(snap), impact(snap), recent, auto, lampsNow),
         );
       }
       case "/automation":
-        return page(
-          "Automation",
-          automationPage(automationView(readAutomation(opts.kbRoot), snap.config, snap.now)),
-        );
+        return page("Automation", automationPage(auto));
       case "/entries":
         return page("Entries", entriesPage(snap.entries, url.searchParams.get("status")));
       case "/members":

@@ -239,3 +239,84 @@ ${
     .join("")}</tbody></table></div></section>
 </div>`;
 }
+
+/** One lamp on the console: what state the team's knowledge loop is in, at a glance. */
+export interface Lamp {
+  key: "daily" | "queue" | "sync" | "kb";
+  label: string;
+  state: "good" | "warning" | "critical" | "off";
+  value: string;
+  detail: string;
+  href: string;
+}
+
+const hhmm = (iso?: string) => (iso ? iso.slice(11, 16) : "—");
+
+/**
+ * The four lamps every page shows: the daily run, the review queue, developer sync and the
+ * knowledge base. `nextRun` comes from the schedule; everything else from the state branch.
+ */
+export function lamps(
+  v: AutomationView,
+  kb: { stability: number; accepted: number; flagged: number; disputed: number },
+  now: Date,
+  nextRun?: string,
+): Lamp[] {
+  const last = v.lastRun;
+  const ageH = last ? (now.getTime() - Date.parse(last.at)) / 3_600_000 : undefined;
+  const refused = last?.members.some((m) => m.mergeError || m.reviewError);
+  const daily: Lamp = {
+    key: "daily",
+    label: "Daily run",
+    href: "/automation",
+    ...(!last
+      ? {
+          state: "off",
+          value: "none yet",
+          detail: nextRun ? `first at ${hhmm(nextRun)} UTC` : "not scheduled here",
+        }
+      : {
+          state: (ageH ?? 0) > 30 ? "critical" : refused ? "warning" : "good",
+          value: (ageH ?? 0) > 30 ? "late" : refused ? "needs a look" : "ok",
+          detail: `last ${last.at.slice(5, 10)} ${hhmm(last.at)}${nextRun ? ` · next ${hhmm(nextRun)}` : ""} UTC`,
+        }),
+  };
+  const overdue = v.queue.filter((q) => q.overdue).length;
+  const oldest = v.queue[0];
+  const queue: Lamp = {
+    key: "queue",
+    label: "Review queue",
+    href: "/automation#queue",
+    state: !v.present ? "off" : overdue ? "critical" : v.queue.length ? "warning" : "good",
+    value: String(v.queue.length),
+    detail: !v.queue.length
+      ? "nothing waiting"
+      : `oldest ${Math.floor(oldest?.ageDays ?? 0)}d${overdue ? ` · ${overdue} overdue` : ""}`,
+  };
+  const syncing = v.health.filter((h) => h.state === "ok").length;
+  const silent = v.health.filter((h) => h.state !== "ok").map((h) => h.member);
+  const sync: Lamp = {
+    key: "sync",
+    label: "Developer sync",
+    href: "/automation#health",
+    state: !v.present
+      ? "off"
+      : silent.length === 0
+        ? "good"
+        : syncing === 0
+          ? "critical"
+          : "warning",
+    value: `${syncing}/${v.health.length}`,
+    detail: silent.length ? `not syncing: ${silent.join(", ")}` : "everyone current",
+  };
+  const pct = Math.round(kb.stability * 100);
+  const kbLamp: Lamp = {
+    key: "kb",
+    label: "Knowledge",
+    href: "/entries",
+    state: kb.accepted === 0 ? "off" : pct >= 80 ? "good" : pct >= 50 ? "warning" : "critical",
+    value: `${pct}%`,
+    detail: `${kb.accepted} rules in force${kb.flagged + kb.disputed ? ` · ${kb.flagged + kb.disputed} disputed or flagged` : ""}`,
+  };
+  return [daily, queue, sync, kbLamp];
+}

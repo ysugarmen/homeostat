@@ -9,6 +9,7 @@ import {
   STATUSES,
   score,
 } from "@homeostat/core";
+import type { AutomationView, Lamp } from "./automation.ts";
 import { columns, type Datum, dataTable, dial, esc, rows } from "./charts.ts";
 import type { AgentLiveness, Contribution, DesirePath, Health, Impact } from "./metrics.ts";
 import { currentValue, type Field, SECTIONS, type Section } from "./settings.ts";
@@ -16,53 +17,56 @@ import { currentValue, type Field, SECTIONS, type Section } from "./settings.ts"
 const CSS = `
 :root {
   color-scheme: light;
-  --paper: #f6f5f1;
-  --surface: #fcfcfb;
-  --ink: #0b0b0b;
-  --ink-2: #52514e;
-  --ink-3: #85847e;
-  --rule: #e2e0d9;
-  --grid: rgba(11, 11, 11, 0.035);
+  --paper: #eef0ed;
+  --surface: #f9faf8;
+  --inset: #e7eae5;
+  --ink: #0d1110;
+  --ink-2: #4a524e;
+  --ink-3: #7d8681;
+  --rule: #d6dbd6;
+  --grid: rgba(13, 17, 16, 0.04);
   --series: #2a78d6;
   --series-soft: #cde2fb;
-  --good: #0ca30c;
-  --warning: #b37a00;
-  --critical: #d03b3b;
+  --good: #0f9d4a;
+  --warning: #b27300;
+  --critical: #cf3a3a;
   --focus: #2a78d6;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --paper: #121211;
-    --surface: #1a1a19;
-    --ink: #ffffff;
-    --ink-2: #c3c2b7;
-    --ink-3: #8f8e86;
-    --rule: #2e2e2b;
-    --grid: rgba(255, 255, 255, 0.03);
-    --series: #3987e5;
-    --series-soft: #184f95;
-    --good: #0ca30c;
-    --warning: #fab219;
-    --critical: #e66767;
-    --focus: #3987e5;
+    --paper: #0a0c0d;
+    --surface: #111416;
+    --inset: #0c0f10;
+    --ink: #e8ece9;
+    --ink-2: #a7afab;
+    --ink-3: #6c7571;
+    --rule: #222829;
+    --grid: rgba(232, 236, 233, 0.025);
+    --series: #4a9bf0;
+    --series-soft: #17406e;
+    --good: #3fd174;
+    --warning: #f2b23a;
+    --critical: #f06a6a;
+    --focus: #4a9bf0;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #121211;
-  --surface: #1a1a19;
-  --ink: #ffffff;
-  --ink-2: #c3c2b7;
-  --ink-3: #8f8e86;
-  --rule: #2e2e2b;
-  --grid: rgba(255, 255, 255, 0.03);
-  --series: #3987e5;
-  --series-soft: #184f95;
-  --good: #0ca30c;
-  --warning: #fab219;
-  --critical: #e66767;
-  --focus: #3987e5;
+  --paper: #0a0c0d;
+  --surface: #111416;
+  --inset: #0c0f10;
+  --ink: #e8ece9;
+  --ink-2: #a7afab;
+  --ink-3: #6c7571;
+  --rule: #222829;
+  --grid: rgba(232, 236, 233, 0.025);
+  --series: #4a9bf0;
+  --series-soft: #17406e;
+  --good: #3fd174;
+  --warning: #f2b23a;
+  --critical: #f06a6a;
+  --focus: #4a9bf0;
 }
 * { box-sizing: border-box; }
 body {
@@ -82,9 +86,31 @@ h2 { font-size: 19px; margin-bottom: 10px; }
 a { color: var(--series); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .shell { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
-header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--rule); padding-bottom: 14px; margin-bottom: 18px; }
-.brand { display: flex; align-items: baseline; gap: 12px; }
-.brand .sub { color: var(--ink-3); font-size: 13px; }
+header.top { border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 18px; display: grid; gap: 12px; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+.brand .word { font: 600 15px ui-monospace, "SFMono-Regular", Menlo, monospace; letter-spacing: 0.28em; }
+.brand .mark { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--ink-2); position: relative; flex: none; }
+.brand .mark::after { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 1.5px; background: var(--good); transform-origin: 0 50%; transform: rotate(-35deg); }
+.brand .sub { color: var(--ink-3); font: 12.5px ui-monospace, Menlo, monospace; }
+.strip.compact { display: flex; flex-wrap: wrap; gap: 6px; }
+.strip.compact a { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; color: var(--ink-2); font: 11.5px ui-monospace, Menlo, monospace; text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px 3px 8px; background: var(--surface); }
+.strip.compact a:hover { border-color: var(--ink-3); color: var(--ink); }
+.strip.compact b { color: var(--ink); font-weight: 600; }
+.console { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+@media (max-width: 860px) { .console { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cell { background: var(--surface); padding: 14px 16px 16px; display: grid; gap: 6px; text-decoration: none; color: var(--ink); position: relative; }
+.cell:hover { background: color-mix(in srgb, var(--surface) 92%, var(--ink)); }
+.cell .k { display: flex; align-items: center; gap: 8px; font: 11.5px ui-monospace, Menlo, monospace; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); }
+.cell .v { font: 600 34px/1 ui-monospace, "SFMono-Regular", Menlo, monospace; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.cell .d { color: var(--ink-2); font-size: 13px; }
+.cell.critical { box-shadow: inset 0 3px 0 var(--critical); } .cell.warning { box-shadow: inset 0 3px 0 var(--warning); } .cell.good { box-shadow: inset 0 3px 0 var(--good); }
+.mini { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 4px 0 12px; }
+.mini .n { font: 600 24px/1.1 ui-monospace, Menlo, monospace; display: block; font-variant-numeric: tabular-nums; }
+.mini .k { color: var(--ink-3); font-size: 12px; }
+.legend { display: flex; gap: 14px; font: 11.5px ui-monospace, Menlo, monospace; color: var(--ink-3); margin: -4px 0 8px; }
+.sym { display: inline-block; width: 1.2em; text-align: center; }
+.sym.learn { color: var(--good); } .sym.alert { color: var(--critical); } .sym.run { color: var(--series); }
 nav { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 nav a { color: var(--ink-2); text-decoration: none; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 0; border-bottom: 1px solid transparent; }
 nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
@@ -110,6 +136,8 @@ nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink);
 .unit .head h3 { white-space: nowrap; }
 .unit .head .state { flex-basis: 100%; padding-left: 18px; }
 .lamp { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); color: var(--ink-3); flex: none; }
+.lamp { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent), 0 0 10px color-mix(in srgb, currentColor 45%, transparent); }
+.lamp.off { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink-3) 15%, transparent); }
 .lamp.good { background: var(--good); color: var(--good); } .lamp.warning { background: var(--warning); color: var(--warning); } .lamp.critical { background: var(--critical); color: var(--critical); }
 .state { font-size: 12.5px; color: var(--ink-2); }
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
@@ -216,6 +244,8 @@ export function layout(opts: {
   kbRoot: string;
   body: string;
   theme?: "light" | "dark";
+  /** The console lamps, shown on every page. */
+  status?: Lamp[];
 }): string {
   const current = (href: string) =>
     href === "/" ? opts.path === "/" : opts.path === href || opts.path.startsWith(`${href}/`);
@@ -230,7 +260,7 @@ export function layout(opts: {
 <body>
 <div class="shell">
 <header class="top">
-  <div class="brand"><h1>Homeostat</h1><span class="sub mono" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}</span></div>
+  <div class="bar"><a class="brand" href="/" aria-label="Homeostat overview"><span class="mark" aria-hidden="true"></span><span class="word">HOMEOSTAT</span><span class="sub" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}</span></a>${opts.status?.length ? `<div class="strip compact" aria-label="Status">${opts.status.map((l) => `<a href="${l.href}" title="${esc(`${l.label}: ${l.value} · ${l.detail}`)}"><span class="lamp ${l.state}" aria-hidden="true"></span>${esc(l.label)} <b>${esc(l.value)}</b></a>`).join("")}</div>` : ""}</div>
   <nav aria-label="Sections">${NAV.map(([href, label]) => `<a href="${href}"${current(href) ? ' aria-current="page"' : ""}>${label}</a>`).join("")}</nav>
 </header>
 <main>${opts.body}</main>
@@ -275,7 +305,7 @@ const ROUTINE = new Set(["model-call", "mcp-call", "doc-injection"]);
 
 const eventRow = (e: Event, when: string) => {
   const detail = describeEvent(e);
-  return `<tr><td class="when mono">${esc(when)}</td><td class="what"><span class="kind ${KIND[e.type] ?? ""}">${esc(e.type)}</span></td><td class="detail" title="${esc(detail)}">${esc(detail)}</td></tr>`;
+  return `<tr><td class="when mono">${esc(when)}</td><td class="what"><span class="sym ${KIND[e.type] ?? ""}" aria-hidden="true">${SYMBOL[KIND[e.type] ?? ""] ?? "·"}</span><span class="kind ${KIND[e.type] ?? ""}">${esc(e.type)}</span></td><td class="detail" title="${esc(detail)}">${esc(detail)}</td></tr>`;
 };
 
 function unit(a: AgentLiveness): string {
@@ -299,28 +329,56 @@ function recentTable(events: Event[]): string {
     .join("")}</tbody></table>`;
 }
 
+/** The console: four lamps, large, each a link to where its detail lives. */
+function consoleRow(ls: readonly Lamp[]): string {
+  return `<div class="console" aria-label="Status">${ls
+    .map(
+      (l) =>
+        `<a class="cell ${l.state}" href="${l.href}"><span class="k"><span class="lamp ${l.state}" aria-hidden="true"></span>${esc(l.label)}</span><span class="v">${esc(l.value)}</span><span class="d">${esc(l.detail)}</span></a>`,
+    )
+    .join("")}</div>`;
+}
+
+const SYMBOL: Record<string, string> = { learn: "◆", alert: "▲", run: "▶" };
+
 export function overviewPage(
   h: Health,
   agents: AgentLiveness[],
   imp: Impact,
   recent: Event[],
+  v: AutomationView,
+  ls: readonly Lamp[],
 ): string {
-  const stat = (n: number | string, k: string) =>
-    `<div class="stat"><span class="n">${n}</span><span class="k">${k}</span></div>`;
+  const mini = (n: number | string, k: string) =>
+    `<div><span class="n">${n}</span><span class="k">${k}</span></div>`;
   const daily: Datum[] = imp.injectionsByDay.map((d) => ({
     label: d.day.slice(5),
     value: d.count,
     title: `${d.day}: ${d.count} injections`,
   }));
+  const r = v.lastRun;
+  const sum = (k: "merged" | "review" | "declined") =>
+    r?.members.reduce((n, m) => n + m[k], 0) ?? 0;
+  const prs = (r?.members ?? []).flatMap((m) => [
+    ...(m.dailyPr ? [`<a href="${esc(m.dailyPr)}">${esc(m.member)} daily</a>`] : []),
+    ...(m.reviewPr ? [`<a href="${esc(m.reviewPr)}">${esc(m.member)} review</a>`] : []),
+  ]);
+  const run = r
+    ? `<p class="lede mono">${esc(r.at.replace("T", " ").slice(0, 16))} UTC</p><div class="mini">${mini(sum("merged"), "merged")}${mini(sum("review"), "to review")}${mini(sum("declined"), "declined")}${mini(r.settled, "settled by reviewers")}</div>${prs.length ? `<p class="mono" style="font-size:12.5px">${prs.join(" · ")}</p>` : ""}`
+    : '<p class="empty">No daily run on record in this clone yet. It runs in the KB repo\'s CI and writes to the homeostat/state branch.</p>';
+  const agentLine = (a: AgentLiveness) =>
+    `<li><span class="lamp ${lampFor(a).cls || "off"}" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-right:8px"></span>${a.agent === "curator" ? "Daily run" : "Deep dive"} <span class="muted mono" style="margin-left:6px">${esc(schedule(a.schedule))}</span></li>`;
   return `<div class="grid">
-<section class="panel span-4" aria-labelledby="stability"><h2 id="stability">Stability</h2>
-${dial(h.stability, { title: "Share of entries accepted, fresh and unflagged", caption: "accepted · fresh · unflagged" })}
-<p class="lede">Of ${h.total} entries, the share an agent can rely on today: accepted, confirmed within the stale limit, and not flagged.</p></section>
-<section class="panel span-8" aria-labelledby="kb"><h2 id="kb">Knowledge base</h2>
-<div class="stats" style="--cols: 3">${stat(h.total, "entries")}${stat(h.byStatus.accepted, "accepted")}${stat(h.byStatus.candidate, "awaiting review")}${stat(h.flagged.length, "flagged")}${stat(h.stale.length, "stale")}${stat(h.byStatus.disputed, "disputed")}</div>
-<div style="margin-top:14px"><span class="label">Injections into sessions, last 14 days</span>${columns(daily, { title: "Injections per day", labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Injections"])}</div></section>
-<section class="panel span-6" aria-labelledby="agents"><h2 id="agents">Agents</h2><p class="lede">Runs recorded in this checkout's log (shared box or local runs). CI runs show up as their PRs on the KB repo.</p><div class="units">${agents.map(unit).join("")}</div><p><a href="/automation">Daily run decisions, review queue and developer sync</a></p></section>
-<section class="panel span-6" aria-labelledby="recent"><h2 id="recent">Recent events</h2>${recent.length ? recentTable(recent) : '<p class="empty">No events yet. Sessions, MCP calls and captures will appear here.</p>'}<p><a href="/events">All events</a></p></section>
+<section class="span-12" aria-label="Console">${consoleRow(ls)}</section>
+<section class="panel span-4" aria-labelledby="run"><h2 id="run">Last daily run</h2>${run}<p><a href="/automation">Decisions, queue and sync</a></p></section>
+<section class="panel span-4" aria-labelledby="kb"><h2 id="kb">Knowledge base</h2>
+<div class="mini">${mini(h.byStatus.accepted, "rules in force")}${mini(h.byStatus.candidate, "awaiting review")}${mini(h.flagged.length + h.byStatus.disputed, "flagged or disputed")}${mini(h.stale.length, "stale")}</div>
+<div style="max-width:210px;margin:0 auto">${dial(h.stability, { title: "Share of entries accepted, fresh and unflagged", caption: "accepted · fresh · unflagged" })}</div></section>
+<section class="panel span-4" aria-labelledby="use"><h2 id="use">Sessions</h2>
+<div class="mini">${mini(imp.sessions, "sessions with rules")}${mini(imp.rulesPerInjection.toFixed(1), "rules per session")}</div>
+<span class="label">Injections, last 14 days</span>${columns(daily, { title: "Injections per day", height: 90, labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Injections"])}
+<ul style="list-style:none;padding:0;margin:12px 0 0;display:grid;gap:4px;font-size:13.5px">${agents.map(agentLine).join("")}</ul></section>
+<section class="panel span-12" aria-labelledby="recent"><h2 id="recent">Recent</h2><div class="legend"><span><span class="sym learn">◆</span>learned</span><span><span class="sym alert">▲</span>alert</span><span><span class="sym run">▶</span>run</span></div>${recent.length ? recentTable(recent) : '<p class="empty">No events yet. Sessions, MCP calls and captures will appear here.</p>'}<p><a href="/events">All events</a></p></section>
 </div>`;
 }
 
