@@ -12,6 +12,8 @@ export interface Draft {
 export interface DraftContext {
   /** Area name → path globs, from homeostat.yaml. `core` is always available. */
   areas: Record<string, readonly string[]>;
+  /** A second try: the previous draft and the limits it broke. */
+  revise?: { previous: Draft; problems: string[] };
 }
 
 /** Turns one review thread into at most one rule; null when the thread holds no lasting lesson. */
@@ -61,7 +63,21 @@ ${conversation}
 </thread>
 
 Areas and the paths they cover:
-${areas.map((a) => `- ${a}`).join("\n")}`;
+${areas.map((a) => `- ${a}`).join("\n")}${
+  ctx.revise
+    ? `
+
+Your previous draft broke these limits:
+${ctx.revise.problems.map((p) => `- ${p}`).join("\n")}
+
+Previous draft:
+Title: ${ctx.revise.previous.title}
+Rule: ${ctx.revise.previous.rule}
+Why: ${ctx.revise.previous.why}
+
+Write it again within the limits, keeping every name and fact it states.`
+    : ""
+}`;
 }
 
 /** Drafts with Claude through either runtime (API or Claude Code). */

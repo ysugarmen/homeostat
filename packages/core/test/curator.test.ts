@@ -3,7 +3,13 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { apiAsker, type ClaudeClient } from "../src/claude.ts";
 import { curate } from "../src/curator/curate.ts";
-import { ClaudeDrafter, type Draft, type Drafter, draftPrompt } from "../src/curator/draft.ts";
+import {
+  ClaudeDrafter,
+  type Draft,
+  type DraftContext,
+  type Drafter,
+  draftPrompt,
+} from "../src/curator/draft.ts";
 import { type ReviewThread, reviewThreads } from "../src/curator/threads.ts";
 import { commentKeyOf, parseCommentUrl } from "../src/curator/urls.ts";
 import { parseEntry } from "../src/entry.ts";
@@ -285,6 +291,33 @@ describe("curate", () => {
     expect(result.entries).toEqual([]);
     expect(result.skipped.some((s) => s.reason.includes("## Rule has 70 words; max 60"))).toBe(
       true,
+    );
+  });
+
+  test("a draft over a length limit gets one rewrite, told exactly what to fix", async () => {
+    const contexts: DraftContext[] = [];
+    const threads: ReviewThread[] = [];
+    const drafter: Drafter = {
+      async draft(t, ctx) {
+        contexts.push(ctx);
+        threads.push(t);
+        return {
+          title: ctx.revise
+            ? "Use withRetry() from http.ts, not hand-rolled retry loops"
+            : "Use withRetry() from services/integrations/http.ts instead of hand-rolled retry loops in partner calls",
+          rule: "Wrap partner HTTP calls in withRetry() from @app/http-client.",
+          why: "Hand-rolled loops dropped the request-id header.",
+          area: "integrations",
+        };
+      },
+    };
+    const result = await run(drafter);
+    expect(result.entries.map((e) => e.frontmatter.title)).toEqual([
+      "Use withRetry() from http.ts, not hand-rolled retry loops",
+    ]);
+    expect(contexts[1]?.revise?.problems.join(" ")).toContain("at most 80 characters");
+    expect(draftPrompt(threads[1] as ReviewThread, contexts[1] as DraftContext)).toContain(
+      "Your previous draft broke these limits",
     );
   });
 

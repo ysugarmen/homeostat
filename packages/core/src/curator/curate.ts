@@ -4,6 +4,7 @@ import type { Config } from "../config.ts";
 import { isDocPath, parseDoc } from "../doc.ts";
 import { applySectionPatch } from "../doc-patch.ts";
 import { formatEntry } from "../entry.ts";
+import type { Issue } from "../issues.ts";
 import type { Provider } from "../providers/types.ts";
 import type { Frontmatter } from "../schema.ts";
 import { score } from "../score.ts";
@@ -12,7 +13,7 @@ import { slugify } from "../slug.ts";
 import { countTokens } from "../tokens.ts";
 import { type KbFiles, validate } from "../validate.ts";
 import type { DocCandidate, DocPatcher } from "./doc-patcher.ts";
-import type { Drafter } from "./draft.ts";
+import type { Draft, Drafter } from "./draft.ts";
 import { type ReviewThread, reviewThreads } from "./threads.ts";
 import { commentKey, commentKeyOf } from "./urls.ts";
 
@@ -171,7 +172,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
 
         const { thread: safe, redacted } = redactThread(thread);
         result.redacted += redacted;
-        const draft = await input.drafter.draft(safe, { areas: config.areas });
+        let draft = await input.drafter.draft(safe, { areas: config.areas });
         if (input.patcher) {
           await docPatchStep(
             { files, config, result, today: input.today },
@@ -184,20 +185,36 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
           skip("no lasting rule in the thread");
           continue;
         }
-        const area = draft.area === CORE_AREA || config.areas[draft.area] ? draft.area : CORE_AREA;
-        let entry = buildEntry(config, {
-          draft: { ...draft, area },
-          id: uniqueId(slugify(draft.title) ?? `review-${pr.id}-${thread.root.id}`, ids),
-          url,
-          author: reviewer.id,
-          today: input.today,
-        });
-
-        const errors = validate({ ...files, [entry.path]: entry.text }).issues.filter(
-          (i) => i.file === entry.path && i.severity === "error",
-        );
-        const isRisk = (i: (typeof errors)[number]) => i.code.startsWith("risk.");
-        const blocking = errors.filter((i) => !isRisk(i));
+        const check = (d: Draft) => {
+          const area = d.area === CORE_AREA || config.areas[d.area] ? d.area : CORE_AREA;
+          const built = buildEntry(config, {
+            draft: { ...d, area },
+            id: uniqueId(slugify(d.title) ?? `review-${pr.id}-${thread.root.id}`, ids),
+            url,
+            author: reviewer.id,
+            today: input.today,
+          });
+          const errs = validate({ ...files, [built.path]: built.text }).issues.filter(
+            (i) => i.file === built.path && i.severity === "error",
+          );
+          return { built, errs };
+        };
+        const isRisk = (i: Issue) => i.code.startsWith("risk.");
+        let { built: entry, errs: errors } = check(draft);
+        let blocking = errors.filter((i) => !isRisk(i));
+        // A draft over a length limit is worth one rewrite rather than losing the lesson.
+        if (blocking.length > 0 && blocking.every(isLengthIssue)) {
+          const problems = blocking.map((i) => i.message);
+          const second = await input.drafter.draft(safe, {
+            areas: config.areas,
+            revise: { previous: draft, problems },
+          });
+          if (second) {
+            draft = second;
+            ({ built: entry, errs: errors } = check(draft));
+            blocking = errors.filter((i) => !isRisk(i));
+          }
+        }
         if (blocking.length > 0) {
           skip(`draft did not validate: ${blocking.map((i) => i.message).join("; ")}`);
           continue;
@@ -298,6 +315,10 @@ async function docPatchStep(
     ctx.result.docs.push({ path: proposal.path, text, sections: [section], risks });
   }
 }
+
+/** Over a word or character limit: fixable by rewriting shorter. */
+const isLengthIssue = (i: Issue) =>
+  i.code.endsWith(".tooLong") || /at most \d+ characters/.test(i.message);
 
 function uniqueId(base: string, taken: ReadonlySet<string>): string {
   let id = base;
