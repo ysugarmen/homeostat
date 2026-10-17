@@ -15,7 +15,7 @@ Homeostat closes the loop:
 
 ```sh
 # In a new or existing repo for your team's knowledge base:
-npx --yes homeostat@0.1.4 init
+npx --yes homeostat@0.1.5 init
 
 # In Claude Code, on each developer's machine:
 claude plugin marketplace add ysugarmen/homeostat
