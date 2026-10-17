@@ -10,7 +10,7 @@ import {
   score,
 } from "@homeostat/core";
 import type { AutomationView, Lamp } from "./automation.ts";
-import { columns, type Datum, dataTable, dial, esc, rows } from "./charts.ts";
+import { columns, type Datum, dataTable, dial, esc, info, rows } from "./charts.ts";
 import type { AgentLiveness, Contribution, DesirePath, Health, Impact } from "./metrics.ts";
 import { currentValue, type Field, SECTIONS, type Section } from "./settings.ts";
 
@@ -83,6 +83,8 @@ code, .mono { font-family: var(--code); font-size: 0.86em; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 h1, h2, h3 { font-family: var(--sans); font-weight: 600; letter-spacing: 0; margin: 0; line-height: 1.2; }
 h2 { font-size: 22px; margin-bottom: 6px; }
+h2 a { color: inherit; text-decoration: none; }
+h2 a:hover { text-decoration: underline; text-decoration-color: var(--brass); }
 h3 { font-size: 17px; }
 a { color: var(--ink); text-decoration-color: var(--brass); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
 a:hover { color: var(--brass); }
@@ -125,7 +127,9 @@ nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--brass
 .hunit:first-child { border-left: 0; padding-left: 0; }
 @media (max-width: 860px) { .hunit:nth-child(3) { border-left: 0; padding-left: 0; } .hunit:nth-child(n+3) { border-top: 1px solid var(--rule-soft); } }
 .hunit:hover .gauge .needle { stroke: var(--ink); }
-.hunit .name { font: 600 17px var(--sans); margin-top: 6px; }
+.hunit .name { font: 600 17px var(--sans); margin-top: 6px; display: inline-flex; align-items: center; }
+.hunit .name a { text-decoration: none; }
+.hunit .name a:hover { text-decoration: underline; text-decoration-color: var(--brass); }
 .hunit .reading { font: 28px/1.15 var(--serif); }
 .hunit .reading.good { color: var(--good); } .hunit .reading.warning { color: var(--warning); } .hunit .reading.critical { color: var(--critical); } .hunit .reading.off { color: var(--ink-3); }
 .hunit .detail { color: var(--ink-2); font-size: 15px; max-width: 30ch; }
@@ -136,6 +140,14 @@ nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--brass
 .gauge .needle { stroke: var(--brass); stroke-width: 2.4; stroke-linecap: round; transition: stroke .2s; }
 .gauge .pivot { fill: var(--ink); }
 .gauge.off .needle { stroke: var(--ink-3); }
+
+/* (i) tooltips: explanations on demand, not paragraphs on every page. */
+.info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; margin-left: 7px; border: 1.2px solid var(--ink-3); border-radius: 50%; color: var(--ink-2); vertical-align: 2px; cursor: help; }
+.info .i { font: italic 600 12px/1 var(--serif); }
+.info:hover, .info:focus-visible { border-color: var(--brass); color: var(--brass); }
+.info .tip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.info:hover .tip, .info:focus .tip { clip: auto; width: max-content; max-width: min(340px, 78vw); height: auto; overflow: visible; white-space: normal; left: -8px; top: calc(100% + 8px); z-index: 20; background: var(--ink); color: var(--paper); font: 400 15px/1.45 var(--sans); letter-spacing: 0; text-align: left; padding: 9px 12px; border-radius: 4px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.18); }
+.info .tip code { color: inherit; }
 
 /* Small multiples of data. */
 .stats, .mini { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 12px 28px; margin: 8px 0 12px; }
@@ -223,6 +235,7 @@ pre.entry { white-space: pre-wrap; }
 .events { white-space: pre-wrap; }
 
 /* Settings. */
+.sections { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 32px; font: 17px var(--sans); }
 form.settings { display: grid; gap: 16px; max-width: 760px; }
 .field { display: grid; grid-template-columns: 240px 1fr; gap: 6px 18px; align-items: start; }
 @media (max-width: 700px) { .field { grid-template-columns: 1fr; } }
@@ -241,7 +254,8 @@ button:hover { background: var(--brass); }
 .notice.error { border-left-color: var(--critical); }
 .notice ul { margin: 6px 0 0; padding-left: 18px; }
 footer { margin-top: 48px; color: var(--ink-2); font-size: 15px; border-top: 1px solid var(--rule); padding-top: 14px; max-width: 80ch; }
-.themes { display: flex; gap: 14px; margin-top: 8px; font: 15px var(--sans); }
+.themes { display: inline-flex; gap: 14px; margin-left: 24px; font: 15px var(--sans); }
+footer { display: flex; align-items: center; flex-wrap: wrap; }
 .themes a { color: var(--ink-2); }
 .themes a[aria-current="true"] { color: var(--ink); text-decoration: none; }
 
@@ -289,11 +303,11 @@ export function layout(opts: {
 <body>
 <div class="shell">
 <header class="top">
-  <div class="bar"><a class="brand" href="/" aria-label="Homeostat overview"><span class="word">Homeostat</span><span class="sub" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}</span></a>${opts.status?.length ? `<div class="strip compact" aria-label="Status">${opts.status.map((l) => `<a href="${l.href}" title="${esc(`${l.label}: ${l.detail}`)}">${gauge(l.state, 26)}${esc(l.label)} <b>${esc(l.value)}</b></a>`).join("")}</div>` : ""}</div>
+  <div class="bar"><a class="brand" href="/" aria-label="Homeostat overview"><span class="word">Homeostat</span><span class="sub" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}</span></a>${opts.status?.length ? `<div class="strip compact" aria-label="Status">${opts.status.map((l) => `<a href="${l.href}" title="${esc(`${l.label}: ${l.value}${l.detail ? `, ${l.detail}` : ""}`)}">${gauge(l.state, 26)}${esc(l.label)} <b>${esc(l.value)}</b></a>`).join("")}</div>` : ""}</div>
   <nav aria-label="Sections">${NAV.map(([href, label]) => `<a href="${href}"${current(href) ? ' aria-current="page"' : ""}>${label}</a>`).join("")}</nav>
 </header>
 <main>${opts.body}</main>
-<footer>Local dashboard. It reads this checkout and its git-ignored event log; nothing leaves this machine. Settings changes are written to homeostat.yaml here: commit them on a branch and open a PR.<span class="themes" aria-label="Theme">Theme ${(["dark", "light"] as const).map((t) => `<a href="?theme=${t}"${(opts.theme ?? "dark") === t ? ' aria-current="true"' : ""}>${t}</a>`).join("")}</span></footer>
+<footer><span>Local dashboard</span>${info("It reads this KB checkout and its git-ignored event log, and sends nothing anywhere. Settings changes are written to homeostat.yaml here: commit them on a branch and open a PR.")}<span class="themes" aria-label="Theme">${(["dark", "light"] as const).map((t) => `<a href="?theme=${t}"${opts.theme === t ? ' aria-current="true"' : ""}>${t}</a>`).join("")}</span></footer>
 </div>
 </body>
 </html>`;
@@ -401,7 +415,7 @@ function consoleRow(ls: readonly Lamp[]): string {
   return `<div class="units-row" aria-label="Status">${ls
     .map(
       (l) =>
-        `<a class="hunit" href="${l.href}">${gauge(l.state, 120, `${l.label}: ${STATE_WORD[l.state]}`)}<span class="name">${esc(l.label)}</span><span class="reading ${l.state}">${esc(l.value)}</span><span class="detail">${esc(l.detail)}</span></a>`,
+        `<div class="hunit">${gauge(l.state, 120, `${l.label}: ${STATE_WORD[l.state]}`)}<span class="name"><a href="${l.href}">${esc(l.label)}</a>${info(esc(l.about))}</span><span class="reading ${l.state}">${esc(l.value)}</span>${l.detail ? `<span class="detail">${esc(l.detail)}</span>` : ""}</div>`,
     )
     .join("")}</div>`;
 }
@@ -432,30 +446,25 @@ export function overviewPage(
   const r = v.lastRun;
   const sum = (k: "merged" | "review" | "declined") =>
     r?.members.reduce((n, m) => n + m[k], 0) ?? 0;
-  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   const prs = (r?.members ?? []).flatMap((m) => [
-    ...(m.dailyPr ? [`<a href="${esc(m.dailyPr)}">${esc(m.member)}'s daily PR</a>`] : []),
-    ...(m.reviewPr ? [`<a href="${esc(m.reviewPr)}">${esc(m.member)}'s review PR</a>`] : []),
+    ...(m.dailyPr ? [`<a href="${esc(m.dailyPr)}">${esc(m.member)} daily PR</a>`] : []),
+    ...(m.reviewPr ? [`<a href="${esc(m.reviewPr)}">${esc(m.member)} review PR</a>`] : []),
   ]);
+  const when = (a: AgentLiveness) =>
+    `${a.agent === "curator" ? "Daily run" : "Deep dive"}: ${esc(schedule(a.schedule))}.`;
+  const runInfo = `Runs in the KB repo's CI, never on laptops. ${agents.map(when).join(" ")} Settled counts lessons reviewers merged or closed since the run before.`;
   const run = r
-    ? `<p class="lede">On ${esc(r.at.slice(0, 10))} at ${esc(r.at.slice(11, 16))} UTC the daily run merged ${plural(sum("merged"), "lesson")}, sent ${sum("review")} to a reviewer and declined ${sum("declined")}. Reviewers settled ${r.settled} from earlier runs.</p>${prs.length ? `<p>${prs.join(", ")}</p>` : ""}`
-    : '<p class="empty">No daily run on record in this clone yet. It runs in the KB repo\'s CI and records its decisions on the homeostat/state branch.</p>';
-  // "The daily run is scheduled daily at 06:00 UTC and the deep dive on Mondays at 07:00 UTC."
-  const when = (a: AgentLiveness) => esc(schedule(a.schedule).replace(/^(\w+days) at/, "on $1 at"));
-  const schedules = agents
-    .map(
-      (a, i) =>
-        `${i === 0 ? "The" : "the"} ${a.agent === "curator" ? "daily run" : "deep dive"}${i === 0 ? " is scheduled" : ""} ${when(a)}`,
-    )
-    .join(" and ");
+    ? `<p class="muted">${esc(r.at.slice(0, 10))}, ${esc(r.at.slice(11, 16))} UTC</p><div class="mini" style="--cols: 4">${mini(sum("merged"), "merged")}${mini(sum("review"), "to review")}${mini(sum("declined"), "declined")}${mini(r.settled, "settled")}</div>${prs.length ? `<p>${prs.join(", ")}</p>` : ""}`
+    : '<p class="empty">No run yet.</p>';
   return `<div class="grid">
 <section class="span-12" aria-label="Status">${consoleRow(ls)}</section>
-<section class="panel span-6" aria-labelledby="run"><h2 id="run">Last daily run</h2>${run}<p class="muted">${schedules}.</p><p><a href="/automation">Decisions, review queue and sync</a></p></section>
-<section class="panel span-6" aria-labelledby="kb"><h2 id="kb">Knowledge base</h2>
-<div class="mini">${mini(h.byStatus.accepted, "rules in force")}${mini(h.byStatus.candidate, "awaiting review")}${mini(h.flagged.length + h.byStatus.disputed, "flagged or disputed")}${mini(h.stale.length, "not confirmed in 180 days")}</div></section>
-<section class="panel span-12" aria-labelledby="use"><h2 id="use">Sessions</h2><p class="lede">${plural(imp.sessions, "session")} started with team rules in the last 14 days, ${imp.rulesPerInjection.toFixed(1)} rules each on average.</p>
+<section class="panel span-6" aria-labelledby="run"><h2 id="run"><a href="/automation">Last daily run</a>${info(runInfo)}</h2>${run}</section>
+<section class="panel span-6" aria-labelledby="kb"><h2 id="kb"><a href="/entries">Knowledge base</a>${info("Rules in force are the ones every session gets. Stale means nobody has confirmed the rule in 180 days.")}</h2>
+<div class="mini" style="--cols: 4">${mini(h.byStatus.accepted, "in force")}${mini(h.byStatus.candidate, "awaiting")}${mini(h.flagged.length + h.byStatus.disputed, "flagged")}${mini(h.stale.length, "stale")}</div></section>
+<section class="panel span-12" aria-labelledby="use"><h2 id="use"><a href="/impact">Sessions</a>${info("Sessions that started with team rules in the last 14 days, from this machine's event log.")}</h2>
+<div class="mini" style="--cols: 4">${mini(imp.sessions, "sessions")}${mini(imp.rulesPerInjection.toFixed(1), "rules each")}</div>
 ${columns(daily, { title: "Sessions given rules, per day", height: 110, labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Sessions"])}</section>
-<section class="panel span-12" aria-labelledby="recent"><h2 id="recent">Recent activity</h2><div class="legend"><span><span class="sym learn">◆</span>learned</span><span><span class="sym alert">▲</span>needs attention</span><span><span class="sym run">▶</span>a run</span></div>${recent.length ? recentTable(recent) : '<p class="empty">Nothing yet. Sessions, MCP calls and saved lessons will show up here.</p>'}<p><a href="/events">All events</a></p></section>
+<section class="panel span-12" aria-labelledby="recent"><h2 id="recent"><a href="/events">Recent</a>${info('<span class="sym learn">◆</span> a lesson saved or a note asked for <br><span class="sym alert">▲</span> something to look at <br><span class="sym run">▶</span> a daily run, deep dive or seed. Model and MCP calls are on the events page.')}</h2>${recent.length ? recentTable(recent) : '<p class="empty">Nothing yet.</p>'}</section>
 </div>`;
 }
 
@@ -495,8 +504,7 @@ export function entryPage(entry: Entry, config: Config): string {
   const fact = (k: string, v: string) => `<dt>${k}</dt><dd>${v}</dd>`;
   return `<section class="panel"><p><a href="/entries">Back to entries</a></p>
 <header class="entry-head"><h2>${esc(fm.title)}</h2>
-<div class="tags"><span class="chip ${fm.status}">${fm.status}</span>${rejected ? '<span class="tag no">decided against</span>' : fm.kind ? `<span class="tag">${esc(fm.kind)}</span>` : ""}<span class="tag">${esc(fm.area)}</span><span class="mono muted">${esc(fm.id)}</span></div></header>
-${rejected ? '<p class="lede">Considered and not adopted. Agents see it as context, never as an instruction, so they stop proposing it unless something below no longer holds.</p>' : ""}
+<div class="tags"><span class="chip ${fm.status}">${fm.status}</span>${rejected ? `<span class="tag no">decided against</span>${info("Considered and not adopted. Agents see it as context, never as an instruction, so they stop proposing it unless something below no longer holds.")}` : fm.kind ? `<span class="tag">${esc(fm.kind)}</span>` : ""}<span class="tag">${esc(fm.area)}</span><span class="mono muted">${esc(fm.id)}</span></div></header>
 <div class="statement ${rejected ? "rejected" : "rule"}"><span class="label">${rejected ? "Proposal" : "Rule"}</span><p>${esc(entry.sections.rule ?? "")}</p></div>
 <div class="statement"><span class="label">${rejected ? "Why not" : "Why"}</span><p>${esc(entry.sections.why ?? "")}</p></div>
 ${entry.sections.example ? `<div class="statement"><span class="label">Example</span><p class="mono">${esc(entry.sections.example)}</p></div>` : ""}
@@ -510,11 +518,11 @@ ${fact("Dates", `created ${esc(fm.created)}, last confirmed ${esc(fm.lastConfirm
 ${fm.conflictsWith?.length ? fact("Conflicts with", fm.conflictsWith.map((c) => `<a href="/entries/${esc(c)}">${esc(c)}</a>`).join(", ")) : ""}
 ${fm.supersedes ? fact("Supersedes", `<a href="/entries/${esc(fm.supersedes)}">${esc(fm.supersedes)}</a>`) : ""}
 </dl>
-<p class="lede" style="margin-top:16px">Wrong or out of date? <code>homeostat flag ${esc(fm.id)} --reason "…"</code> takes it out of sessions and sends it back for review.</p></section>`;
+<p style="margin-top:18px"><code>homeostat flag ${esc(fm.id)} --reason "…"</code>${info("If this rule is wrong or out of date, flag it: it leaves sessions at once and goes back for review.")}</p></section>`;
 }
 
 export function membersPage(rowsData: Contribution[]): string {
-  return `<section class="panel"><h2>Members</h2><p class="lede">What each person's sessions, reviews and captures have fed into the shared knowledge base. Listed alphabetically: this is contribution to a shared product, not a ranking.</p>
+  return `<section class="panel"><h2>Members${info("What each person's sessions, reviews and captures have fed into the shared knowledge base. Listed alphabetically: this is contribution to a shared product, not a ranking.")}</h2>
 <div class="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th class="num">Entries authored</th><th class="num">Accepted</th><th class="num">Accepted share</th><th class="num">Captured, 30 days</th><th class="num">Flags raised</th></tr></thead><tbody>
 ${rowsData
   .map(
@@ -577,7 +585,7 @@ export function documentsPage(usage: readonly SectionUsage[]): string {
   const docs = new Set(usage.map((u) => u.doc)).size;
   const used = usage.filter((u) => u.reads + u.injected > 0).length;
   return `<div class="grid"><section class="panel"><div class="stats" style="--cols: 4">${stat(docs, "documents")}${stat(usage.length, "sections")}${stat(used, "used in 90 days")}${stat(decaying.length, "to review")}</div></section>
-<section class="panel"><h2>Section usage</h2><p class="lede">Reads through MCP and sessions each section was given in full, from this machine's event log over the last 90 days. A section nobody used or confirmed in 90 days is a review candidate: its owner confirms, updates or removes it.</p>
+<section class="panel"><h2>Section usage${info("Reads through MCP and sessions each section was given in full, from this machine's event log over the last 90 days. A section nobody used or confirmed in 90 days is a review candidate: its owner confirms, updates or removes it.")}</h2>
 ${
   usage.length
     ? `<div class="table-wrap"><table><thead><tr><th>Section</th><th class="num">Reads</th><th class="num">In sessions</th><th>Last used</th><th>Confirmed</th><th></th></tr></thead><tbody>${usage
@@ -591,7 +599,7 @@ ${
 }
 
 export function desirePathsPage(paths: DesirePath[]): string {
-  return `<section class="panel"><h2>Desire paths</h2><p class="lede">Tool names agents tried that are not the real ones. Resolved guesses already work as aliases; unresolved ones that keep coming back are worth turning into real tools.</p>
+  return `<section class="panel"><h2>Desire paths${info("Tool names agents tried that are not the real ones. Resolved guesses already work as aliases; unresolved ones that keep coming back are worth turning into real tools.")}</h2>
 ${
   paths.length
     ? `<div class="table-wrap"><table><thead><tr><th>Name tried</th><th>Resolved to</th><th class="num">Times</th><th>Last</th></tr></thead><tbody>${paths
@@ -627,8 +635,8 @@ export function eventsPage(events: Event[], type: string | null = null): string 
 }
 
 export function settingsIndex(): string {
-  return `<section class="panel"><h2>Settings</h2><p class="lede">Every key in homeostat.yaml, as forms. Changes are validated before anything is written, and comments in the file are kept.</p>
-<table><tbody>${SECTIONS.map((s) => `<tr><td><a href="/settings/${s.id}">${esc(s.title)}</a></td><td class="muted">${esc(s.intro)}</td></tr>`).join("")}</tbody></table></section>`;
+  return `<section class="panel"><h2>Settings${info("Every key in homeostat.yaml, as forms. Changes are validated before anything is written, and comments in the file are kept.")}</h2>
+<ul class="sections">${SECTIONS.map((s) => `<li><a href="/settings/${s.id}">${esc(s.title)}</a>${info(esc(s.intro))}</li>`).join("")}</ul></section>`;
 }
 
 function input(field: Field, value: unknown): string {
@@ -664,7 +672,7 @@ function input(field: Field, value: unknown): string {
     default:
       control = `<input type="text" id="${id}" name="${name}" value="${esc(value ?? "")}">`;
   }
-  return `<div class="field"><label for="${id}">${esc(field.label)}</label>${control}${field.help ? `<div class="help">${esc(field.help)}</div>` : ""}</div>`;
+  return `<div class="field"><label for="${id}">${esc(field.label)}${field.help ? info(esc(field.help)) : ""}</label>${control}</div>`;
 }
 
 function rowEditor(section: Section, config: Config): string {
@@ -677,7 +685,7 @@ function rowEditor(section: Section, config: Config): string {
       )
       .join(
         "",
-      )}</tbody></table></div><p class="muted">Blank rows add members. Areas are comma-separated.</p>`;
+      )}</tbody></table></div><p class="muted">Adding rows${info("Blank rows add members. Areas are comma-separated.")}</p>`;
   }
   if (section.rows === "teams") {
     const teams = [...Object.entries(config.teams), ...Array(2).fill(undefined)];
@@ -697,7 +705,7 @@ function rowEditor(section: Section, config: Config): string {
       )
       .join(
         "",
-      )}</tbody></table></div><p class="muted">Blank rows add teams. Lists are comma-separated; the handle is an @org/team.</p>`;
+      )}</tbody></table></div><p class="muted">Adding rows${info("Blank rows add teams. Lists are comma-separated; the handle is an @org/team.")}</p>`;
   }
   const areas = [...Object.entries(config.areas), ...Array(3).fill(undefined)];
   return `<div class="table-wrap"><table class="rows"><thead><tr><th>Area</th><th>Path globs</th><th>Remove</th></tr></thead><tbody>${areas
@@ -707,7 +715,7 @@ function rowEditor(section: Section, config: Config): string {
     )
     .join(
       "",
-    )}</tbody></table></div><p class="muted">Blank rows add areas. Globs are comma-separated.</p>`;
+    )}</tbody></table></div><p class="muted">Adding rows${info("Blank rows add areas. Globs are comma-separated.")}</p>`;
 }
 
 export function settingsPage(
@@ -724,7 +732,7 @@ export function settingsPage(
   const body = section.rows
     ? rowEditor(section, config)
     : (section.fields ?? []).map((f) => input(f, currentValue(config, f))).join("");
-  return `<section class="panel"><p class="mono"><a href="/settings">← Settings</a></p><h2>${esc(section.title)}</h2><p class="lede">${esc(section.intro)}</p>${banner}
+  return `<section class="panel"><p><a href="/settings">Back to settings</a></p><h2>${esc(section.title)}${info(esc(section.intro))}</h2>${banner}
 <form class="settings" method="post" action="/settings/${section.id}"><input type="hidden" name="_token" value="${esc(token)}">${body}<button type="submit">Save</button></form></section>`;
 }
 

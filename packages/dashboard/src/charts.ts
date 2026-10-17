@@ -133,3 +133,11 @@ export function dataTable(data: readonly Datum[], headers: [string, string]): st
     .map((d) => `<tr><td>${esc(d.label)}</td><td class="num">${d.value}</td></tr>`)
     .join("")}</tbody></table></details>`;
 }
+
+/**
+ * An (i) that shows `html` on hover or keyboard focus. Explanations live here instead of in
+ * paragraphs. The text stays in the page for screen readers; only its box is hidden.
+ */
+export function info(html: string): string {
+  return `<span class="info" tabindex="0"><span class="i" aria-hidden="true">i</span><span class="tip" role="tooltip">${html}</span></span>`;
+}

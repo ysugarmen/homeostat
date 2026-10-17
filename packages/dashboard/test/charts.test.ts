@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { rows } from "../src/charts.ts";
+import { info, rows } from "../src/charts.ts";
 
 describe("rows", () => {
   test("a label too long for its column is shortened, and kept whole in the tooltip", () => {
@@ -11,5 +11,13 @@ describe("rows", () => {
 
   test("a label that fits is left alone", () => {
     expect(rows([{ label: "web", value: 1 }], { title: "t" })).toContain(">web</text>");
+  });
+});
+
+describe("info", () => {
+  test("an (i) a keyboard can reach, whose text stays in the page for screen readers", () => {
+    const html = info("Lessons the daily run could not decide.");
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain('role="tooltip">Lessons the daily run could not decide.</span>');
   });
 });
