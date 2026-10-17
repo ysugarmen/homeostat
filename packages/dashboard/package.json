@@ -1,6 +1,6 @@
 {
   "name": "@homeostat/dashboard",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "The local dashboard for homeostat.",
   "keywords": [
     "homeostat",
