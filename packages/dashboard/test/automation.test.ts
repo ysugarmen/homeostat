@@ -168,7 +168,7 @@ describe("the Automation page (automation, step 5)", () => {
     const started = await startDashboard({ kbRoot: kb, port: 0, now: () => NOW });
     closers.push(() => started.server.close());
     const html = await (await fetch(`${started.url}/automation`)).text();
-    expect(html).toContain('<a href="/automation" aria-current="page">Automation</a>');
+    expect(html).toContain('<a href="/automation" aria-current="page" title="Automation">');
     expect(html).toContain("Last daily run");
     expect(html).toContain("use-the-shared-button-component");
     expect(html).toContain("homeostat/review-lee-2026-10-12");

@@ -72,11 +72,11 @@ describe("pages render from the KB and the event log (4.3)", () => {
     [
       "/",
       [
-        'class="units-row"',
-        'class="gauge off"',
-        "Review queue",
-        "Developer sync",
-        "No run yet.",
+        "Welcome back",
+        "Rules in force",
+        "Lessons decided",
+        "Recent decisions",
+        "No decisions yet.",
         "Daily run: daily at 06:00 UTC.",
       ],
     ],

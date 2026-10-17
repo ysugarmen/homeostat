@@ -73,3 +73,32 @@ describe("gauge", () => {
     );
   });
 });
+
+describe("entries search", () => {
+  test("every word must appear in the id, title or rule", async () => {
+    const { entriesPage } = await import("../src/views.ts");
+    const entry = (id: string, title: string, rule: string) =>
+      ({
+        frontmatter: {
+          id,
+          title,
+          status: "accepted",
+          area: "core",
+          score: 1,
+          owner: "x",
+          lastConfirmed: "2026-10-01",
+        },
+        sections: { rule },
+      }) as never;
+    const html = entriesPage(
+      [
+        entry("retry", "Use the retry helper", "Wrap calls in withRetry()."),
+        entry("tokens", "Use colour tokens", "No hex."),
+      ],
+      null,
+      "retry helper",
+    );
+    expect(html).toContain("Use the retry helper");
+    expect(html).not.toContain("Use colour tokens");
+  });
+});

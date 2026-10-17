@@ -10,263 +10,308 @@ import {
   score,
 } from "@homeostat/core";
 import type { AutomationView, Lamp } from "./automation.ts";
-import { columns, type Datum, dataTable, dial, esc, info, rows } from "./charts.ts";
+import {
+  areaChart,
+  columns,
+  type Datum,
+  dataTable,
+  dial,
+  esc,
+  info,
+  rings,
+  rows,
+} from "./charts.ts";
 import type { AgentLiveness, Contribution, DesirePath, Health, Impact } from "./metrics.ts";
 import { currentValue, type Field, SECTIONS, type Section } from "./settings.ts";
 
 const CSS = `
 :root {
-  color-scheme: light;
-  --paper: #eceff1;
-  --sheet: #fafbfb;
-  --surface: #fafbfb;
-  --ink: #18222c;
-  --ink-2: #56636f;
-  --ink-3: #6f7c87;
-  --rule: #c9d1d7;
-  --rule-soft: #dde3e7;
-  --brass: #a9772a;
-  --trough: #d5e0e5;
-  --series: #3d5a73;
-  --series-soft: #d3dde6;
-  --good: #2e6b5a;
-  --warning: #b0621c;
-  --critical: #b03a3a;
-  --focus: #a9772a;
-  --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
-  --sans: "Gill Sans", "Gill Sans MT", Seravek, Calibri, "Trebuchet MS", sans-serif;
-  --code: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --paper: #0f161c;
-    --sheet: #151f27;
-    --surface: #151f27;
-    --ink: #e2e8ec;
-    --ink-2: #a9b5be;
-    --ink-3: #8794a0;
-    --rule: #2b3843;
-    --rule-soft: #22303a;
-    --brass: #d6a352;
-    --trough: #223744;
-    --series: #8fb2cf;
-    --series-soft: #2a4357;
-    --good: #5fb39a;
-    --warning: #e0954e;
-    --critical: #e77b7b;
-    --focus: #d6a352;
-  }
-}
-:root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #0f161c;
-  --sheet: #151f27;
-  --surface: #151f27;
-  --ink: #e2e8ec;
-  --ink-2: #a9b5be;
-  --ink-3: #8794a0;
-  --rule: #2b3843;
-  --rule-soft: #22303a;
-  --brass: #d6a352;
-  --trough: #223744;
-  --series: #8fb2cf;
-  --series-soft: #2a4357;
-  --good: #5fb39a;
-  --warning: #e0954e;
-  --critical: #e77b7b;
-  --focus: #d6a352;
+  --paper: #121316;
+  --side: #17181c;
+  --surface: #1e1f24;
+  --raised: #26272d;
+  --ink: #f4f4f6;
+  --ink-2: #b4b5bd;
+  --ink-3: #8a8b94;
+  --rule: #2c2d34;
+  --accent: #8b5cf6;
+  --accent-2: #3b82f6;
+  --series: #8b5cf6;
+  --series-soft: #3b2a63;
+  --good: #22c55e;
+  --warning: #f59e0b;
+  --critical: #ef4444;
+  --pink: #ec4899;
+  --focus: #a78bfa;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --code: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  --radius: 20px;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --paper: #f3f4f7;
+  --side: #ffffff;
+  --surface: #ffffff;
+  --raised: #f1f2f6;
+  --ink: #16171b;
+  --ink-2: #4b4d57;
+  --ink-3: #6b6d78;
+  --rule: #e4e5ea;
+  --series-soft: #e9e1fd;
+  --good: #16a34a;
+  --warning: #d97706;
+  --critical: #dc2626;
+  --focus: #7c3aed;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.55 var(--serif); font-variant-numeric: lining-nums tabular-nums; }
-code, .mono { font-family: var(--code); font-size: 0.86em; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-h1, h2, h3 { font-family: var(--sans); font-weight: 600; letter-spacing: 0; margin: 0; line-height: 1.2; }
-h2 { font-size: 22px; margin-bottom: 6px; }
-h2 a { color: inherit; text-decoration: none; }
-h2 a:hover { text-decoration: underline; text-decoration-color: var(--brass); }
-h3 { font-size: 17px; }
-a { color: var(--ink); text-decoration-color: var(--brass); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
-a:hover { color: var(--brass); }
-:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 2px; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
 a, button, summary, select, input[type=checkbox] { cursor: pointer; }
-.shell { max-width: 1100px; margin: 0 auto; padding: 28px 24px 72px; }
-@media (max-width: 600px) { .shell { padding: 20px 16px 56px; } }
-
-/* Header: the wordmark, the four small needles, then the sections. */
-header.top { display: grid; gap: 14px; padding-bottom: 14px; margin-bottom: 28px; border-bottom: 1px solid var(--rule); }
-.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
-.brand { display: flex; align-items: baseline; gap: 12px; text-decoration: none; color: var(--ink); }
-.brand .word { font: 600 26px/1 var(--sans); letter-spacing: 0.01em; }
-.brand .sub { color: var(--ink-2); font: 15px var(--sans); }
-.brand .mark { display: none; }
-.strip.compact { display: flex; flex-wrap: wrap; gap: 4px 18px; }
-.strip.compact a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--ink-2); font: 15px var(--sans); }
-.strip.compact a:hover { color: var(--ink); }
-.strip.compact b { color: var(--ink); font-weight: 600; }
-nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
-nav a { color: var(--ink-2); text-decoration: none; font: 16px var(--sans); padding: 2px 0; border-bottom: 2px solid transparent; }
-nav a:hover { color: var(--ink); }
-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--brass); }
-
-/* Sections sit on the paper, separated by space and one rule; only grouped data gets a sheet. */
-.grid { display: grid; gap: 40px 48px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
-.panel { grid-column: span 12; min-width: 0; }
-.panel + .panel, .grid > .panel { border-top: 1px solid var(--rule); padding-top: 18px; }
-.span-4 { grid-column: span 4; } .span-6 { grid-column: span 6; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
-@media (max-width: 860px) { .span-4, .span-6, .span-8 { grid-column: span 12; } .grid { column-gap: 0; } }
-.lede { color: var(--ink-2); margin: 2px 0 14px; max-width: 64ch; }
-.label { display: block; color: var(--ink-2); font: 15px var(--sans); margin: 14px 0 4px; }
+code, .mono { font-family: var(--code); font-size: 0.88em; }
+h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; line-height: 1.2; }
+h2 { font-size: 18px; display: flex; align-items: center; gap: 6px; }
+h2 a { color: inherit; }
+h3 { font-size: 15px; }
+.num { text-align: right; }
 .muted { color: var(--ink-2); }
-.empty { color: var(--ink-2); font-style: italic; }
+.empty { color: var(--ink-3); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* The homeostat units: the one memorable thing. */
-.units-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
-@media (max-width: 860px) { .units-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.hunit { display: grid; justify-items: start; align-content: start; gap: 2px; padding: 18px 20px 20px; text-decoration: none; color: var(--ink); border-left: 1px solid var(--rule-soft); }
-.hunit:first-child { border-left: 0; padding-left: 0; }
-@media (max-width: 860px) { .hunit:nth-child(3) { border-left: 0; padding-left: 0; } .hunit:nth-child(n+3) { border-top: 1px solid var(--rule-soft); } }
-.hunit:hover .gauge .needle { stroke: var(--ink); }
-.hunit .name { font: 600 17px var(--sans); margin-top: 6px; display: inline-flex; align-items: center; }
-.hunit .name a { text-decoration: none; }
-.hunit .name a:hover { text-decoration: underline; text-decoration-color: var(--brass); }
-.hunit .reading { font: 28px/1.15 var(--serif); }
-.hunit .reading.good { color: var(--good); } .hunit .reading.warning { color: var(--warning); } .hunit .reading.critical { color: var(--critical); } .hunit .reading.off { color: var(--ink-3); }
-.hunit .detail { color: var(--ink-2); font-size: 15px; max-width: 30ch; }
-.gauge { display: block; overflow: visible; }
-.gauge .trough { fill: none; stroke: var(--trough); stroke-linecap: round; }
-.gauge .rim { fill: none; stroke: var(--ink-3); stroke-width: 1; }
-.gauge .zero { stroke: var(--ink-3); stroke-width: 1.2; }
-.gauge .needle { stroke: var(--brass); stroke-width: 2.4; stroke-linecap: round; transition: stroke .2s; }
-.gauge .pivot { fill: var(--ink); }
-.gauge.off .needle { stroke: var(--ink-3); }
+/* App frame: sidebar + main. */
+.app { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; }
+.side { background: var(--side); border-right: 1px solid var(--rule); padding: 22px 14px; display: flex; flex-direction: column; gap: 22px; position: sticky; top: 0; height: 100vh; }
+.logo { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 700; font-size: 18px; padding: 0 8px; }
+.logo:hover { text-decoration: none; }
+.logo svg { flex: none; }
+.menu { display: grid; gap: 4px; }
+.menu a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; color: var(--ink-2); font-weight: 550; }
+.menu a:hover { background: var(--raised); color: var(--ink); text-decoration: none; }
+.menu a[aria-current="page"] { background: var(--raised); color: var(--ink); }
+.menu svg { flex: none; }
+.side-foot { margin-top: auto; display: grid; gap: 12px; padding: 0 8px; }
+.kbname { color: var(--ink-3); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switch { display: flex; align-items: center; justify-content: space-between; color: var(--ink); font-weight: 550; }
+.switch:hover { text-decoration: none; }
+.switch .track { width: 38px; height: 22px; border-radius: 999px; background: var(--raised); border: 1px solid var(--rule); position: relative; transition: background .2s; }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink-3); transition: transform .2s, background .2s; }
+.switch.on .track { background: var(--accent); border-color: var(--accent); }
+.switch.on .knob { transform: translateX(16px); background: #fff; }
+.main { min-width: 0; padding: 22px 32px 48px; }
+.topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 26px; }
+.search { flex: 1 1 260px; max-width: 360px; position: relative; }
+.search input { width: 100%; background: var(--surface); border: 1px solid var(--rule); color: var(--ink); border-radius: 12px; padding: 11px 14px 11px 40px; font: 15px var(--sans); }
+.search svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-3); }
+.status { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--rule); color: var(--ink-2); font-size: 13px; font-weight: 550; white-space: nowrap; }
+.pill:hover { color: var(--ink); text-decoration: none; border-color: var(--ink-3); }
+.pill b { color: var(--ink); }
+.btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 10px 18px; font-weight: 650; font-size: 14px; }
+.btn.primary { background: var(--accent-2); color: #fff; }
+.btn.primary:hover { filter: brightness(1.1); text-decoration: none; }
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
+  .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; gap: 10px; }
+  .menu { display: flex; flex-wrap: wrap; gap: 2px; }
+  .menu a { padding: 7px 10px; }
+  .menu a span { display: none; }
+  .side-foot { margin: 0 0 0 auto; padding: 0; }
+  .kbname { display: none; }
+  .main { padding: 18px 16px 40px; }
+  .status { margin-left: 0; }
+}
 
-/* (i) tooltips: explanations on demand, not paragraphs on every page. */
-.info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; margin-left: 7px; border: 1.2px solid var(--ink-3); border-radius: 50%; color: var(--ink-2); vertical-align: 2px; cursor: help; }
-.info .i { font: italic 600 12px/1 var(--serif); }
-.info:hover, .info:focus-visible { border-color: var(--brass); color: var(--brass); }
-.info .tip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.info:hover .tip, .info:focus .tip { clip: auto; width: max-content; max-width: min(340px, 78vw); height: auto; overflow: visible; white-space: normal; left: -8px; top: calc(100% + 8px); z-index: 20; background: var(--ink); color: var(--paper); font: 400 15px/1.45 var(--sans); letter-spacing: 0; text-align: left; padding: 9px 12px; border-radius: 4px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.18); }
-.info .tip code { color: inherit; }
+/* Greeting and cards. */
+.hello { color: var(--ink-2); margin: 0 0 2px; font-size: 15px; }
+.welcome { font-size: 30px; font-weight: 700; margin: 0 0 22px; }
+.grid { display: grid; gap: 20px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.panel, .card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 22px 24px; grid-column: span 12; min-width: 0; }
+.span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; } .span-6 { grid-column: span 6; } .span-7 { grid-column: span 7; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
+@media (max-width: 1000px) { .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; } .grid { gap: 16px; } }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.detail-link { font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 4px; }
+.lede { color: var(--ink-2); margin: 4px 0 14px; max-width: 70ch; }
+.label { display: block; color: var(--ink-3); font-size: 13px; margin: 10px 0 4px; }
 
-/* Small multiples of data. */
-.stats, .mini { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 12px 28px; margin: 8px 0 12px; }
-@media (max-width: 600px) { .stats { --cols: 2 !important; } }
-.stat .n, .mini .n { display: block; font: 30px/1.1 var(--serif); }
-.stat .k, .mini .k { color: var(--ink-2); font: 15px var(--sans); }
-.console { display: none; }
+/* Hero card. */
+.hero-body { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); gap: 24px; align-items: end; }
+@media (max-width: 1000px) { .hero-body { grid-template-columns: 1fr; } }
+.tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--raised); margin-bottom: 26px; }
+.tabs a, .tabs span { padding: 7px 14px; border-radius: 999px; color: var(--ink-3); font-size: 14px; font-weight: 550; }
+.tabs a:hover { color: var(--ink); text-decoration: none; }
+.tabs .on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
+.big { font-size: 56px; font-weight: 750; letter-spacing: -0.03em; line-height: 1; display: flex; align-items: center; gap: 14px; }
+.trend { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 650; letter-spacing: 0; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--rule); }
+.trend.up { color: var(--good); } .trend.down { color: var(--critical); } .trend.flat { color: var(--ink-3); }
+.big-sub { color: var(--ink-3); margin-top: 10px; font-size: 14px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 22px; border: 1px solid var(--rule); border-radius: 16px; }
+.kpi { padding: 16px 20px; border-left: 1px solid var(--rule); }
+.kpi:first-child { border-left: 0; }
+.kpi .k { color: var(--ink-2); font-size: 14px; display: block; margin-bottom: 6px; }
+.kpi .v { font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+@media (max-width: 700px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi:nth-child(3) { border-left: 0; } .kpi:nth-child(n+3) { border-top: 1px solid var(--rule); } }
+.area { width: 100%; height: auto; display: block; overflow: visible; }
+.area .curve { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.area .gridline { stroke: var(--rule); stroke-dasharray: 3 5; }
+.area .xl { fill: var(--ink-3); font: 12px var(--sans); }
+.area .pt { fill: transparent; }
+.area .pt:hover { fill: color-mix(in srgb, var(--accent) 30%, transparent); }
+.area .last { fill: var(--accent); stroke: #fff; stroke-width: 2.5; }
+.area .callout rect { fill: var(--ink); }
+.area .callout .cl { fill: var(--ink-3); font: 11px var(--sans); }
+.area .callout .cv { fill: var(--paper); font: 700 14px var(--sans); }
 
-/* Tables: ruled lists, no boxes. */
-table { width: 100%; border-collapse: collapse; font-size: 16px; }
-th { text-align: left; font: 600 14px var(--sans); color: var(--ink-2); border-bottom: 1px solid var(--rule); padding: 6px 10px 6px 0; }
-td { border-bottom: 1px solid var(--rule-soft); padding: 8px 10px 8px 0; vertical-align: top; }
+/* Decisions card: total, legend, rings. */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 16px; align-items: center; }
+@media (max-width: 520px) { .split { grid-template-columns: 1fr; } }
+.total .k { color: var(--ink-2); font-size: 14px; }
+.total .v { font-size: 34px; font-weight: 750; display: block; margin: 2px 0 14px; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.legend li { display: flex; align-items: center; gap: 10px; font-weight: 550; }
+.legend .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.legend b { margin-left: auto; padding-right: 8px; }
+.rings { width: 100%; max-width: 200px; display: block; }
+.rings .ring-track { fill: none; stroke: var(--raised); stroke-width: 11; }
+.rings .ring { fill: none; stroke-width: 11; stroke-linecap: round; }
+
+/* Pills for status in tables. */
+.chip, .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 650; white-space: nowrap; background: var(--raised); color: var(--ink-2); }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.accepted, .status-pill.merged { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.chip.candidate, .status-pill.review { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.chip.disputed, .status-pill.declined { background: color-mix(in srgb, var(--critical) 18%, transparent); color: var(--critical); }
+.chip.retired { color: var(--ink-3); }
+
+/* Tables. */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; color: var(--ink-3); font-weight: 550; font-size: 13px; padding: 8px 10px; border-bottom: 1px solid var(--rule); }
+td { padding: 11px 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
 tr:last-child td { border-bottom: 0; }
 .table-wrap { overflow-x: auto; }
 .table-wrap > table { min-width: 620px; }
-.recent { table-layout: fixed; font-size: 15px; }
-.recent td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 6px 10px 6px 0; }
-.recent .when { width: 104px; color: var(--ink-2); }
-.recent .what { width: 150px; }
-.log { font-size: 15px; }
-.log:not(.recent) .when { white-space: nowrap; color: var(--ink-2); width: 1%; }
+.table-wrap.fit > table { min-width: 0; table-layout: fixed; }
+.decided td:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.decided th:nth-child(2), .decided td:nth-child(2) { width: 24%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.decided th:nth-child(3) { width: 112px; } .decided th:nth-child(4) { width: 64px; }
+.recent { table-layout: fixed; }
+.recent td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent .when { width: 104px; color: var(--ink-3); }
+.recent .what { width: 160px; }
+.log:not(.recent) .when { white-space: nowrap; color: var(--ink-3); width: 1%; }
 .log:not(.recent) .what { white-space: nowrap; width: 1%; }
-.log .detail { overflow-wrap: anywhere; }
-.kind { font: 15px var(--sans); color: var(--ink-2); }
+.log .detail { overflow-wrap: anywhere; color: var(--ink-2); }
+.kind { font-size: 13px; color: var(--ink-2); }
 .sym { display: inline-block; width: 1.3em; color: var(--ink-3); }
-.sym.learn { color: var(--good); } .sym.alert { color: var(--critical); } .sym.run { color: var(--series); }
-.legend { display: flex; gap: 18px; font: 15px var(--sans); color: var(--ink-2); margin: 0 0 6px; }
-.filters { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 15px var(--sans); margin: 0 0 12px; }
-.filters a { color: var(--ink-2); text-decoration: none; }
-.filters a[aria-current="page"] { color: var(--ink); border-bottom: 2px solid var(--brass); }
+.sym.learn { color: var(--good); } .sym.alert { color: var(--critical); } .sym.run { color: var(--accent); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.filters a { padding: 6px 12px; border-radius: 999px; background: var(--raised); color: var(--ink-2); font-size: 13px; font-weight: 550; }
+.filters a:hover { color: var(--ink); text-decoration: none; }
+.filters a[aria-current="page"] { background: var(--accent); color: #fff; }
 
-/* State, always in words and shape as well as colour. */
-.chip { display: inline-flex; align-items: center; gap: 6px; font: 15px var(--sans); color: var(--ink-2); white-space: nowrap; }
-.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
-.chip.accepted::before { background: var(--good); } .chip.disputed::before { background: var(--critical); } .chip.candidate::before { background: var(--warning); }
+/* Small multiples. */
+.stats, .mini { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 14px; margin: 8px 0 12px; }
+@media (max-width: 600px) { .stats, .mini { --cols: 2 !important; } }
+.stat .n, .mini .n { display: block; font-size: 26px; font-weight: 700; }
+.stat .k, .mini .k { color: var(--ink-2); font-size: 13px; }
 .lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
 .lamp.good { background: var(--good); } .lamp.warning { background: var(--warning); } .lamp.critical { background: var(--critical); }
 .icon { flex: none; } .icon.good { color: var(--good); } .icon.warning { color: var(--warning); } .icon.critical { color: var(--critical); } .icon.off { color: var(--ink-3); }
-.state { font: 15px var(--sans); color: var(--ink-2); }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.tag { font: 15px var(--sans); color: var(--ink-2); border-bottom: 1px dotted var(--rule); }
-.tag.no { color: var(--critical); border-bottom-color: var(--critical); }
+.state { font-size: 13px; color: var(--ink-2); }
+.tag { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); padding: 3px 10px; border-radius: 999px; background: var(--raised); }
+.tag.no { color: var(--critical); background: color-mix(in srgb, var(--critical) 16%, transparent); }
 
-/* Agent units on older pages. */
-.units { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 600px) { .units { grid-template-columns: 1fr; } }
-.unit { display: grid; gap: 4px; }
-.unit .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-
-/* Charts. */
-.chart { width: 100%; max-width: 640px; height: auto; display: block; overflow: visible; }
-.chart path { fill: var(--series); }
+/* Bars and dial (other pages). */
+.chart { width: 100%; max-width: 680px; height: auto; display: block; overflow: visible; }
+.chart path { fill: var(--accent); }
 .chart .hit { fill: transparent; }
-.chart .m:hover path { fill: var(--brass); }
-.chart .base { stroke: var(--rule); stroke-width: 1; }
-.chart text { font: 13px var(--sans); fill: var(--ink-2); }
+.chart .m:hover path { fill: var(--accent-2); }
+.chart .base { stroke: var(--rule); }
+.chart text { font: 12px var(--sans); fill: var(--ink-3); }
 .chart text.v { fill: var(--ink); }
 .dial { width: 100%; max-width: 220px; display: block; margin: 0 auto; }
-.dial .track { fill: none; stroke: var(--trough); stroke-width: 10; stroke-linecap: round; }
-.dial .fill { fill: none; stroke: var(--series); stroke-width: 10; stroke-linecap: round; }
-.dial .tick { stroke: var(--ink-3); stroke-width: 1; } .dial .tick.major { stroke: var(--ink-2); stroke-width: 1.5; }
-.dial .needle { stroke: var(--brass); stroke-width: 2.4; stroke-linecap: round; }
-.dial .hub { fill: var(--ink); }
-.dial-value { font: 26px var(--serif); fill: var(--ink); }
-.dial-caption { font: 14px var(--sans); fill: var(--ink-2); }
-details.table-view { margin-top: 6px; } details.table-view summary { color: var(--ink-2); font: 15px var(--sans); }
+.dial .track { fill: none; stroke: var(--raised); stroke-width: 10; stroke-linecap: round; }
+.dial .fill { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; }
+.dial .tick { stroke: var(--ink-3); } .dial .needle { stroke: var(--ink); stroke-width: 2; } .dial .hub { fill: var(--ink); }
+.dial-value { font: 700 24px var(--sans); fill: var(--ink); } .dial-caption { font: 12px var(--sans); fill: var(--ink-3); }
+details.table-view { margin-top: 8px; } details.table-view summary { color: var(--ink-3); font-size: 13px; }
+
+/* (i) tooltips. */
+.info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; margin-left: 4px; border: 1.3px solid var(--ink-3); border-radius: 50%; color: var(--ink-3); cursor: help; flex: none; }
+.info .i { font: italic 700 11px/1 Georgia, serif; }
+.info:hover, .info:focus-visible { border-color: var(--accent); color: var(--accent); }
+.info .tip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.info:hover .tip, .info:focus .tip { clip: auto; width: max-content; max-width: min(320px, 78vw); height: auto; overflow: visible; white-space: normal; left: -10px; top: calc(100% + 10px); z-index: 30; background: var(--raised); color: var(--ink); border: 1px solid var(--rule); font: 400 13.5px/1.5 var(--sans); letter-spacing: 0; text-align: left; padding: 10px 12px; border-radius: 12px; box-shadow: 0 12px 30px rgb(0 0 0 / .35); }
 
 /* Entry pages. */
-.entry-head { display: grid; gap: 6px; margin: 8px 0 18px; }
-.entry-head h2 { font-size: 30px; margin: 0; max-width: 32ch; }
-.entry-head .tags { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
-.statement { padding: 0; margin: 0 0 18px; max-width: 64ch; }
-.statement .label { margin: 0 0 2px; }
+.entry-head { display: grid; gap: 10px; margin: 6px 0 20px; }
+.entry-head h2 { font-size: 26px; }
+.entry-head .tags { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.statement { margin: 0 0 18px; padding: 16px 18px; border-radius: 14px; background: var(--raised); max-width: 72ch; }
+.statement .label { margin: 0 0 4px; }
 .statement p { margin: 0; }
-.statement.rule p { font-size: 22px; line-height: 1.45; }
-.statement.rejected p { font-size: 22px; line-height: 1.45; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--critical) 60%, transparent); text-decoration-thickness: 1.5px; }
-.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 22px; margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--rule); }
-.facts dt { color: var(--ink-2); font: 15px/1.7 var(--sans); }
+.statement.rule p { font-size: 18px; font-weight: 550; }
+.statement.rejected p { font-size: 18px; text-decoration: line-through; text-decoration-color: var(--critical); }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 20px 0 0; }
+.facts dt { color: var(--ink-3); font-size: 13px; padding-top: 2px; }
 .facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.reasons { list-style: none; padding: 0; margin: 2px 0 0; }
-.reasons .d { display: inline-block; width: 3ch; text-align: right; margin-right: 8px; }
+.reasons { list-style: none; padding: 0; margin: 4px 0 0; }
+.reasons .d { display: inline-block; width: 3ch; text-align: right; margin-right: 8px; font-weight: 700; }
 .reasons .d.pos { color: var(--good); } .reasons .d.neg { color: var(--critical); }
 .flag { border-left: 3px solid var(--warning); padding-left: 12px; margin: 6px 0; }
-pre.entry { white-space: pre-wrap; }
-.events { white-space: pre-wrap; }
 
 /* Settings. */
-.sections { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 32px; font: 17px var(--sans); }
+.sections { list-style: none; padding: 0; margin: 10px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.sections li { display: flex; align-items: center; gap: 4px; padding: 14px 16px; border-radius: 14px; background: var(--raised); font-weight: 600; }
 form.settings { display: grid; gap: 16px; max-width: 760px; }
 .field { display: grid; grid-template-columns: 240px 1fr; gap: 6px 18px; align-items: start; }
 @media (max-width: 700px) { .field { grid-template-columns: 1fr; } }
-.field label { padding-top: 6px; color: var(--ink); font: 16px var(--sans); }
-.field .help { grid-column: 2; color: var(--ink-2); font-size: 15px; margin-top: -2px; }
-@media (max-width: 700px) { .field .help { grid-column: 1; } }
-input[type=text], input[type=number], select, textarea { font: 15px var(--code); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px; padding: 7px 9px; width: 100%; }
+.field label { padding-top: 8px; color: var(--ink); font-weight: 550; display: flex; align-items: center; }
+input[type=text], input[type=number], select, textarea { font: 14px var(--code); color: var(--ink); background: var(--raised); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 10px; width: 100%; }
 textarea { min-height: 84px; resize: vertical; }
 .checks { display: flex; flex-wrap: wrap; gap: 6px 18px; padding-top: 6px; }
-.rows td { padding: 4px 8px 4px 0; }
+.rows td { padding: 5px 8px 5px 0; }
 .rows input[type=text] { min-width: 90px; }
 .rows select { min-width: 104px; }
-button { font: 600 16px var(--sans); color: var(--sheet); background: var(--ink); border: 0; border-radius: 3px; padding: 9px 18px; justify-self: start; }
-button:hover { background: var(--brass); }
-.notice { border-left: 3px solid var(--good); background: var(--sheet); padding: 10px 14px; margin-bottom: 16px; }
-.notice.error { border-left-color: var(--critical); }
+button { font: 650 14px var(--sans); color: #fff; background: var(--accent-2); border: 0; border-radius: 999px; padding: 10px 20px; justify-self: start; }
+button:hover { filter: brightness(1.1); }
+.notice { border-radius: 12px; background: color-mix(in srgb, var(--good) 14%, transparent); padding: 12px 16px; margin-bottom: 16px; }
+.notice.error { background: color-mix(in srgb, var(--critical) 14%, transparent); }
 .notice ul { margin: 6px 0 0; padding-left: 18px; }
-footer { margin-top: 48px; color: var(--ink-2); font-size: 15px; border-top: 1px solid var(--rule); padding-top: 14px; max-width: 80ch; }
-.themes { display: inline-flex; gap: 14px; margin-left: 24px; font: 15px var(--sans); }
-footer { display: flex; align-items: center; flex-wrap: wrap; }
-.themes a { color: var(--ink-2); }
-.themes a[aria-current="true"] { color: var(--ink); text-decoration: none; }
-
-.dial .needle { transform-origin: 110px 104px; }
-/* One moment of motion: the needles settle into place, as the machine finds equilibrium. */
-@media (prefers-reduced-motion: no-preference) {
-  .gauge .needle, .dial .needle { transform-box: view-box; animation: settle 1.4s cubic-bezier(.25,1.6,.4,1) both; }
-  @keyframes settle { from { transform: rotate(var(--from, -40deg)); } }
-}
+.units { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.unit { display: grid; gap: 4px; }
+.gauge { display: inline-block; vertical-align: middle; }
+.gauge .trough { fill: none; stroke: var(--raised); stroke-linecap: round; }
+.gauge .rim { display: none; } .gauge .zero { stroke: var(--ink-3); }
+.gauge .needle { stroke: var(--accent); stroke-linecap: round; } .gauge .pivot { fill: var(--ink); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 `;
+
+/** Stroke icons, drawn here (no icon font, nothing fetched). 20px, currentColor. */
+const ICON: Record<string, string> = {
+  "/": '<rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/>',
+  "/automation":
+    '<path d="M20 12a8 8 0 0 1-14 5.3"/><path d="M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4"/><path d="M6 21v-4h4"/>',
+  "/entries":
+    '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/>',
+  "/members":
+    '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2 .8 3 2.9 3 6"/>',
+  "/coverage":
+    '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".8"/>',
+  "/impact": '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
+  "/documents": '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
+  "/desire-paths":
+    '<path d="M5 19c3-1 3-5 7-6s4-5 7-6"/><circle cx="5" cy="19" r="1.6"/><circle cx="19" cy="7" r="1.6"/>',
+  "/events": '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
+  "/settings":
+    '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+};
+const icon = (path: string, size = 20) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+
+/** Pill labels in the top bar; the full name and reading are in the pill's title. */
+const SHORT: Record<Lamp["key"], string> = { daily: "Run", queue: "Queue", sync: "Sync", kb: "KB" };
 
 const NAV: [string, string][] = [
   ["/", "Overview"],
@@ -301,13 +346,23 @@ export function layout(opts: {
 <style>${CSS}</style>
 </head>
 <body>
-<div class="shell">
-<header class="top">
-  <div class="bar"><a class="brand" href="/" aria-label="Homeostat overview"><span class="word">Homeostat</span><span class="sub" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}</span></a>${opts.status?.length ? `<div class="strip compact" aria-label="Status">${opts.status.map((l) => `<a href="${l.href}" title="${esc(`${l.label}: ${l.value}${l.detail ? `, ${l.detail}` : ""}`)}">${gauge(l.state, 26)}${esc(l.label)} <b>${esc(l.value)}</b></a>`).join("")}</div>` : ""}</div>
-  <nav aria-label="Sections">${NAV.map(([href, label]) => `<a href="${href}"${current(href) ? ' aria-current="page"' : ""}>${label}</a>`).join("")}</nav>
-</header>
-<main>${opts.body}</main>
-<footer><span>Local dashboard</span>${info("It reads this KB checkout and its git-ignored event log, and sends nothing anywhere. Settings changes are written to homeostat.yaml here: commit them on a branch and open a PR.")}<span class="themes" aria-label="Theme">${(["dark", "light"] as const).map((t) => `<a href="?theme=${t}"${opts.theme === t ? ' aria-current="true"' : ""}>${t}</a>`).join("")}</span></footer>
+<div class="app">
+<aside class="side">
+  <a class="logo" href="/" aria-label="Homeostat overview"><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><rect width="30" height="30" rx="9" fill="url(#lg)"/><path d="M7 19a8 8 0 0 1 16 0" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><path d="M15 19l4-6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg><span>Homeostat</span></a>
+  <nav class="menu" aria-label="Sections">${NAV.map(([href, label]) => `<a href="${href}"${current(href) ? ' aria-current="page"' : ""} title="${label}">${icon(ICON[href] ?? "")}<span>${label}</span></a>`).join("")}</nav>
+  <div class="side-foot">
+    <span class="kbname" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}${info("A local view of this KB checkout and its git-ignored event log. It sends nothing anywhere. Settings changes are written to homeostat.yaml here: commit them on a branch and open a PR.")}</span>
+    <a class="switch${opts.theme === "light" ? "" : " on"}" href="?theme=${opts.theme === "light" ? "dark" : "light"}" role="switch" aria-checked="${opts.theme === "light" ? "false" : "true"}">Dark mode<span class="track"><span class="knob"></span></span></a>
+  </div>
+</aside>
+<div class="main">
+  <header class="topbar">
+    <form class="search" action="/entries" role="search">${icon('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>', 18)}<input type="search" name="q" placeholder="Search rules" aria-label="Search rules"></form>
+    ${opts.status?.length ? `<div class="status" aria-label="Status">${opts.status.map((l) => `<a class="pill" href="${l.href}" title="${esc(`${l.label}: ${l.value}${l.detail ? `, ${l.detail}` : ""}`)}">${stateIcon(l.state, 15)}${esc(SHORT[l.key])} <b>${esc(l.value)}</b></a>`).join("")}</div>` : ""}
+    <a class="btn primary" href="/automation#queue">${icon('<path d="M4 12l5 5L20 6"/>', 18)}Review queue</a>
+  </header>
+  <main>${opts.body}</main>
+</div>
 </div>
 </body>
 </html>`;
@@ -428,49 +483,119 @@ const STATE_WORD: Record<Lamp["state"], string> = {
   off: "no data yet",
 };
 
+/** A small arrow for a change: up, down or level. */
+const arrow = (d: number) =>
+  icon(
+    d > 0
+      ? '<path d="M4 17l6-6 4 4 6-7"/><path d="M15 8h5v5"/>'
+      : d < 0
+        ? '<path d="M4 7l6 6 4-4 6 7"/><path d="M15 16h5v-5"/>'
+        : '<path d="M5 12h14"/>',
+    16,
+  );
+
+export interface OverviewExtras {
+  name?: string;
+  /** Rules accepted in the last 7 days. */
+  newThisWeek: number;
+  decided: { member: string; id: string; decision: string; confidence?: number; at: string }[];
+}
+
 export function overviewPage(
   h: Health,
   agents: AgentLiveness[],
   imp: Impact,
-  recent: Event[],
+  _recent: Event[],
   v: AutomationView,
-  ls: readonly Lamp[],
+  _ls: readonly Lamp[],
+  x: OverviewExtras = { newThisWeek: 0, decided: [] },
 ): string {
-  const mini = (n: number | string, k: string) =>
-    `<div><span class="n">${n}</span><span class="k">${k}</span></div>`;
   const daily: Datum[] = imp.injectionsByDay.map((d) => ({
-    label: d.day.slice(5),
+    label: new Date(`${d.day}T00:00:00Z`).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+    }),
     value: d.count,
-    title: `${d.day}: ${d.count} injections`,
+    title: `${d.day}: ${d.count} sessions given rules`,
   }));
-  const r = v.lastRun;
-  const sum = (k: "merged" | "review" | "declined") =>
+  const runs = v.runs;
+  const last = runs.at(-1);
+  const prev = runs.at(-2);
+  const sum = (r: typeof last, k: "merged" | "review" | "declined") =>
     r?.members.reduce((n, m) => n + m[k], 0) ?? 0;
-  const prs = (r?.members ?? []).flatMap((m) => [
-    ...(m.dailyPr ? [`<a href="${esc(m.dailyPr)}">${esc(m.member)} daily PR</a>`] : []),
-    ...(m.reviewPr ? [`<a href="${esc(m.reviewPr)}">${esc(m.member)} review PR</a>`] : []),
-  ]);
-  const when = (a: AgentLiveness) =>
-    `${a.agent === "curator" ? "Daily run" : "Deep dive"}: ${esc(schedule(a.schedule))}.`;
-  const runInfo = `Runs in the KB repo's CI, never on laptops. ${agents.map(when).join(" ")} Settled counts lessons reviewers merged or closed since the run before.`;
-  const run = r
-    ? `<p class="muted">${esc(r.at.slice(0, 10))}, ${esc(r.at.slice(11, 16))} UTC</p><div class="mini" style="--cols: 4">${mini(sum("merged"), "merged")}${mini(sum("review"), "to review")}${mini(sum("declined"), "declined")}${mini(r.settled, "settled")}</div>${prs.length ? `<p>${prs.join(", ")}</p>` : ""}`
-    : '<p class="empty">No run yet.</p>';
-  return `<div class="grid">
-<section class="span-12" aria-label="Status">${consoleRow(ls)}</section>
-<section class="panel span-6" aria-labelledby="run"><h2 id="run"><a href="/automation">Last daily run</a>${info(runInfo)}</h2>${run}</section>
-<section class="panel span-6" aria-labelledby="kb"><h2 id="kb"><a href="/entries">Knowledge base</a>${info("Rules in force are the ones every session gets. Stale means nobody has confirmed the rule in 180 days.")}</h2>
-<div class="mini" style="--cols: 4">${mini(h.byStatus.accepted, "in force")}${mini(h.byStatus.candidate, "awaiting")}${mini(h.flagged.length + h.byStatus.disputed, "flagged")}${mini(h.stale.length, "stale")}</div></section>
-<section class="panel span-12" aria-labelledby="use"><h2 id="use"><a href="/impact">Sessions</a>${info("Sessions that started with team rules in the last 14 days, from this machine's event log.")}</h2>
-<div class="mini" style="--cols: 4">${mini(imp.sessions, "sessions")}${mini(imp.rulesPerInjection.toFixed(1), "rules each")}</div>
-${columns(daily, { title: "Sessions given rules, per day", height: 110, labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Sessions"])}</section>
-<section class="panel span-12" aria-labelledby="recent"><h2 id="recent"><a href="/events">Recent</a>${info('<span class="sym learn">◆</span> a lesson saved or a note asked for <br><span class="sym alert">▲</span> something to look at <br><span class="sym run">▶</span> a daily run, deep dive or seed. Model and MCP calls are on the events page.')}</h2>${recent.length ? recentTable(recent) : '<p class="empty">Nothing yet.</p>'}</section>
+  const kpi = (label: string, now: number, before: number | undefined, tip: string) =>
+    `<div class="kpi"><span class="k">${label}${info(tip)}</span><span class="v">${before === undefined ? "" : `<span class="trend ${now > before ? "up" : now < before ? "down" : "flat"}" style="border:0;padding:0">${arrow(now - before)}</span>`}${now}</span></div>`;
+  const totals = {
+    merged: runs.reduce((n, r) => n + sum(r, "merged"), 0),
+    review: runs.reduce((n, r) => n + sum(r, "review"), 0),
+    declined: runs.reduce((n, r) => n + sum(r, "declined"), 0),
+    settled: runs.reduce((n, r) => n + r.settled, 0),
+  };
+  const segments = [
+    { label: "Merged", value: totals.merged, color: "var(--good)" },
+    { label: "To review", value: totals.review, color: "var(--warning)" },
+    { label: "Declined", value: totals.declined, color: "var(--critical)" },
+    { label: "Settled", value: totals.settled, color: "var(--accent)" },
+  ];
+  const decidedTotal = totals.merged + totals.review + totals.declined;
+  const schedules = agents
+    .map((a) => `${a.agent === "curator" ? "Daily run" : "Deep dive"}: ${schedule(a.schedule)}.`)
+    .join(" ");
+  const rows = x.decided.slice(0, 6);
+  return `<p class="hello">Hi ${esc(x.name ?? "there")},</p><h1 class="welcome">Welcome back</h1>
+<div class="grid">
+<section class="card span-12" aria-labelledby="kb">
+  <div class="card-head"><h2 id="kb">Knowledge${info("The rules every session gets, and how much they're used. Rules in force are accepted and not disputed.")}</h2></div>
+  <div class="hero-body">
+    <div>
+      <div class="tabs" role="tablist"><span class="on" role="tab" aria-selected="true">Rules in force</span><a role="tab" href="/entries?status=candidate">Awaiting review</a><a role="tab" href="/entries?status=disputed">Disputed</a></div>
+      <div class="big">${h.byStatus.accepted}<span class="trend ${x.newThisWeek > 0 ? "up" : "flat"}">${arrow(x.newThisWeek)}${x.newThisWeek > 0 ? `+${x.newThisWeek}` : "0"} this week</span></div>
+      <p class="big-sub">${h.flagged.length + h.byStatus.disputed} flagged, ${h.stale.length} stale</p>
+    </div>
+    <div>${areaChart(daily, { title: "Sessions given team rules, per day", id: "sessions" })}</div>
+  </div>
+  <div class="kpis">
+    ${kpi("Merged", sum(last, "merged"), prev ? sum(prev, "merged") : undefined, "Lessons the last daily run merged on its own: confident, safe and not repeats.")}
+    ${kpi("To review", sum(last, "review"), prev ? sum(prev, "review") : undefined, "Lessons the last daily run sent to a reviewer, in a review PR.")}
+    ${kpi("Declined", sum(last, "declined"), prev ? sum(prev, "declined") : undefined, "Lessons the last daily run declined: weak, invalid, or a repeat of a rule the team already has.")}
+    ${kpi("Settled", last?.settled ?? 0, prev?.settled, "Review PRs reviewers merged or closed since the run before.")}
+  </div>
+</section>
+<section class="card span-5" aria-labelledby="runs">
+  <div class="card-head"><h2 id="runs">Daily run${info(`Every decision recorded on the state branch. ${schedules}`)}</h2><a class="detail-link" href="/automation">Detail ${icon('<path d="M9 6l6 6-6 6"/>', 16)}</a></div>
+  <div class="split"><div><div class="total"><span class="k">Lessons decided</span><span class="v">${decidedTotal}</span></div>
+  <ul class="legend">${segments.map((g) => `<li><span class="dot" style="background:${g.color}"></span>${g.label}<b>${g.value}</b></li>`).join("")}</ul></div>
+  ${rings(segments, "Lessons decided by the daily run")}</div>
+</section>
+<section class="card span-7" aria-labelledby="decided">
+  <div class="card-head"><h2 id="decided">Recent decisions</h2><a class="detail-link" href="/automation">Detail ${icon('<path d="M9 6l6 6-6 6"/>', 16)}</a></div>
+  ${
+    rows.length
+      ? `<div class="table-wrap fit"><table class="decided"><thead><tr><th>Lesson</th><th>Developer</th><th>Decision</th><th class="num">Score</th></tr></thead><tbody>${rows
+          .map(
+            (d) =>
+              `<tr><td>${d.id.startsWith("knowledge/") ? esc(d.id.replace(/^knowledge\//, "")) : `<a href="/entries/${esc(d.id)}">${esc(d.id)}</a>`}</td><td>${esc(d.member)}</td><td><span class="status-pill ${esc(d.decision)}">${d.decision === "review" ? "to review" : esc(d.decision)}</span></td><td class="num">${d.confidence ?? "—"}</td></tr>`,
+          )
+          .join("")}</tbody></table></div>`
+      : '<p class="empty">No decisions yet. The first daily run fills this in.</p>'
+  }
+</section>
 </div>`;
 }
 
-export function entriesPage(entries: readonly Entry[], status: string | null): string {
+export function entriesPage(
+  entries: readonly Entry[],
+  status: string | null,
+  query: string | null = null,
+): string {
+  const words = (query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (e: Entry) => {
+    const hay = `${e.frontmatter.id} ${e.frontmatter.title} ${e.sections.rule ?? ""}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  };
   const shown = entries
-    .filter((e) => !status || e.frontmatter.status === status)
+    .filter((e) => (!status || e.frontmatter.status === status) && matches(e))
     .sort(
       (a, b) =>
         a.frontmatter.area.localeCompare(b.frontmatter.area) ||

@@ -342,3 +342,16 @@ export function lamps(
   };
   return [daily, queue, sync, kbLamp];
 }
+
+/** The first name in this checkout's git identity, for the greeting; undefined when unset. */
+export function firstName(kbRoot: string): string | undefined {
+  const name = git(kbRoot, "config", "user.name")?.trim();
+  return name ? name.split(/\s+/)[0] : undefined;
+}
+
+/** Every lesson decided across the recorded runs, newest first. */
+export function decidedLessons(
+  state: AutomationState,
+): (RunReport["lessons"][number] & { at: string })[] {
+  return [...state.runs].reverse().flatMap((r) => r.lessons.map((l) => ({ ...l, at: r.at })));
+}

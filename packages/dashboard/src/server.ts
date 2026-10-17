@@ -10,7 +10,15 @@ import {
   sectionUsage,
   validate,
 } from "@homeostat/core";
-import { automationPage, automationView, type Lamp, lamps, readAutomation } from "./automation.ts";
+import {
+  automationPage,
+  automationView,
+  decidedLessons,
+  firstName,
+  type Lamp,
+  lamps,
+  readAutomation,
+} from "./automation.ts";
 import {
   agentLiveness,
   contributions,
@@ -164,7 +172,8 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
       );
     }
     // The console lamps on every page: the daily run, the review queue, sync and the KB.
-    const auto = automationView(readAutomation(opts.kbRoot), snap.config, snap.now);
+    const autoState = readAutomation(opts.kbRoot);
+    const auto = automationView(autoState, snap.config, snap.now);
     const kbHealth = health(snap);
     lampsNow = lamps(
       auto,
@@ -217,13 +226,23 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
         const recent: Event[] = snap.events.slice(-60).reverse();
         return page(
           "Overview",
-          overviewPage(kbHealth, agentLiveness(snap), impact(snap), recent, auto, lampsNow),
+          overviewPage(kbHealth, agentLiveness(snap), impact(snap), recent, auto, lampsNow, {
+            ...(firstName(opts.kbRoot) ? { name: firstName(opts.kbRoot) } : {}),
+            newThisWeek: snap.entries.filter(
+              (e) =>
+                e.frontmatter.status === "accepted" && e.frontmatter.created >= week.slice(0, 10),
+            ).length,
+            decided: decidedLessons(autoState),
+          }),
         );
       }
       case "/automation":
         return page("Automation", automationPage(auto));
       case "/entries":
-        return page("Entries", entriesPage(snap.entries, url.searchParams.get("status")));
+        return page(
+          "Entries",
+          entriesPage(snap.entries, url.searchParams.get("status"), url.searchParams.get("q")),
+        );
       case "/members":
         return page("Members", membersPage(contributions(snap)));
       case "/coverage":
