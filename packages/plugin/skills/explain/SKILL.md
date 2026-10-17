@@ -2,7 +2,7 @@
 name: explain
 description: Explain which homeostat knowledge base rules apply to a file and why each exists, with its source PR, score and owner. Use when the user asks why a team rule exists or what rules cover a file.
 argument-hint: "<file path or entry id>"
-allowed-tools: Bash(homeostat explain:*), Bash(homeostat search:*), Bash(npx --yes homeostat@0.1.6 explain:*), Bash(npx --yes homeostat@0.1.6 search:*), Read, Glob, Grep
+allowed-tools: Bash(homeostat explain:*), Bash(homeostat search:*), Bash(npx --yes homeostat@0.1.7 explain:*), Bash(npx --yes homeostat@0.1.7 search:*), Read, Glob, Grep
 ---
 
 # Explain team rules
@@ -15,7 +15,7 @@ Input: $ARGUMENTS
 
 Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is not empty; the `HOMEOSTAT_DIR` environment variable; the current repository if it has a `homeostat.yaml`; otherwise ask the user for the path to their KB checkout.
 
-Run the CLI as `homeostat` if it is on the PATH, otherwise as `npx --yes homeostat@0.1.6`.
+Run the CLI as `homeostat` if it is on the PATH, otherwise as `npx --yes homeostat@0.1.7`.
 
 ## 2. Find the entries
 
