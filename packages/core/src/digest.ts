@@ -81,7 +81,7 @@ export function buildDigest(input: DigestInput): string {
   ];
   const quiet = body.length === 0;
   return [
-    `*Homeostat weekly digest* (since ${since})`,
+    `*Homeostat ${days === 7 ? "weekly digest" : `digest, last ${days} days`}* (since ${since})`,
     "",
     ...(quiet ? ["A quiet week: no new or changed rules, documents, reviews or flags."] : body),
   ]

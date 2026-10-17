@@ -64,7 +64,7 @@ describe("homeostat digest (K8)", () => {
     expect(stdout).toContain("digest posted to Slack");
     expect(posted.map((p) => p.url)).toEqual([HOOK]);
     const text = posted[0]?.body.text ?? "";
-    expect(text).toContain("*Homeostat weekly digest* (since 2026-09-14)");
+    expect(text).toContain("*Homeostat digest, last 30 days* (since 2026-09-14)");
     expect(text).toContain("*New rules (2)*");
     expect(text).toContain("`integrations/partner-calls#http-client`");
     expect(text).toContain("*Waiting for review (1)*");
