@@ -79,8 +79,8 @@ export function rows(data: readonly Datum[], opts: { title: string; labelWidth?:
   const max = Math.max(1, ...data.map((d) => d.value));
   const track = width - labelW - 40;
   // Labels are right-aligned against the bars, so a long one would run off the left edge.
-  // Monospace at the chart's label size is about 6.6 units a character.
-  const fit = Math.floor((labelW - 12) / 6.6);
+  // Monospace at the chart's 12px label size is about 7.2 units a character.
+  const fit = Math.floor((labelW - 12) / 7.2);
   const label = (s: string) => (s.length > fit ? `${s.slice(0, fit - 1)}…` : s);
   const marks = data
     .map((d, i) => {

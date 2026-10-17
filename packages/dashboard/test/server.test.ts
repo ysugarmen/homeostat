@@ -56,6 +56,17 @@ const get = async (path: string) => {
 /** The form token from a settings page. */
 const tokenOf = (html: string) => /name="_token" value="([0-9a-f]+)"/.exec(html)?.[1] ?? "";
 
+describe("theme", () => {
+  test("dark by default; ?theme=light switches and a cookie keeps it", async () => {
+    const plain = await fetch(`${url}/`);
+    expect(await plain.text()).toContain('<html lang="en">');
+    const light = await fetch(`${url}/?theme=light`);
+    expect(light.headers.get("set-cookie")).toContain("theme=light");
+    const later = await fetch(`${url}/entries`, { headers: { cookie: "theme=light" } });
+    expect(await later.text()).toContain('<html lang="en" data-theme="light">');
+  });
+});
+
 describe("pages render from the KB and the event log (4.3)", () => {
   test.each([
     [

@@ -129,8 +129,14 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
     // DNS-rebinding and cross-site protection: only our own Host, and our own Origin on writes.
     if (!allowed(req.headers.host)) return send(res, 421, "Misdirected request");
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
-    const t = url.searchParams.get("theme");
+    // ?theme= picks a theme and a cookie keeps it; dark is the default.
+    const asked = url.searchParams.get("theme");
+    const kept = /(?:^|;\s*)theme=(light|dark)/.exec(req.headers.cookie ?? "")?.[1];
+    const t = asked === "light" || asked === "dark" ? asked : kept;
     const theme = t === "light" || t === "dark" ? { theme: t as "light" | "dark" } : {};
+    if (asked === "light" || asked === "dark") {
+      res.setHeader("set-cookie", `theme=${asked}; Path=/; SameSite=Strict; Max-Age=31536000`);
+    }
     let lampsNow: Lamp[] = [];
     const page = (title: string, body: string, status = 200) =>
       send(
