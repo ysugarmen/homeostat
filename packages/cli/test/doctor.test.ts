@@ -122,6 +122,18 @@ describe("homeostat doctor --security (T8)", () => {
     expect(stdout).not.toContain("main is not protected");
   });
 
+  test("a private repo on a free plan is told that protection needs a paid plan", async () => {
+    const base = github({ "/acme/team-kb/branches/main": { protected: false } });
+    const fetch = (async (url: string, init: { headers: Record<string, string> }) =>
+      url.endsWith("/rules/branches/main")
+        ? new Response('{"message":"Upgrade to GitHub Pro or make this repository public"}', {
+            status: 403,
+          })
+        : base.fetch(url, init as RequestInit)) as unknown as typeof globalThis.fetch;
+    const { stdout } = await doctor(kb(`homeostat@${VERSION}`), { fetch });
+    expect(stdout).toContain("main cannot be protected on acme/team-kb: GitHub protects branches");
+  });
+
   test("the public check never sends the token", async () => {
     const { fetch, calls } = github({});
     await doctor(kb(`homeostat@${VERSION}`), { fetch });

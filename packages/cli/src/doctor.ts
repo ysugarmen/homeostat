@@ -85,6 +85,13 @@ async function hostChecks(config: Config, io: Io): Promise<{ access: Check[]; bl
       access.push(ok(`${sources.baseBranch} is protected on ${sources.kbRepo}`));
     else if (guarded)
       access.push(ok(`${sources.baseBranch} is protected by a ruleset on ${sources.kbRepo}`));
+    // GitHub answers 403 here when the plan cannot protect a private repository's branches.
+    else if (rules?.status === 403)
+      access.push(
+        fail(
+          `${sources.baseBranch} cannot be protected on ${sources.kbRepo}: GitHub protects branches of private repositories only on paid plans (Pro, Team). Without it anything can merge unreviewed; keep the KB's writers few`,
+        ),
+      );
     else if (b.body)
       access.push(
         fail(
