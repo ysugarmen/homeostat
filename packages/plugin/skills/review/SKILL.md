@@ -36,6 +36,8 @@ Also include any open `homeostat/daily-` PR: it is one the host refused to merge
 - **Ask the author:** `gh pr comment <n> --repo <kbRepo> --body "<question>"`, and leave it open.
 - **Skip:** leave it for later.
 
+A lesson of kind `decision` with `adopted: false` is a record that the team considered a proposal and turned it down: its Rule is the proposal and its Why is why not. Merging it records the rejection, so agents stop proposing it; it never tells an agent to do the proposal. Describe it that way.
+
 Never merge or close without the user's choice for that PR. Do not edit lesson files yourself.
 
 ## 4. Finish

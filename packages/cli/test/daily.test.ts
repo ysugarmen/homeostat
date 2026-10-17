@@ -73,7 +73,20 @@ class FakeProvider implements Provider {
   constructor(commentPath = "apps/web/src/Button.css") {
     this.commentPath = commentPath;
   }
-  async listMergedPullRequests(_repo: RepoRef, _since: Date): Promise<PullRequest[]> {
+  /** KB-repo PR branches a reviewer merged. */
+  kbMerged: string[] = [];
+  async listMergedPullRequests(repo: RepoRef, _since: Date): Promise<PullRequest[]> {
+    if (repo.name === "team-kb") {
+      return this.kbMerged.map((b, i) => ({
+        id: 50 + i,
+        title: b,
+        url: `https://github.com/acme/team-kb/pull/${50 + i}`,
+        author: { id: "lee" },
+        mergedAt: "2026-10-16T12:00:00Z",
+        sourceBranch: b,
+        targetBranch: "main",
+      }));
+    }
     return [
       {
         id: 120,
@@ -427,5 +440,50 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
         reason: "no lasting rule in the thread",
       },
     ]);
+  });
+
+  test("a review PR a reviewer merged settles as merged, documents included", async () => {
+    const t = team();
+    await leeLearns(t.lee);
+    await run([
+      "learn",
+      "--dir",
+      t.lee,
+      "--doc",
+      "integrations/partner-calls",
+      "--section",
+      "timeouts",
+      "--append",
+      "--text",
+      "Booking confirmation waits up to 30 seconds.",
+    ]);
+    await run(["sync", "--dir", t.lee]);
+    const provider = new FakeProvider();
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
+    const branch = "homeostat/review-lee-2026-10-16";
+    expect(provider.opened.map((o) => o.pr.sourceBranch)).toEqual([branch]);
+    // The reviewer merges the review PR.
+    t.g(t.ci, "fetch", "-q", "origin", branch);
+    t.g(t.ci, "merge", "-q", "--no-edit", "FETCH_HEAD");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    provider.open = [];
+    provider.kbMerged = [branch];
+    await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider,
+      now: () => new Date("2026-10-17T06:00:00Z"),
+    });
+    const decided = JSON.parse(t.g(t.origin, "show", "homeostat/state:decisions/lee.json")).decided;
+    expect(
+      decided.map((d: { id: string; decision: string; reason: string }) => [
+        d.id,
+        d.decision,
+        d.reason,
+      ]),
+    ).toEqual(
+      expect.arrayContaining([
+        ["use-the-shared-button-component", "merged", "merged by a reviewer"],
+        ["knowledge/integrations/docs/partner-calls.md", "merged", "merged by a reviewer"],
+      ]),
+    );
   });
 });

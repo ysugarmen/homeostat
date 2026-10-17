@@ -187,7 +187,12 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
       forcePush(root, commit, candidatesBranch(member));
       pushed = fp;
       lastHeartbeat = now;
-      say(`sent ${Object.keys(pending).length} pending lesson(s) to ${candidatesBranch(member)}\n`);
+      const count = Object.keys(pending).length;
+      say(
+        count
+          ? `sent ${count} pending lesson(s) to ${candidatesBranch(member)}\n`
+          : `sent a heartbeat to ${candidatesBranch(member)} (no pending lessons)\n`,
+      );
     } catch (e) {
       say(`could not push ${candidatesBranch(member)}: ${(e as Error).message}\n`);
     }

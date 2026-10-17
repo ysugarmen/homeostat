@@ -137,12 +137,26 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     (await provider.listOpenPullRequests(kbRepo)).map((p: OpenPullRequest) => p.sourceBranch),
   );
   let settled = 0;
-  for (const d of decisions.values()) {
-    for (const r of d.decided) {
-      if (r.decision !== "review" || !r.pr || open.has(r.pr)) continue;
+  const closed = [...decisions.values()].flatMap((d) =>
+    d.decided.filter((r) => r.decision === "review" && r.pr && !open.has(r.pr)),
+  );
+  if (closed.length) {
+    // Ask the host which review PRs were merged: a document has no id line to look for on main.
+    const since = new Date(Math.min(...closed.map((r) => Date.parse(r.at))) - 86_400_000);
+    const merged = new Set(
+      (await provider.listMergedPullRequests(kbRepo, since)).map((p) => p.sourceBranch),
+    );
+    for (const r of closed) {
       const onMain = onBase(r.path);
-      r.decision = onMain !== undefined && onMain.includes(`id: ${r.id}`) ? "merged" : "declined";
-      r.reason = r.decision === "merged" ? "merged by a reviewer" : "closed by a reviewer";
+      // A reviewer can drop one lesson by deleting its file from the PR before merging.
+      const landed = onMain !== undefined && (isDocPath(r.path) || onMain.includes(`id: ${r.id}`));
+      if (r.pr && merged.has(r.pr)) {
+        r.decision = landed ? "merged" : "declined";
+        r.reason = landed ? "merged by a reviewer" : "removed from the review PR by a reviewer";
+      } else {
+        r.decision = "declined";
+        r.reason = "closed by a reviewer";
+      }
       r.at = now.toISOString();
       settled++;
     }
