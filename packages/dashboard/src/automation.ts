@@ -177,7 +177,8 @@ export function automationPage(v: AutomationView): string {
 <section class="panel span-8" aria-labelledby="last"><h2 id="last">Last daily run</h2>
 ${r ? `<p class="lede mono">${esc(r.at.replace("T", " ").slice(0, 16))} UTC</p>` : ""}
 <div class="stats" style="--cols: 4">${stat(total("merged"), "merged")}${stat(total("review"), "to review")}${stat(total("declined"), "declined")}${stat(r?.settled ?? 0, "settled by reviewers")}</div>
-${daily.length > 1 ? `<div style="margin-top:14px"><span class="label">Lessons decided per run</span>${columns(daily, { title: "Lessons decided per run", labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Run", "Lessons"])}</div>` : ""}</section>
+${daily.length > 1 ? `<div style="margin-top:14px"><span class="label">Lessons decided per run</span>${columns(daily, { title: "Lessons decided per run", labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Run", "Lessons"])}</div>` : ""}
+${r?.skipped?.length ? `<details style="margin-top:12px"><summary>${r.skipped.length} review thread${r.skipped.length === 1 ? "" : "s"} read with no lesson</summary><ul>${r.skipped.map((s) => `<li>${prLink(s.url, s.url.replace(/^https:\/\/[^/]+\//, ""))}: ${esc(s.reason)}</li>`).join("")}</ul></details>` : ""}</section>
 <section class="panel span-4" aria-labelledby="attention"><h2 id="attention">Needs attention</h2>
 <div class="stats" style="--cols: 2">${stat(v.queue.length, "in review")}${stat(overdue, `waiting &gt; ${REVIEW_REMINDER_DAYS} days`)}${stat(notSyncing.length, "not syncing")}${stat(r?.members.filter((m) => m.mergeError).length ?? 0, "merges refused")}</div>
 ${notSyncing.length ? `<p class="lede">Not syncing: ${notSyncing.map((h) => `<span class="mono">${esc(h.member)}</span>`).join(", ")}. Their lessons reach the daily run only after a session syncs; check that the Homeostat plugin is installed for them.</p>` : ""}</section>

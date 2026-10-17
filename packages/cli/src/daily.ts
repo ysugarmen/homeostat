@@ -201,6 +201,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
 
   // 1b. Lessons from review comments, filed under the developer whose PR it was.
   let drafted: CuratedEntry[] = [];
+  let skipped: { url: string; reason: string }[] = [];
   if (!opts.noReviews) {
     const since = opts.since
       ? new Date(opts.since)
@@ -215,6 +216,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       today,
     });
     drafted = result.entries;
+    skipped = result.skipped.map((s) => ({ url: s.url, reason: s.reason }));
     for (const e of drafted) {
       const member = e.prAuthor ?? e.frontmatter.source.author;
       if (decidedHashes(member).has(lessonHash(e.text))) continue;
@@ -309,7 +311,18 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   }
 
   // 3–4. Per developer: one daily PR (merged), one review PR (assigned).
-  const report: RunReport = { at: now.toISOString(), members: [], settled, lessons: [] };
+  const report: RunReport = {
+    at: now.toISOString(),
+    members: [],
+    settled,
+    lessons: [],
+    ...(skipped.length ? { skipped } : {}),
+  };
+  if (skipped.length) {
+    io.stdout(
+      `reviews read with no lesson:\n${skipped.map((s) => `  ${s.url}: ${s.reason}\n`).join("")}`,
+    );
+  }
   const byMember = new Map<string, Lesson[]>();
   for (const l of lessons) byMember.set(l.member, [...(byMember.get(l.member) ?? []), l]);
   for (const [member, list] of byMember) {

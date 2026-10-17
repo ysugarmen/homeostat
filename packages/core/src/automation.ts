@@ -65,6 +65,8 @@ export interface RunReport {
   }[];
   /** Review PRs from earlier runs that a reviewer merged or closed since. */
   settled: number;
+  /** Review threads read this run that gave no lesson, and why (one-off, skip marker, too long...). */
+  skipped?: { url: string; reason: string }[];
   lessons: {
     member: string;
     id: string;

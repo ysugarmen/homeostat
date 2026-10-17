@@ -42,11 +42,17 @@ function clone(state?: Record<string, unknown>) {
   return kb;
 }
 
-const run = (at: string, members: RunReport["members"], settled = 0): RunReport => ({
+const run = (
+  at: string,
+  members: RunReport["members"],
+  settled = 0,
+  skipped?: RunReport["skipped"],
+): RunReport => ({
   at,
   members,
   settled,
   lessons: [],
+  ...(skipped ? { skipped } : {}),
 });
 const heartbeat = (member: string, at: string, extra: Partial<Heartbeat> = {}): Heartbeat => ({
   member,
@@ -107,6 +113,7 @@ const STATE = {
       { member: "sam", merged: 0, review: 0, declined: 0, mergeError: "protected" },
     ],
     1,
+    [{ url: "https://github.com/acme/web/pull/7#discussion_r1", reason: "marked homeostat:skip" }],
   ),
   "heartbeats/lee.json": heartbeat("lee", "2026-10-16T09:00:00Z", { behind: 2 }),
   "heartbeats/sam.json": heartbeat("sam", "2026-10-13T09:00:00Z"),
@@ -160,6 +167,8 @@ describe("the Automation page (automation, step 5)", () => {
     expect(html).toContain("2 behind");
     expect(html).toContain('<a href="https://github.com/acme/team-kb/pull/11">daily</a>');
     expect(html).not.toContain("old-merged");
+    expect(html).toContain("1 review thread read with no lesson");
+    expect(html).toContain("acme/web/pull/7#discussion_r1</a>: marked homeostat:skip");
   });
 
   test("before any daily run, the page says what will appear and why", async () => {

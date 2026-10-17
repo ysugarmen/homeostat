@@ -409,4 +409,23 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
       "the same lesson as use-the-shared-button-component, which is waiting in review: decide them together",
     );
   });
+
+  test("review threads that gave no lesson are listed with the reason", async () => {
+    const t = team();
+    const { stdout } = await run(["daily", "--dir", t.ci], {
+      provider: new FakeProvider(),
+      drafter: new FakeDrafter(null),
+    });
+    expect(stdout).toContain("reviews read with no lesson:");
+    expect(stdout).toContain(
+      "https://github.com/acme/web-app/pull/120#discussion_r9001: no lasting rule in the thread",
+    );
+    const report = JSON.parse(t.g(t.origin, "show", "homeostat/state:runs/2026-10-16.json"));
+    expect(report.skipped).toEqual([
+      {
+        url: "https://github.com/acme/web-app/pull/120#discussion_r9001",
+        reason: "no lasting rule in the thread",
+      },
+    ]);
+  });
 });
