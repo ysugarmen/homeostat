@@ -85,6 +85,13 @@ describe("tool list", () => {
   test("the server tells agents when to use it", async () => {
     const { client } = await connect();
     expect(client.getInstructions()).toContain("call context with the files you will touch");
+    expect(client.getInstructions()).toContain("save it with learn");
+  });
+
+  test("with MCP writes off, the instructions point to the learn skill, not a hidden tool", async () => {
+    const { client } = await connect({ security: [] });
+    expect(client.getInstructions()).not.toContain("save it with learn");
+    expect(client.getInstructions()).toContain("/homeostat:learn");
   });
 });
 

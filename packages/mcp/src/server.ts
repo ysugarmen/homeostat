@@ -47,7 +47,13 @@ export interface McpDeps {
 
 const WRITE_TOOLS = new Set(["learn", "flag"]);
 
-const INSTRUCTIONS = `Homeostat holds your team's reviewed coding rules, learned from accepted code-review feedback. Before changing code, call context with the files you will touch (or search for a topic) and follow the rules it returns. When the user teaches you a team convention, save it with learn. If a rule is wrong, flag it. explain says why a rule exists.`;
+/** Mentions learn and flag only when this KB offers them, so agents never look for a hidden tool. */
+const instructions = (writes: boolean) =>
+  `Homeostat holds your team's reviewed coding rules, learned from accepted code-review feedback, and its reference documents. Before changing code, call context with the files you will touch (or search for a topic) and follow the rules it returns. docs lists the team documents and read returns one section. explain says why a rule exists. ${
+    writes
+      ? "When the user teaches you a team convention, save it with learn. If a rule is wrong, flag it."
+      : "Saving through MCP is off for this team: when the user teaches you a team convention, use the /homeostat:learn skill or the homeostat learn command; to dispute a rule, homeostat flag <id> --reason."
+  }`;
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t.slice(0, MAX_CHARS) }] });
 const fail = (t: string) => ({ ...text(t), isError: true });
@@ -239,9 +245,10 @@ function distance(a: string, b: string): number {
 
 /** Builds the Homeostat MCP server. Transport-agnostic: the CLI connects it to stdio. */
 export function createServer(deps: McpDeps, version = VERSION): Server {
+  const startWrites = validate(deps.readKb()).config?.security.mcpWrites === true;
   const server = new Server(
     { name: "homeostat", version },
-    { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
+    { capabilities: { tools: {} }, instructions: instructions(startWrites) },
   );
 
   // Writes are off unless the KB enables them, and capped per session when on (security T7):
