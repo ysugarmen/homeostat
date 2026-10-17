@@ -214,4 +214,15 @@ describe("the Automation page (automation, step 5)", () => {
       "2026-10-16T12:54:00Z",
     ]);
   });
+
+  test("a developer's row shows the latest run that had their lessons", () => {
+    const kb = clone({
+      ...STATE,
+      "runs/2026-10-16T12-00-00Z.json": run("2026-10-16T12:00:00Z", [], 1),
+    });
+    const config = { team: { members: [{ id: "lee", role: "member" }] } };
+    const v = automationView(readAutomation(kb), config as never, NOW);
+    expect(v.health[0]?.today).toMatchObject({ member: "lee", merged: 2, review: 1 });
+    expect(v.byDay.at(-1)).toEqual({ day: "2026-10-16", merged: 2, review: 1, declined: 1 });
+  });
 });

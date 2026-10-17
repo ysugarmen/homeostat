@@ -111,7 +111,11 @@ export function automationView(state: AutomationState, config: Config, now: Date
   const health: SyncHealth[] = config.team.members.map((m) => {
     const heartbeat = state.heartbeats.find((h) => h.member === m.id);
     const ageHours = heartbeat ? (now.getTime() - Date.parse(heartbeat.at)) / 3_600_000 : undefined;
-    const today = lastRun?.members.find((r) => r.member === m.id);
+    // The latest run that had lessons from this developer, not just the latest run.
+    const today = [...state.runs]
+      .reverse()
+      .map((r) => r.members.find((x) => x.member === m.id))
+      .find((x) => x !== undefined);
     return {
       member: m.id,
       role: m.role,
@@ -131,12 +135,19 @@ export function automationView(state: AutomationState, config: Config, now: Date
         }),
     )
     .sort((a, b) => b.ageDays - a.ageDays);
-  const byDay = state.runs.map((r) => ({
-    day: r.at.slice(0, 10),
-    merged: r.members.reduce((n, m) => n + m.merged, 0),
-    review: r.members.reduce((n, m) => n + m.review, 0),
-    declined: r.members.reduce((n, m) => n + m.declined, 0),
-  }));
+  // A day can have several runs (the schedule, a manual run): one bar per day.
+  const days = new Map<string, { day: string; merged: number; review: number; declined: number }>();
+  for (const r of state.runs) {
+    const day = r.at.slice(0, 10);
+    const d = days.get(day) ?? { day, merged: 0, review: 0, declined: 0 };
+    for (const m of r.members) {
+      d.merged += m.merged;
+      d.review += m.review;
+      d.declined += m.declined;
+    }
+    days.set(day, d);
+  }
+  const byDay = [...days.values()];
   return {
     present: state.present,
     ...(lastRun ? { lastRun } : {}),
@@ -196,7 +207,7 @@ export function automationPage(v: AutomationView): string {
 <section class="panel span-8" aria-labelledby="last"><h2 id="last">Last daily run</h2>
 ${r ? `<p class="lede mono">${esc(r.at.replace("T", " ").slice(0, 16))} UTC</p>` : ""}
 <div class="stats" style="--cols: 4">${stat(total("merged"), "merged")}${stat(total("review"), "to review")}${stat(total("declined"), "declined")}${stat(r?.settled ?? 0, "settled by reviewers")}</div>
-${daily.length > 1 ? `<div style="margin-top:14px"><span class="label">Lessons decided per run</span>${columns(daily, { title: "Lessons decided per run", labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Run", "Lessons"])}</div>` : ""}
+${daily.length > 1 ? `<div style="margin-top:14px"><span class="label">Lessons decided per day</span>${columns(daily, { title: "Lessons decided per day", labelled: "ends", tickEvery: 7 })}${dataTable(daily, ["Day", "Lessons"])}</div>` : ""}
 ${r?.skipped?.length ? `<details style="margin-top:12px"><summary>${r.skipped.length} review thread${r.skipped.length === 1 ? "" : "s"} read with no lesson</summary><ul>${r.skipped.map((s) => `<li>${prLink(s.url, s.url.replace(/^https:\/\/[^/]+\//, ""))}: ${esc(s.reason)}</li>`).join("")}</ul></details>` : ""}</section>
 <section class="panel span-4" aria-labelledby="attention"><h2 id="attention">Needs attention</h2>
 <div class="stats" style="--cols: 2">${stat(v.queue.length, "in review")}${stat(overdue, `waiting &gt; ${REVIEW_REMINDER_DAYS} days`)}${stat(notSyncing.length, "not syncing")}${stat(r?.members.filter((m) => m.mergeError).length ?? 0, "merges refused")}</div>
@@ -213,7 +224,7 @@ ${
     : '<p class="empty">Nothing waiting for a reviewer.</p>'
 }</section>
 <section class="panel span-12" aria-labelledby="health"><h2 id="health">Developer sync</h2><p class="lede">Each developer's sessions sync their clone in the background and report a heartbeat; the daily run collects them. "Not syncing" means no report for ${STALE_HEARTBEAT_HOURS} hours: normal over a weekend, worth a look after that.</p>
-<div class="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th>Sync</th><th class="num">Last report</th><th>KB clone</th><th class="num">Pending</th><th>Version</th><th>Last daily run</th></tr></thead><tbody>${v.health.map(healthRow).join("")}</tbody></table></div></section>
+<div class="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th>Sync</th><th class="num">Last report</th><th>KB clone</th><th class="num">Pending</th><th>Version</th><th>Last run with lessons</th></tr></thead><tbody>${v.health.map(healthRow).join("")}</tbody></table></div></section>
 <section class="panel span-12" aria-labelledby="runs"><h2 id="runs">Runs</h2>
 <div class="table-wrap"><table><thead><tr><th>Run</th><th class="num">Merged</th><th class="num">To review</th><th class="num">Declined</th><th class="num">Settled</th><th>Merge refused</th></tr></thead><tbody>${[
     ...v.runs,

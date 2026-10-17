@@ -146,6 +146,11 @@ describe("homeostat sync (automation, step 2)", () => {
     decide(t, "merged", "confidence 78");
     const synced = await run(["sync", "--dir", t.lee]);
     expect(synced.stdout).toContain("pulled 1 commit");
+    // The pull moved the clone, so the heartbeat reports the new commit, though nothing is pending.
+    const heartbeat = JSON.parse(
+      t.g(t.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json"),
+    );
+    expect(heartbeat).toMatchObject({ kbCommit: t.g(t.lee, "rev-parse", "HEAD"), pending: 0 });
     expect(synced.stdout).toContain("use-the-shared-button-component: merged into the team KB");
     expect(existsSync(join(t.lee, ".homeostat/pending", LESSON))).toBe(false);
     expect(existsSync(join(t.lee, LESSON))).toBe(true);

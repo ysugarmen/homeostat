@@ -46,6 +46,8 @@ export interface SyncState {
   lastHeartbeat?: string;
   /** Fingerprint of the pending set last pushed. */
   pushed?: string;
+  /** Version, clone commit and lag last reported in a heartbeat. */
+  reported?: string;
   /** Notices not yet shown in a session. */
   unseen?: Notice[];
 }
@@ -174,8 +176,11 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
     !state.lastHeartbeat || Date.parse(now) - Date.parse(state.lastHeartbeat) > HEARTBEAT_EVERY_MS;
   let pushed = state.pushed;
   let lastHeartbeat = state.lastHeartbeat;
+  // An upgrade, a pull or falling behind changes what the dashboard should show: report it.
+  const position = `${VERSION}:${git(root, "rev-parse", "HEAD") ?? ""}:${behind}`;
+  let reported = state.reported;
   const baseRef = git(root, "rev-parse", "--verify", "--quiet", `refs/remotes/origin/${base}`);
-  if (isMember && baseRef && (fp !== state.pushed || heartbeatDue)) {
+  if (isMember && baseRef && (fp !== state.pushed || heartbeatDue || position !== state.reported)) {
     const pending = readPendingFiles(root);
     const heartbeat: Heartbeat = {
       member,
@@ -195,6 +200,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
       forcePush(root, commit, candidatesBranch(member));
       pushed = fp;
       lastHeartbeat = now;
+      reported = position;
       const count = Object.keys(pending).length;
       say(
         count
@@ -222,6 +228,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
     lastSync: now,
     ...(lastHeartbeat ? { lastHeartbeat } : {}),
     ...(pushed ? { pushed } : {}),
+    ...(reported ? { reported } : {}),
     unseen: [...(state.unseen ?? []), ...notices].slice(-20),
   });
   return 0;
