@@ -78,11 +78,15 @@ export function rows(data: readonly Datum[], opts: { title: string; labelWidth?:
   const height = Math.max(rowH, data.length * rowH) + 4;
   const max = Math.max(1, ...data.map((d) => d.value));
   const track = width - labelW - 40;
+  // Labels are right-aligned against the bars, so a long one would run off the left edge.
+  // Monospace at the chart's label size is about 6.6 units a character.
+  const fit = Math.floor((labelW - 12) / 6.6);
+  const label = (s: string) => (s.length > fit ? `${s.slice(0, fit - 1)}…` : s);
   const marks = data
     .map((d, i) => {
       const y = i * rowH + 4;
       const w = (d.value / max) * track;
-      return `<g class="m"><rect class="hit" x="0" y="${y - 2}" width="${width}" height="${rowH}"/><text class="t" x="${labelW - 8}" y="${y + 12}" text-anchor="end">${esc(d.label)}</text><path d="${rowPath(labelW, y + 2, w, rowH - 8)}"/><text class="v" x="${labelW + w + 6}" y="${y + 12}">${d.value}</text><title>${esc(d.title ?? `${d.label}: ${d.value}`)}</title></g>`;
+      return `<g class="m"><rect class="hit" x="0" y="${y - 2}" width="${width}" height="${rowH}"/><text class="t" x="${labelW - 8}" y="${y + 12}" text-anchor="end">${esc(label(d.label))}</text><path d="${rowPath(labelW, y + 2, w, rowH - 8)}"/><text class="v" x="${labelW + w + 6}" y="${y + 12}">${d.value}</text><title>${esc(d.title ?? `${d.label}: ${d.value}`)}</title></g>`;
     })
     .join("");
   return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(opts.title)}"><line class="base" x1="${labelW}" x2="${labelW}" y1="0" y2="${height}"/>${marks}</svg>`;
