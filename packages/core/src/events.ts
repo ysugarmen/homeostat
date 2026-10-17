@@ -130,6 +130,15 @@ export function describeEvent(e: Event): string {
         return `${(rest.entries as string[] | undefined)?.join(", ") ?? ""} in ${rest.url}`;
       case "agent-run":
         return `${rest.agent} ${rest.ok ? "ok" : "failed"}: ${rest.summary ?? ""}`;
+      case "doc-read":
+        return `${rest.doc}${rest.section ? `#${rest.section}` : ""}`;
+      case "doc-injection": {
+        const docs = (rest.docs as unknown[] | undefined) ?? [];
+        const sections = (rest.sections as unknown[] | undefined) ?? [];
+        return `${docs.length} document${docs.length === 1 ? "" : "s"} listed, ${sections.length} section${sections.length === 1 ? "" : "s"} included`;
+      }
+      case "seed-run":
+        return `${rest.repo}: ${(rest.topics as string[] | undefined)?.join(", ") ?? ""} from ${rest.paths} paths (${rest.chars} chars sent)`;
       default:
         return JSON.stringify(rest);
     }
