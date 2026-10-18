@@ -186,10 +186,12 @@ export function sameLesson(a: Entry, b: Entry): boolean {
   const ra = codeReferences(a.sections.rule ?? "");
   const rb = codeReferences(b.sections.rule ?? "");
   if (ra.size === 0 || rb.size === 0) return false;
-  const both = [...ra].filter((r) => rb.has(r));
-  // A shared file alone is not the same lesson: many rules are about src/money.ts.
-  if (both.every((r) => r.includes("/") && !r.includes("("))) return false;
-  const shared = both.length;
+  // File paths say where, not what: many rules are about src/money.ts. Compare the code itself.
+  const code = (refs: Set<string>) => [...refs].filter((r) => r.includes("(") || !r.includes("/"));
+  const ca = code(ra);
+  const cb = new Set(code(rb));
+  const shared = ca.filter((r) => cb.has(r)).length;
+  if (shared === 0) return false;
   // Mostly the same code, or a mostly similar title about some of the same code.
-  return shared / new Set([...ra, ...rb]).size >= 0.5 || (shared > 0 && titles >= 0.6);
+  return shared / new Set([...ca, ...cb]).size > 0.5 || titles >= 0.6;
 }

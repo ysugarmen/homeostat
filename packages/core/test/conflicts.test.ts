@@ -180,6 +180,24 @@ describe("sameLesson", () => {
     ).toBe(false);
   });
 
+  test("a rule about another helper from the same module is a different lesson", () => {
+    // From the demo: a sum() rule that mentions cents() was declined as the cents() rule.
+    expect(
+      sameLesson(
+        entry(
+          "Build Cents values with cents(), never a cast",
+          "Construct amounts with cents() from src/money.ts, including in tests.",
+          ["**"],
+        ),
+        entry(
+          "Add Cents values with sum() from src/money.ts, not raw +",
+          "Add Cents with sum() from src/money.ts, which returns cents(); never a raw + on amounts.",
+          ["**"],
+        ),
+      ),
+    ).toBe(false);
+  });
+
   test("different code, or scopes that do not overlap, are different lessons", () => {
     const retry = entry(
       "Use the retry helper",
