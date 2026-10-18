@@ -734,6 +734,246 @@
           "state": "MERGED"
         }
       }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/42"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": 42,
+          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "description": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
+          "author": {
+            "display_name": "homeostat",
+            "nickname": "homeostat-bot"
+          },
+          "created_on": "2026-10-15T06:00:00.000000+00:00",
+          "updated_on": "2026-10-15T06:00:00.000000+00:00",
+          "state": "OPEN",
+          "source": {
+            "branch": {
+              "name": "homeostat/review-lee-2026-10-15"
+            }
+          },
+          "destination": {
+            "branch": {
+              "name": "main"
+            }
+          },
+          "links": {
+            "html": {
+              "href": "https://bitbucket.org/acme/team-kb/pull-requests/42"
+            }
+          },
+          "reviewers": [
+            {
+              "display_name": "Dana Reyes",
+              "nickname": "dana",
+              "uuid": "{c2}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/42/mergeability/checks"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "values": [
+            {
+              "type": "pullrequest_state_check",
+              "status": "PASSED",
+              "required": true,
+              "blocking": false
+            },
+            {
+              "type": "git_mergeability_check",
+              "status": "PASSED",
+              "required": true,
+              "blocking": false,
+              "reason": "clean"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/43"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": 43,
+          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "description": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
+          "author": {
+            "display_name": "homeostat",
+            "nickname": "homeostat-bot"
+          },
+          "created_on": "2026-10-15T06:00:00.000000+00:00",
+          "updated_on": "2026-10-15T06:00:00.000000+00:00",
+          "state": "OPEN",
+          "source": {
+            "branch": {
+              "name": "homeostat/review-lee-2026-10-15"
+            }
+          },
+          "destination": {
+            "branch": {
+              "name": "main"
+            }
+          },
+          "links": {
+            "html": {
+              "href": "https://bitbucket.org/acme/team-kb/pull-requests/43"
+            }
+          },
+          "reviewers": [
+            {
+              "display_name": "Dana Reyes",
+              "nickname": "dana",
+              "uuid": "{c2}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/43/mergeability/checks"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "values": [
+            {
+              "type": "pullrequest_state_check",
+              "status": "PASSED",
+              "required": true,
+              "blocking": false
+            },
+            {
+              "type": "git_mergeability_check",
+              "status": "FAILED",
+              "required": true,
+              "blocking": true,
+              "reason": "conflicts"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/44"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": 44,
+          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "description": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
+          "author": {
+            "display_name": "homeostat",
+            "nickname": "homeostat-bot"
+          },
+          "created_on": "2026-10-15T06:00:00.000000+00:00",
+          "updated_on": "2026-10-15T06:00:00.000000+00:00",
+          "state": "DECLINED",
+          "source": {
+            "branch": {
+              "name": "homeostat/review-lee-2026-10-15"
+            }
+          },
+          "destination": {
+            "branch": {
+              "name": "main"
+            }
+          },
+          "links": {
+            "html": {
+              "href": "https://bitbucket.org/acme/team-kb/pull-requests/44"
+            }
+          },
+          "reviewers": [
+            {
+              "display_name": "Dana Reyes",
+              "nickname": "dana",
+              "uuid": "{c2}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/44/mergeability/checks"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "values": [
+            {
+              "type": "pullrequest_state_check",
+              "status": "PASSED",
+              "required": true,
+              "blocking": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/42/diff"
+      },
+      "response": {
+        "status": 200,
+        "body": "diff --git a/knowledge/core/x.md b/knowledge/core/x.md\n+id: x\n"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/42/comments",
+        "body": {
+          "content": {
+            "raw": "Declined in review: duplicate"
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": 5
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/42/decline"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": 42,
+          "state": "DECLINED"
+        }
+      }
     }
   ]
 }

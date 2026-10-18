@@ -28,6 +28,17 @@ export const SKIP_MARKER = "homeostat:skip";
 
 export type OpenPullRequest = Omit<PullRequest, "mergedAt">;
 
+/** One PR in full, for a person deciding on it. */
+export interface PullRequestDetails extends OpenPullRequest {
+  body: string;
+  state: "open" | "merged" | "closed";
+  createdAt: string;
+  /** Who is asked to review it. */
+  reviewers: Person[];
+  /** Whether it conflicts with its target branch; undefined while the host can't tell. */
+  conflicts?: boolean;
+}
+
 export interface ReviewComment {
   id: number;
   body: string;
@@ -56,8 +67,8 @@ export interface NewPullRequest {
 }
 
 /**
- * What the agents need from a git host. Reads span every configured code repo; the writes,
- * `openPullRequest` and `mergePullRequest`, target the KB repo. Branch content is pushed with git, not through here.
+ * What the agents and `homeostat review` need from a git host. Reads span every configured code
+ * repo; every write targets the KB repo. Branch content is pushed with git, not through here.
  */
 export interface Provider {
   readonly kind: "bitbucket" | "github";
@@ -68,6 +79,12 @@ export interface Provider {
   openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }>;
   /** Squash-merges a PR on the KB repo; used only for entries that pass every auto-merge gate. */
   mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void>;
+  getPullRequest(repo: RepoRef, pullRequestId: number): Promise<PullRequestDetails>;
+  /** The PR's changes as a unified diff. */
+  getPullRequestDiff(repo: RepoRef, pullRequestId: number): Promise<string>;
+  /** Closes (on Bitbucket, declines) a PR on the KB repo without merging it. */
+  closePullRequest(repo: RepoRef, pullRequestId: number): Promise<void>;
+  commentOnPullRequest(repo: RepoRef, pullRequestId: number, body: string): Promise<void>;
   /** Asks these git-host users (GitHub logins or Bitbucket nicknames, no @) to review. */
   requestReviewers?(repo: RepoRef, pullRequestId: number, logins: string[]): Promise<void>;
 }

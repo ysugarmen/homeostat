@@ -9,6 +9,7 @@ export type {
   Provider,
   ProviderOptions,
   PullRequest,
+  PullRequestDetails,
   RepoRef,
   ReviewComment,
 } from "./types.ts";

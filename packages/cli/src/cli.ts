@@ -26,6 +26,7 @@ import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
 import { runMcp } from "./mcp.ts";
 import { runExplain, runList, runSearch, runStatus } from "./query.ts";
+import { type ReviewOptions, runReview } from "./review.ts";
 import { runSeed, type SeedOptions } from "./seed.ts";
 import { runSync, type SyncOptions } from "./sync.ts";
 import { runDashboard, runUp, type UpOptions } from "./up.ts";
@@ -279,6 +280,62 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
         { ...opts, ...(opts.reviews === false ? { noReviews: true } : {}) },
         io,
       );
+    });
+
+  const review = program
+    .command("review")
+    .description(
+      "Homeostat's PRs that wait for a person, on any git host: merge to accept their lessons, close to decline.",
+    );
+  const kbDir = [
+    "--dir <dir>",
+    "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)",
+  ] as const;
+  review
+    .command("list")
+    .description("Open review PRs (and daily PRs the host refused to merge), oldest first.")
+    .option(...kbDir)
+    .option("--reviewer <handle>", "put the PRs that ask this reviewer first")
+    .option("--json", "print JSON")
+    .action(async (opts: ReviewOptions) => {
+      exitCode = await runReview("list", [], opts, io);
+    });
+  review
+    .command("show")
+    .description("One PR: its lessons table, reviewers, whether it merges cleanly, and its diff.")
+    .argument("<pr>", "PR number or URL")
+    .option(...kbDir)
+    .option("--json", "print JSON")
+    .action(async (pr: string, opts: ReviewOptions) => {
+      exitCode = await runReview("show", [pr], opts, io);
+    });
+  review
+    .command("merge")
+    .description("Squash-merge a PR: every lesson still in it is accepted.")
+    .argument("<pr>", "PR number or URL")
+    .option(...kbDir)
+    .option("--json", "print JSON")
+    .action(async (pr: string, opts: ReviewOptions) => {
+      exitCode = await runReview("merge", [pr], opts, io);
+    });
+  review
+    .command("close")
+    .description("Close (decline) a PR with a reason: every lesson in it is declined.")
+    .argument("<pr>", "PR number or URL")
+    .requiredOption("--reason <text>", "why; posted on the PR for the authors")
+    .option(...kbDir)
+    .option("--json", "print JSON")
+    .action(async (pr: string, opts: ReviewOptions) => {
+      exitCode = await runReview("close", [pr], opts, io);
+    });
+  review
+    .command("comment")
+    .description("Ask the author a question on a PR and leave it open.")
+    .argument("<pr>", "PR number or URL")
+    .argument("<text...>", "the comment")
+    .option(...kbDir)
+    .action(async (pr: string, text: string[], opts: ReviewOptions) => {
+      exitCode = await runReview("comment", [pr, ...text], opts, io);
     });
 
   program

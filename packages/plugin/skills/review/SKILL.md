@@ -3,7 +3,7 @@ name: review
 description: Walk the homeostat review queue with the user: the lessons the daily run could not decide on its own, in its open review PRs. Merge a PR to accept its lessons, close it to decline them. Use when the user wants to review pending team knowledge.
 argument-hint: "[area or member]"
 disable-model-invocation: true
-allowed-tools: Read, Glob, Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr merge:*), Bash(gh pr close:*), Bash(gh pr comment:*), Bash(homeostat explain:*), Bash(npx --yes homeostat@0.1.7 explain:*)
+allowed-tools: Read, Glob, Bash(homeostat review:*), Bash(npx --yes homeostat@0.1.7 review:*), Bash(homeostat explain:*), Bash(npx --yes homeostat@0.1.7 explain:*)
 ---
 
 # Review the queue
@@ -12,28 +12,28 @@ Input: $ARGUMENTS (optional area or member to limit the queue)
 
 Nobody approves lessons one by one. Each morning the daily run scores every lesson: confident ones merge on their own, weak ones are declined, and only the middle band goes to a human, in one review PR per developer. That PR is the queue. Merging it accepts its lessons; closing it declines them. The next daily run records the outcome, and each developer's session is told.
 
-## 1. Find the knowledge base and its repo
+## 1. Find the knowledge base
 
-Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is not empty; the `HOMEOSTAT_DIR` environment variable; the current repository if it has a `homeostat.yaml`; otherwise ask the user for the path to their KB checkout. Read `sources` in its `homeostat.yaml` for the host and `kbRepo`.
+Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is not empty; the `HOMEOSTAT_DIR` environment variable; the current repository if it has a `homeostat.yaml`; otherwise ask the user for the path to their KB checkout. Pass it to every command below as `--dir <kb>`.
 
-On Bitbucket there is no `gh`: list the open PRs whose branch starts with `homeostat/review-` for the user to open in the browser, and walk them through the same choices there.
+`homeostat review` works the same on GitHub and Bitbucket and only ever acts on homeostat's own PRs. It needs the KB's git-host token (`HOMEOSTAT_GITHUB_TOKEN` or `GITHUB_TOKEN`, or `HOMEOSTAT_BITBUCKET_TOKEN`); if it says one is missing, tell the user which variable to set rather than retrying.
 
 ## 2. Build the queue
 
 ```sh
-gh pr list --repo <kbRepo> --state open --search "head:homeostat/review-" --json number,title,headRefName,createdAt,reviewRequests,url
+homeostat review list --dir <kb> --json [--reviewer <the user's handle>]
 ```
 
-Also include any open `homeostat/daily-` PR: it is one the host refused to merge (for example, branch protection), so its lessons wait for a person too. Put PRs that request the user's review first, then the oldest. Filter by area or member if one was given (the member is in the branch name). Say how many PRs and lessons there are before starting.
+It lists the open review PRs, plus any open daily PR the host refused to merge (for example, branch protection), whose lessons wait for a person too. Each has its member, date, lesson count, reviewers and whether it conflicts with the base branch. With `--reviewer`, the PRs that ask the user come first; then the oldest. Filter by area or member if one was given. Say how many PRs and lessons there are before starting.
 
 ## 3. One PR at a time
 
-`gh pr view <n> --repo <kbRepo>` shows a table: each lesson with its decision, confidence and why it was not decided automatically. `gh pr diff <n> --repo <kbRepo>` shows the lessons themselves. For each lesson, show the title, rule, why, source (with link), author, confidence and the reason it waits, and point out anything that matters: a risky-content finding, a conflict with an existing rule, code it names that may not exist, a document section it changes. Then ask the user to choose for the whole PR:
+`homeostat review show <n> --dir <kb>` shows the PR's table (each lesson with its decision, confidence and why it was not decided automatically), whether it merges cleanly, and the diff with the lessons themselves. For each lesson, show the title, rule, why, source (with link), author, confidence and the reason it waits, and point out anything that matters: a risky-content finding, a conflict with an existing rule, code it names that may not exist, a document section it changes. Then ask the user to choose for the whole PR:
 
-- **Merge:** `gh pr merge <n> --repo <kbRepo> --squash`. Every lesson in it is accepted.
-- **Close:** `gh pr close <n> --repo <kbRepo> --comment "<their reason>"`. Every lesson in it is declined, with that reason.
-- **Keep some, drop others:** the user deletes the files they reject from the PR branch (on the PR's Files tab, or in a checkout), then merges. Only the lessons still in the PR are accepted.
-- **Ask the author:** `gh pr comment <n> --repo <kbRepo> --body "<question>"`, and leave it open.
+- **Merge:** `homeostat review merge <n> --dir <kb>`. Every lesson in it is accepted. If it conflicts with the base branch, the command does not merge and prints how to update the branch or close it; relay that, and do not try to resolve the conflict yourself. If the host refuses (for example, an approval is required), say why and point the user to the PR's link.
+- **Close:** `homeostat review close <n> --dir <kb> --reason "<their reason>"`. Every lesson in it is declined, with that reason posted on the PR.
+- **Keep some, drop others:** the user deletes the files they reject from the PR branch (on the host's web page, or in a checkout), then merges. Only the lessons still in the PR are accepted.
+- **Ask the author:** `homeostat review comment <n> --dir <kb> "<question>"`, and leave it open.
 - **Skip:** leave it for later.
 
 A lesson of kind `decision` with `adopted: false` is a record that the team considered a proposal and turned it down: its Rule is the proposal and its Why is why not. Merging it records the rejection, so agents stop proposing it; it never tells an agent to do the proposal. Describe it that way.

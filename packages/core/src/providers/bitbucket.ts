@@ -7,6 +7,7 @@ import {
   type Provider,
   type ProviderOptions,
   type PullRequest,
+  type PullRequestDetails,
   type RepoRef,
   type ReviewComment,
   SKIP_MARKER,
@@ -33,6 +34,17 @@ interface BbPullRequest {
   source: { branch: { name: string } };
   destination: { branch: { name: string } };
   links: { html: { href: string } };
+}
+
+interface BbPullRequestDetails extends BbPullRequest {
+  state: "OPEN" | "MERGED" | "DECLINED" | "SUPERSEDED";
+  created_on: string;
+  reviewers?: BbUser[];
+}
+
+interface BbMergeabilityCheck {
+  type: string;
+  reason?: "clean" | "conflicts" | "merge_impossible";
 }
 
 interface BbComment {
@@ -183,6 +195,74 @@ export class BitbucketProvider implements Provider {
       });
     }
     return commits;
+  }
+
+  async getPullRequest(repo: RepoRef, pullRequestId: number): Promise<PullRequestDetails> {
+    const url = `${this.repoUrl(repo)}/pullrequests/${pullRequestId}`;
+    const [{ body }, conflicts] = await Promise.all([
+      requestJson("Bitbucket", this.fetch, url, { headers: this.headers() }),
+      this.conflicts(url),
+    ]);
+    const pr = body as BbPullRequestDetails;
+    return {
+      id: pr.id,
+      title: pr.title,
+      url: pr.links.html.href,
+      author: person(pr.author),
+      sourceBranch: pr.source.branch.name,
+      targetBranch: pr.destination.branch.name,
+      body: pr.description ?? "",
+      state: pr.state === "OPEN" ? "open" : pr.state === "MERGED" ? "merged" : "closed",
+      createdAt: pr.created_on,
+      reviewers: (pr.reviewers ?? []).map(person),
+      ...(conflicts === undefined ? {} : { conflicts }),
+    };
+  }
+
+  /**
+   * Bitbucket's own pre-merge evaluation; its git check says whether the PR conflicts. Undefined
+   * when Bitbucket could not evaluate it, or the PR is no longer open.
+   */
+  private async conflicts(prUrl: string): Promise<boolean | undefined> {
+    try {
+      const { body } = await requestJson("Bitbucket", this.fetch, `${prUrl}/mergeability/checks`, {
+        headers: this.headers(),
+      });
+      const checks = (body as { values: BbMergeabilityCheck[] }).values;
+      const reason = checks.find((c) => c.type === "git_mergeability_check")?.reason;
+      return reason === undefined ? undefined : reason !== "clean";
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Bitbucket redirects to the repository diff for the PR's revisions. */
+  async getPullRequestDiff(repo: RepoRef, pullRequestId: number): Promise<string> {
+    const { body } = await requestJson(
+      "Bitbucket",
+      this.fetch,
+      `${this.repoUrl(repo)}/pullrequests/${pullRequestId}/diff`,
+      { headers: { ...this.headers(), Accept: "text/plain" } },
+    );
+    return String(body ?? "");
+  }
+
+  async closePullRequest(repo: RepoRef, pullRequestId: number): Promise<void> {
+    await requestJson(
+      "Bitbucket",
+      this.fetch,
+      `${this.repoUrl(repo)}/pullrequests/${pullRequestId}/decline`,
+      { method: "POST", headers: this.headers() },
+    );
+  }
+
+  async commentOnPullRequest(repo: RepoRef, pullRequestId: number, text: string): Promise<void> {
+    await requestJson(
+      "Bitbucket",
+      this.fetch,
+      `${this.repoUrl(repo)}/pullrequests/${pullRequestId}/comments`,
+      { method: "POST", headers: this.headers(), body: { content: { raw: text } } },
+    );
   }
 
   async openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }> {

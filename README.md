@@ -45,6 +45,7 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat learn [comment-url]` | Save one lesson from flags, prompts or a PR review comment; it applies to your sessions now and goes to tomorrow's daily run |
 | `homeostat codeowners [--check]` | Generate CODEOWNERS from members, areas and entry owners |
 | `homeostat daily` | The daily run (CI): one scored PR per developer, merged, declined or sent to a reviewer |
+| `homeostat review list`, `show`, `merge`, `close`, `comment` | Work the review queue on GitHub or Bitbucket: merge a review PR to accept its lessons, close it to decline them |
 | `homeostat sync` | Pull the team KB and send your pending lessons (the plugin runs it in the background) |
 | `homeostat curate` | Draft rules from review comments on their own, without the daily decisions |
 | `homeostat deep-dive` | The deep-dive run (CI) |

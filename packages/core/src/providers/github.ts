@@ -6,6 +6,7 @@ import {
   type Provider,
   type ProviderOptions,
   type PullRequest,
+  type PullRequestDetails,
   type RepoRef,
   type ReviewComment,
   SKIP_MARKER,
@@ -26,6 +27,15 @@ interface GhPullRequest {
   base: { ref: string };
   body?: string | null;
   labels?: { name: string }[];
+}
+
+/** The single-PR view adds what the list leaves out. */
+interface GhPullRequestDetails extends GhPullRequest {
+  state: "open" | "closed";
+  created_at: string;
+  requested_reviewers?: GhUser[];
+  mergeable: boolean | null;
+  mergeable_state?: string;
 }
 
 interface GhReviewComment {
@@ -160,6 +170,53 @@ export class GitHubProvider implements Provider {
     });
     const created = body as { number: number; html_url: string };
     return { id: created.number, url: created.html_url };
+  }
+
+  /** GitHub works mergeability out in the background: `mergeable` is null until it has. */
+  async getPullRequest(repo: RepoRef, pullRequestId: number): Promise<PullRequestDetails> {
+    const { body } = await this.get(`${this.repoUrl(repo)}/pulls/${pullRequestId}`);
+    const pr = body as GhPullRequestDetails;
+    return {
+      id: pr.number,
+      title: pr.title,
+      url: pr.html_url,
+      author: { id: pr.user.login },
+      sourceBranch: pr.head.ref,
+      targetBranch: pr.base.ref,
+      body: pr.body ?? "",
+      state: pr.merged_at ? "merged" : pr.state,
+      createdAt: pr.created_at,
+      reviewers: (pr.requested_reviewers ?? []).map((u) => ({ id: u.login })),
+      ...(pr.mergeable === null ? {} : { conflicts: pr.mergeable_state === "dirty" }),
+    };
+  }
+
+  async getPullRequestDiff(repo: RepoRef, pullRequestId: number): Promise<string> {
+    const { body } = await requestJson(
+      "GitHub",
+      this.fetch,
+      `${this.repoUrl(repo)}/pulls/${pullRequestId}`,
+      { headers: { ...this.headers(), Accept: "application/vnd.github.diff" } },
+    );
+    return String(body ?? "");
+  }
+
+  async closePullRequest(repo: RepoRef, pullRequestId: number): Promise<void> {
+    await requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls/${pullRequestId}`, {
+      method: "PATCH",
+      headers: this.headers(),
+      body: { state: "closed" },
+    });
+  }
+
+  /** A PR's conversation comments live on its issue. */
+  async commentOnPullRequest(repo: RepoRef, pullRequestId: number, text: string): Promise<void> {
+    await requestJson(
+      "GitHub",
+      this.fetch,
+      `${this.repoUrl(repo)}/issues/${pullRequestId}/comments`,
+      { method: "POST", headers: this.headers(), body: { body: text } },
+    );
   }
 
   async requestReviewers(repo: RepoRef, pullRequestId: number, logins: string[]): Promise<void> {

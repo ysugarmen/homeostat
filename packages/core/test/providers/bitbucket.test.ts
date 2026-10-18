@@ -161,3 +161,43 @@ describe("BitbucketProvider.listCommits after the source branch is gone", () => 
     ]);
   });
 });
+
+describe("BitbucketProvider review actions", () => {
+  const kb = { owner: "acme", name: "team-kb" };
+
+  test("reads a PR with its body, reviewers and whether it conflicts", async () => {
+    const { bb } = provider();
+    expect(await bb.getPullRequest(kb, 42)).toEqual({
+      id: 42,
+      title: "homeostat: 2 lessons to review · lee · 2026-10-15",
+      url: "https://bitbucket.org/acme/team-kb/pull-requests/42",
+      author: { id: "homeostat-bot", name: "homeostat" },
+      sourceBranch: "homeostat/review-lee-2026-10-15",
+      targetBranch: "main",
+      body: "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
+      state: "open",
+      createdAt: "2026-10-15T06:00:00.000000+00:00",
+      reviewers: [{ id: "dana", name: "Dana Reyes" }],
+      conflicts: false,
+    });
+    expect((await bb.getPullRequest(kb, 43)).conflicts).toBe(true);
+    const declined = await bb.getPullRequest(kb, 44);
+    expect(declined.state).toBe("closed");
+    expect(declined.conflicts).toBeUndefined();
+  });
+
+  test("fetches the diff as text", async () => {
+    const { bb } = provider();
+    expect(await bb.getPullRequestDiff(kb, 42)).toContain("+id: x");
+  });
+
+  test("comments, and declines", async () => {
+    const { bb, sent } = provider();
+    await bb.commentOnPullRequest(kb, 42, "Declined in review: duplicate");
+    await bb.closePullRequest(kb, 42);
+    expect(sent.map((r) => `${r.method} ${new URL(r.url).pathname.split("/").at(-1)}`)).toEqual([
+      "POST comments",
+      "POST decline",
+    ]);
+  });
+});

@@ -62,8 +62,17 @@ function team() {
 }
 
 /** Lee's PR #120 got a review from Sam that Lee acted on. */
+const unused = (): never => {
+  throw new Error("not used by this test");
+};
+
 class FakeProvider implements Provider {
   readonly kind = "github" as const;
+  // `homeostat review` only; never reached here.
+  getPullRequest = unused;
+  getPullRequestDiff = unused;
+  closePullRequest = unused;
+  commentOnPullRequest = unused;
   opened: { pr: NewPullRequest; id: number }[] = [];
   merged: number[] = [];
   reviewers: { id: number; logins: string[] }[] = [];

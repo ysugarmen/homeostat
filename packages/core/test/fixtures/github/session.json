@@ -260,6 +260,152 @@
           }
         ]
       }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/team-kb/pulls/8"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "number": 8,
+          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "html_url": "https://github.com/acme/team-kb/pull/8",
+          "user": {
+            "login": "homeostat-bot"
+          },
+          "created_at": "2026-10-15T06:00:00Z",
+          "updated_at": "2026-10-15T06:00:00Z",
+          "state": "open",
+          "merged_at": null,
+          "head": {
+            "ref": "homeostat/review-lee-2026-10-15"
+          },
+          "base": {
+            "ref": "main"
+          },
+          "body": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
+          "requested_reviewers": [
+            {
+              "login": "dana"
+            }
+          ],
+          "mergeable": true,
+          "mergeable_state": "clean"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/team-kb/pulls/9"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "number": 9,
+          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "html_url": "https://github.com/acme/team-kb/pull/9",
+          "user": {
+            "login": "homeostat-bot"
+          },
+          "created_at": "2026-10-15T06:00:00Z",
+          "updated_at": "2026-10-15T06:00:00Z",
+          "state": "open",
+          "merged_at": null,
+          "head": {
+            "ref": "homeostat/review-dana-2026-10-14"
+          },
+          "base": {
+            "ref": "main"
+          },
+          "body": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
+          "requested_reviewers": [
+            {
+              "login": "dana"
+            }
+          ],
+          "mergeable": false,
+          "mergeable_state": "dirty"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/team-kb/pulls/10"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "number": 10,
+          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "html_url": "https://github.com/acme/team-kb/pull/10",
+          "user": {
+            "login": "homeostat-bot"
+          },
+          "created_at": "2026-10-15T06:00:00Z",
+          "updated_at": "2026-10-15T06:00:00Z",
+          "state": "open",
+          "merged_at": null,
+          "head": {
+            "ref": "homeostat/review-kim-2026-10-16"
+          },
+          "base": {
+            "ref": "main"
+          },
+          "body": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
+          "requested_reviewers": [
+            {
+              "login": "dana"
+            }
+          ],
+          "mergeable": null,
+          "mergeable_state": "unknown"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/team-kb/pulls/11"
+      },
+      "response": {
+        "status": 200,
+        "body": "diff --git a/knowledge/core/x.md b/knowledge/core/x.md\n+id: x\n"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://api.github.com/repos/acme/team-kb/pulls/8",
+        "body": {
+          "state": "closed"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "number": 8,
+          "state": "closed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/acme/team-kb/issues/8/comments",
+        "body": {
+          "body": "Declined in review: duplicate"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": 1
+        }
+      }
     }
   ]
 }

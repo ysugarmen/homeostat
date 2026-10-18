@@ -120,3 +120,40 @@ describe("GitHubProvider.listOpenPullRequests", () => {
     ]);
   });
 });
+
+describe("GitHubProvider review actions", () => {
+  const kb = { owner: "acme", name: "team-kb" };
+
+  test("reads a PR with its body, reviewers and whether it conflicts", async () => {
+    const { gh } = provider();
+    expect(await gh.getPullRequest(kb, 8)).toEqual({
+      id: 8,
+      title: "homeostat: 2 lessons to review · lee · 2026-10-15",
+      url: "https://github.com/acme/team-kb/pull/8",
+      author: { id: "homeostat-bot" },
+      sourceBranch: "homeostat/review-lee-2026-10-15",
+      targetBranch: "main",
+      body: "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
+      state: "open",
+      createdAt: "2026-10-15T06:00:00Z",
+      reviewers: [{ id: "dana" }],
+      conflicts: false,
+    });
+    expect((await gh.getPullRequest(kb, 9)).conflicts).toBe(true);
+    // GitHub works mergeability out in the background; until then it is unknown.
+    expect((await gh.getPullRequest(kb, 10)).conflicts).toBeUndefined();
+  });
+
+  test("fetches the diff as text", async () => {
+    const { gh, sent } = provider();
+    expect(await gh.getPullRequestDiff(kb, 11)).toContain("+id: x");
+    expect(sent[0]?.headers.Accept).toBe("application/vnd.github.diff");
+  });
+
+  test("comments, and closes", async () => {
+    const { gh, sent } = provider();
+    await gh.commentOnPullRequest(kb, 8, "Declined in review: duplicate");
+    await gh.closePullRequest(kb, 8);
+    expect(sent.map((r) => r.method)).toEqual(["POST", "PATCH"]);
+  });
+});
