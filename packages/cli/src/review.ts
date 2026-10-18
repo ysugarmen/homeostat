@@ -28,12 +28,15 @@ export interface ReviewOptions {
 
 /** Review PRs hold the middle band; a daily PR is open only when the host refused to merge it. */
 const BRANCH = /^homeostat\/(review|daily)-(.+)-(\d{4}-\d{2}-\d{2})$/;
+/** A flagged rule's PR: merging puts its fix in force, closing retires the rule. */
+const DISPUTE = /^homeostat\/review-dispute-(.+)-(\d{4}-\d{2}-\d{2})$/;
 
 interface Queued {
   id: number;
   title: string;
   url: string;
-  kind: "review" | "daily";
+  kind: "review" | "daily" | "dispute";
+  /** The developer whose lessons these are; for a dispute, the flagged rule's id instead. */
   member: string;
   date: string;
   lessons: number;
@@ -81,6 +84,16 @@ const lessonCount = (pr: PullRequestDetails, kind: Queued["kind"]) =>
     .length;
 
 function queued(pr: PullRequestDetails): Queued | undefined {
+  const base = {
+    id: pr.id,
+    title: pr.title.replace(/^homeostat: /, ""),
+    url: pr.url,
+    reviewers: pr.reviewers.map((r) => r.id),
+    createdAt: pr.createdAt,
+    ...(pr.conflicts === undefined ? {} : { conflicts: pr.conflicts }),
+  };
+  const d = DISPUTE.exec(pr.sourceBranch);
+  if (d) return { ...base, kind: "dispute", member: d[1] ?? "", date: d[2] ?? "", lessons: 1 };
   const m = BRANCH.exec(pr.sourceBranch);
   if (!m) return undefined;
   const kind = m[1] as Queued["kind"];
@@ -177,6 +190,7 @@ async function list(ctx: Context, opts: ReviewOptions, io: Io): Promise<number> 
   for (const q of queue) {
     const notes = [
       q.kind === "daily" ? "the host refused to merge this daily PR" : "",
+      q.kind === "dispute" ? `flagged rule ${q.member}: merge the fix, or close to retire it` : "",
       q.reviewers.length ? `asks ${q.reviewers.map((r) => `@${r}`).join(", ")}` : "",
       q.conflicts ? paint("red", `conflicts with ${ctx.base}`) : "",
     ].filter(Boolean);
@@ -232,12 +246,15 @@ async function merge(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Pr
     );
     return 1;
   }
-  const n = queued(pr)?.lessons ?? 0;
+  const q = queued(pr);
+  const n = q?.lessons ?? 0;
   const result = { merged: pr.id, url: pr.url, lessons: n };
   io.stdout(
     opts.json
       ? `${JSON.stringify(result)}\n`
-      : `merged #${pr.id}: its ${plural(n, "lesson")} ${n === 1 ? "is" : "are"} accepted. The next daily run records it and tells the authors' sessions.\n`,
+      : q?.kind === "dispute"
+        ? `merged #${pr.id}: the fix for ${q.member} is accepted and the rule is back in force. The next daily run records it.\n`
+        : `merged #${pr.id}: its ${plural(n, "lesson")} ${n === 1 ? "is" : "are"} accepted. The next daily run records it and tells the authors' sessions.\n`,
   );
   return 0;
 }
@@ -248,11 +265,14 @@ async function close(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Pr
   const pr = await homeostatPr(ctx, ref, "close");
   await ctx.provider.commentOnPullRequest(ctx.kbRepo, pr.id, `Declined in review: ${reason}`);
   await ctx.provider.closePullRequest(ctx.kbRepo, pr.id);
-  const n = queued(pr)?.lessons ?? 0;
+  const q = queued(pr);
+  const n = q?.lessons ?? 0;
   io.stdout(
     opts.json
       ? `${JSON.stringify({ closed: pr.id, url: pr.url, lessons: n, reason })}\n`
-      : `closed #${pr.id}: its ${plural(n, "lesson")} ${n === 1 ? "is" : "are"} declined (${reason}). The next daily run records it.\n`,
+      : q?.kind === "dispute"
+        ? `closed #${pr.id}: ${q.member} is retired (${reason}). The next daily run records it.\n`
+        : `closed #${pr.id}: its ${plural(n, "lesson")} ${n === 1 ? "is" : "are"} declined (${reason}). The next daily run records it.\n`,
   );
   return 0;
 }

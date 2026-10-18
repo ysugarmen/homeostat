@@ -219,3 +219,29 @@ describe("homeostat review close and comment", () => {
     expect(writes).toEqual(["comment 7: Which client?"]);
   });
 });
+
+describe("homeostat review on dispute PRs", () => {
+  const dispute = () =>
+    pr(8, "homeostat/review-dispute-use-with-retry-2026-10-17", {
+      title: "homeostat: fix or retire use-with-retry",
+      body: "`use-with-retry` was flagged as wrong, so sessions stopped getting it.",
+    });
+
+  test("lists a flagged rule's PR as one rule to decide", async () => {
+    const { stdout } = await review(host([dispute()]).provider, "list", "--json");
+    expect(JSON.parse(stdout)[0]).toMatchObject({
+      kind: "dispute",
+      member: "use-with-retry",
+      lessons: 1,
+    });
+  });
+
+  test("merging puts the fix in force; closing retires the rule", async () => {
+    const merged = await review(host([dispute()]).provider, "merge", "8");
+    expect(merged.stdout).toContain(
+      "the fix for use-with-retry is accepted and the rule is back in force",
+    );
+    const closed = await review(host([dispute()]).provider, "close", "8", "--reason", "obsolete");
+    expect(closed.stdout).toContain("closed #8: use-with-retry is retired (obsolete)");
+  });
+});

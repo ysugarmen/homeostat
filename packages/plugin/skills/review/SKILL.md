@@ -24,7 +24,7 @@ Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is 
 homeostat review list --dir <kb> --json [--reviewer <the user's handle>]
 ```
 
-It lists the open review PRs, plus any open daily PR the host refused to merge (for example, branch protection), whose lessons wait for a person too. Each has its member, date, lesson count, reviewers and whether it conflicts with the base branch. With `--reviewer`, the PRs that ask the user come first; then the oldest. Filter by area or member if one was given. Say how many PRs and lessons there are before starting.
+It lists the open review PRs, plus any open daily PR the host refused to merge (for example, branch protection), whose lessons wait for a person too. It also lists dispute PRs (`kind: dispute`), one per flagged rule: merging puts the drafted fix in force, closing retires the rule. Say which it is before the user chooses. Each has its member, date, lesson count, reviewers and whether it conflicts with the base branch. With `--reviewer`, the PRs that ask the user come first; then the oldest. Filter by area or member if one was given. Say how many PRs and lessons there are before starting.
 
 ## 3. One PR at a time
 
