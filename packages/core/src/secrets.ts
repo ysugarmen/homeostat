@@ -21,7 +21,7 @@ const PATTERNS: [kind: string, re: RegExp][] = [
   ["slack-token", /\bxox[abposr]-[A-Za-z0-9-]{10,}|\bxapp-\d-[A-Za-z0-9-]{10,}/g],
   ["stripe-key", /\b(?:sk|rk)_(?:live|test)_[0-9a-zA-Z]{16,}\b/g],
   ["google-api-key", /\bAIza[0-9A-Za-z_-]{35}\b/g],
-  ["atlassian-token", /\b(?:ATATT3|ATBB)[A-Za-z0-9_=-]{24,}/g],
+  ["atlassian-token", /\b(?:ATATT3|ATCTT3|ATBB)[A-Za-z0-9_=-]{24,}/g],
   ["jwt", /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g],
   ["credentialed-url", /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]{3,}@[^\s]+/gi],
   [

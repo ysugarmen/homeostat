@@ -525,7 +525,7 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(stdout).toContain(
       "could not request @sam (Reviews may only be requested from collaborators)",
     );
-    expect(stdout).toContain("reviewers must be collaborators on acme/team-kb");
+    expect(stdout).toContain("reviewers must have access to acme/team-kb");
     const report = JSON.parse(
       t.g(t.origin, "show", "homeostat/state:runs/2026-10-16T06-00-00Z.json"),
     );

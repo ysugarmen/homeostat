@@ -471,7 +471,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       if (refused.length) {
         row.reviewError = `could not request ${refused.join(", ")}`;
         io.stdout(
-          `  ${row.reviewError}; reviewers must be collaborators on ${sources.kbRepo}, and not the PR's author\n`,
+          `  ${row.reviewError}; reviewers must have access to ${sources.kbRepo}, and not be the PR's author\n`,
         );
       }
     };

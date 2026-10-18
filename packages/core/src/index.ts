@@ -43,7 +43,7 @@ export {
   type CloudClient,
   vertexAsker,
 } from "./cloud.ts";
-export { CODEOWNERS_FILE, generateCodeowners } from "./codeowners.ts";
+export { CODEOWNERS_FILE, codeownersFile, generateCodeowners } from "./codeowners.ts";
 export {
   type Confidence,
   type ConfidenceInput,

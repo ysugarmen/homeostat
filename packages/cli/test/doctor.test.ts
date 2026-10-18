@@ -1,4 +1,12 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { VERSION } from "@homeostat/core";
@@ -22,6 +30,8 @@ function kb(version: string) {
       "https://github.com/acme/integrations-api/pull/812#discussion_r33",
     ),
   );
+  // GitHub reads CODEOWNERS from the root; the starter KB keeps it where Bitbucket reads it.
+  renameSync(join(dir, ".bitbucket/CODEOWNERS"), join(dir, "CODEOWNERS"));
   mkdirSync(join(dir, ".github/workflows"), { recursive: true });
   writeFileSync(
     join(dir, ".github/workflows/homeostat.yml"),
@@ -146,5 +156,69 @@ describe("homeostat doctor --security (T8)", () => {
     expect(stdout).toContain(
       "set HOMEOSTAT_GITHUB_TOKEN or GITHUB_TOKEN to check branch protection",
     );
+  });
+});
+
+describe("homeostat doctor --security on Bitbucket", () => {
+  /** The starter KB as committed: Bitbucket host, CODEOWNERS in .bitbucket/. */
+  function bbKb() {
+    const dir = mkdtempSync(join(tmpdir(), "homeostat-doc-bb-"));
+    cpSync(starter, dir, { recursive: true });
+    return dir;
+  }
+
+  /** A Bitbucket API stub: the KB repo's branch restrictions; every repo is private. */
+  function bitbucket(
+    restrictions: { kind: string; pattern: string; branch_match_kind?: string }[],
+  ) {
+    return (async (url: string, init: { headers: Record<string, string> }) => {
+      if (!init.headers.Authorization) return new Response("{}", { status: 404 });
+      if (url.includes("/repositories/acme/team-kb/branch-restrictions"))
+        return Response.json({
+          values: restrictions.map((r) => ({ branch_match_kind: "glob", ...r })),
+        });
+      return new Response("{}", { status: 404 });
+    }) as unknown as typeof globalThis.fetch;
+  }
+
+  const run = (dir: string, fetch: typeof globalThis.fetch) =>
+    doctor(dir, { fetch, env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" } });
+
+  test("enforced approvals on the base branch pass", async () => {
+    const { stdout } = await run(
+      bbKb(),
+      bitbucket([
+        { kind: "require_approvals_to_merge", pattern: "main" },
+        { kind: "enforce_merge_checks", pattern: "main" },
+      ]),
+    );
+    expect(stdout).toContain("✓ merges into main on acme/team-kb need an approval");
+    expect(stdout).toContain("✓ CODEOWNERS routes each area to its reviewers");
+  });
+
+  test("approvals on another branch do not protect the base branch", async () => {
+    const { stdout } = await run(
+      bbKb(),
+      bitbucket([
+        { kind: "require_approvals_to_merge", pattern: "release/*" },
+        { kind: "enforce_merge_checks", pattern: "release/*" },
+      ]),
+    );
+    expect(stdout).toContain("merges into main on acme/team-kb need no approval");
+  });
+
+  test("approvals that are not enforced are only advice, short of Premium", async () => {
+    const { stdout } = await run(
+      bbKb(),
+      bitbucket([{ kind: "require_approvals_to_merge", pattern: "*" }]),
+    );
+    expect(stdout).toContain("only Bitbucket Premium enforces merge checks");
+  });
+
+  test("a root CODEOWNERS is ignored by Bitbucket", async () => {
+    const dir = bbKb();
+    renameSync(join(dir, ".bitbucket/CODEOWNERS"), join(dir, "CODEOWNERS"));
+    const { stdout } = await run(dir, bitbucket([]));
+    expect(stdout).toContain("Bitbucket reads CODEOWNERS only from .bitbucket/");
   });
 });

@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { type Config, readKbFiles, VERSION, validate } from "@homeostat/core";
+import { minimatch } from "minimatch";
 import type { Io } from "./cli.ts";
 import { painter } from "./format.ts";
 import { CliError, TOKEN_VARS } from "./provider.ts";
@@ -100,24 +101,38 @@ async function hostChecks(config: Config, io: Io): Promise<{ access: Check[]; bl
       );
     else access.push(info(`could not read branch protection on ${sources.kbRepo} (${b.status})`));
   } else {
-    const r = await api.get(`/repositories/${sources.kbRepo}/branch-restrictions`, true);
-    const values = (r.body?.values as { kind: string; pattern: string }[] | undefined) ?? undefined;
+    const r = await api.get(
+      `/repositories/${sources.kbRepo}/branch-restrictions?pagelen=100`,
+      true,
+    );
+    const values = r.body?.values as BbRestriction[] | undefined;
+    const base = sources.baseBranch;
+    // A branching-model restriction (production, development) can't be resolved here; count it.
+    const kinds = new Set(
+      values
+        ?.filter((v) => v.branch_match_kind === "branching_model" || minimatch(base, v.pattern))
+        .map((v) => v.kind),
+    );
     if (!values)
       access.push(
         info(`could not read branch restrictions on ${sources.kbRepo} (${r.status}; needs admin)`),
       );
     else if (
-      values.some(
-        (v) =>
-          v.kind === "require_approvals_to_merge" ||
-          v.kind === "require_default_reviewer_approvals_to_merge",
-      )
+      !kinds.has("require_approvals_to_merge") &&
+      !kinds.has("require_default_reviewer_approvals_to_merge")
     )
-      access.push(ok(`merges into ${sources.kbRepo} need an approval`));
-    else
       access.push(
-        fail(`merges into ${sources.kbRepo} need no approval: anything can merge unreviewed`),
+        fail(
+          `merges into ${base} on ${sources.kbRepo} need no approval: anything can merge unreviewed`,
+        ),
       );
+    else if (!kinds.has("enforce_merge_checks"))
+      access.push(
+        fail(
+          `merges into ${base} on ${sources.kbRepo} ask for an approval but anyone can merge past it: only Bitbucket Premium enforces merge checks ("Prevent a merge with unresolved merge checks"). Without it keep the KB's writers few`,
+        ),
+      );
+    else access.push(ok(`merges into ${base} on ${sources.kbRepo} need an approval`));
   }
 
   // The token: code repos need read only; only the KB repo needs write.
@@ -139,6 +154,26 @@ async function hostChecks(config: Config, io: Io): Promise<{ access: Check[]; bl
     else blast.push(info(`could not check the token's access to ${repo}`));
   }
   return { access, blast };
+}
+
+interface BbRestriction {
+  kind: string;
+  branch_match_kind?: "branching_model" | "glob";
+  pattern: string;
+}
+
+/** Bitbucket Cloud reads only `.bitbucket/CODEOWNERS`; GitHub also reads the root and `.github/`. */
+function codeownersCheck(root: string, config: Config): Check {
+  const routes = ok("CODEOWNERS routes each area to its reviewers");
+  if (config.sources?.host === "bitbucket") {
+    if (existsSync(join(root, ".bitbucket/CODEOWNERS"))) return routes;
+    return existsSync(join(root, "CODEOWNERS"))
+      ? warn("Bitbucket reads CODEOWNERS only from .bitbucket/: rerun homeostat codeowners")
+      : warn("no CODEOWNERS file: run homeostat codeowners");
+  }
+  return existsSync(join(root, ".github/CODEOWNERS")) || existsSync(join(root, "CODEOWNERS"))
+    ? routes
+    : warn("no CODEOWNERS file: run homeostat codeowners");
 }
 
 /** CI files that run homeostat, and any floating version they use. */
@@ -209,9 +244,7 @@ export async function securityReport(root: string, config: Config, io: Io): Prom
           `the daily run merges lessons at confidence ${config.scoring.confidence.accept}+ (${config.scoring.confidence.coreAccept}+ for core), declines below ${config.scoring.confidence.decline}, and asks a reviewer in between; risky content, conflicts and document edits always go to a reviewer; ${am.areas.length ? `areas ${am.areas.join(", ")}` : "all areas"}${am.excludeAreas.length ? ` except ${am.excludeAreas.join(", ")}` : ""}`,
         )
       : ok("auto-merge is off: the daily run sends every lesson to a reviewer"),
-    existsSync(join(root, ".github/CODEOWNERS")) || existsSync(join(root, "CODEOWNERS"))
-      ? ok("CODEOWNERS routes each area to its reviewers")
-      : warn("no CODEOWNERS file: run homeostat codeowners"),
+    codeownersCheck(root, config),
     s.mcpWrites
       ? warn(`agents can save and flag through MCP (at most ${s.mcpWriteLimit} per session)`)
       : ok("agents cannot write through MCP (security.mcpWrites is off)"),

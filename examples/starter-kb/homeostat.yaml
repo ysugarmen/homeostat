@@ -54,8 +54,8 @@ sources:
   kbRepo: acme/team-kb
   baseBranch: main
   repos: [acme/integrations-api, acme/web-app]
-  # Never read these repos, or review comments on these files. A PR marked homeostat:skip
-  # (label, title or description) is skipped too.
+  # Never read these repos, or review comments on these files. A PR with homeostat:skip in its
+  # title or description (or, on GitHub, as a label) is skipped too.
   exclude:
     repos: []
     paths: []

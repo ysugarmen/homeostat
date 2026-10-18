@@ -15,6 +15,8 @@ const SAMPLES: [string, string][] = [
   ["stripe-key", j("sk_live_", "4eC39HqLyjWDarjtT1zdp7dc")],
   ["google-api-key", j("AIza", "SyD", "-", "a".repeat(31))],
   ["atlassian-token", j("ATATT3", "xFfGF0", "Q".repeat(40))],
+  // Bitbucket repository, project and workspace access tokens.
+  ["atlassian-token", j("ATCTT3", "xFfGN0", "Q".repeat(40))],
   ["private-key", j("-----BEGIN ", "RSA PRIVATE KEY-----")],
   [
     "jwt",

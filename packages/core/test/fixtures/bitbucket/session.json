@@ -500,6 +500,240 @@
           ]
         }
       }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/workspaces/acme/members?pagelen=100"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 100,
+          "values": [
+            {
+              "type": "workspace_membership",
+              "user": {
+                "type": "user",
+                "display_name": "Lee Park",
+                "nickname": "lee",
+                "uuid": "{c1}",
+                "account_id": "5f-lee"
+              }
+            },
+            {
+              "type": "workspace_membership",
+              "user": {
+                "type": "user",
+                "display_name": "Dana Reyes",
+                "nickname": "dana",
+                "uuid": "{c2}",
+                "account_id": "5f-dana"
+              }
+            }
+          ],
+          "next": "https://api.bitbucket.org/2.0/workspaces/acme/members?pagelen=100&page=2"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/workspaces/acme/members?pagelen=100&page=2"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 100,
+          "values": [
+            {
+              "type": "workspace_membership",
+              "user": {
+                "type": "user",
+                "display_name": "Sam Ortiz",
+                "nickname": "sam",
+                "uuid": "{c3}",
+                "account_id": "5f-sam"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/41"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": 41,
+          "title": "homeostat: 2 lessons to review",
+          "reviewers": [
+            {
+              "type": "user",
+              "display_name": "Dana Reyes",
+              "uuid": "{c2}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/41",
+        "body": {
+          "title": "homeostat: 2 lessons to review",
+          "reviewers": [
+            {
+              "uuid": "{c2}"
+            },
+            {
+              "uuid": "{c3}"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": 41
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests/790/commits?pagelen=100"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "type": "error",
+          "error": {
+            "message": "The source or destination could not be found."
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests/790/activity?pagelen=50"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 50,
+          "values": [
+            {
+              "update": {
+                "state": "MERGED",
+                "date": "2026-10-06T12:00:00+00:00",
+                "source": {
+                  "commit": {
+                    "hash": "cc33"
+                  },
+                  "branch": {
+                    "name": "feature/old"
+                  }
+                },
+                "author": {
+                  "display_name": "Sam Ortiz",
+                  "nickname": "sam",
+                  "uuid": "{c3}"
+                }
+              }
+            },
+            {
+              "approval": {
+                "date": "2026-10-06T11:00:00+00:00",
+                "user": {
+                  "nickname": "dana"
+                }
+              }
+            },
+            {
+              "update": {
+                "state": "OPEN",
+                "date": "2026-10-05T16:00:00+00:00",
+                "source": {
+                  "commit": {
+                    "hash": "cc33"
+                  },
+                  "branch": {
+                    "name": "feature/old"
+                  }
+                },
+                "author": {
+                  "display_name": "Sam Ortiz",
+                  "nickname": "sam",
+                  "uuid": "{c3}"
+                }
+              }
+            },
+            {
+              "comment": {
+                "id": 90,
+                "created_on": "2026-10-05T10:00:00+00:00"
+              }
+            }
+          ],
+          "next": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests/790/activity?pagelen=50&page=2"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests/790/activity?pagelen=50&page=2"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 50,
+          "values": [
+            {
+              "update": {
+                "state": "OPEN",
+                "date": "2026-10-04T09:00:00+00:00",
+                "source": {
+                  "commit": {
+                    "hash": "aa11"
+                  },
+                  "branch": {
+                    "name": "feature/old"
+                  }
+                },
+                "author": {
+                  "display_name": "Sam Ortiz",
+                  "nickname": "sam",
+                  "uuid": "{c3}"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/41/merge",
+        "body": {
+          "merge_strategy": "squash",
+          "close_source_branch": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": 41,
+          "state": "MERGED"
+        }
+      }
     }
   ]
 }

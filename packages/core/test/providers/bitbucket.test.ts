@@ -83,6 +83,12 @@ describe("BitbucketProvider", () => {
     expect(pr).toEqual({ id: 41, url: "https://bitbucket.org/acme/team-kb/pull-requests/41" });
   });
 
+  test("squash-merges a KB PR and closes its branch", async () => {
+    const { bb, sent } = provider();
+    await bb.mergePullRequest({ owner: "acme", name: "team-kb" }, 41);
+    expect(sent).toHaveLength(1);
+  });
+
   test("API errors carry the status and Bitbucket's message", async () => {
     const { bb } = provider();
     const err = await bb.listCommits({ owner: "acme", name: "private-repo" }, 1).catch((e) => e);
@@ -103,6 +109,54 @@ describe("BitbucketProvider.listOpenPullRequests", () => {
         author: { id: "lee", name: "Lee Park" },
         sourceBranch: "candidates/lee",
         targetBranch: "main",
+      },
+    ]);
+  });
+});
+
+describe("BitbucketProvider.requestReviewers", () => {
+  const kb = { owner: "acme", name: "team-kb" };
+
+  test("adds a workspace member by nickname, keeping the existing reviewers", async () => {
+    const { bb, sent } = provider();
+    await bb.requestReviewers(kb, 41, ["Sam"]);
+    expect(sent.at(-1)).toMatchObject({
+      method: "PUT",
+      body: { reviewers: [{ uuid: "{c2}" }, { uuid: "{c3}" }] },
+    });
+  });
+
+  test("looks the workspace members up once", async () => {
+    const { bb, sent } = provider();
+    await bb.requestReviewers(kb, 41, ["sam"]);
+    await bb.requestReviewers(kb, 41, ["sam"]);
+    expect(sent.filter((r) => r.url.includes("/members")).length).toBe(2);
+  });
+
+  test("refuses a nickname that is not in the workspace, without changing the PR", async () => {
+    const { bb, sent } = provider();
+    const err = await bb.requestReviewers(kb, 41, ["kim"]).catch((e) => e);
+    expect(err.message).toBe("kim is not a member of the acme workspace");
+    expect(sent.some((r) => r.method === "PUT")).toBe(false);
+  });
+});
+
+describe("BitbucketProvider.listCommits after the source branch is gone", () => {
+  test("falls back to the pushes in the PR's activity, oldest first", async () => {
+    const { bb } = provider();
+    const commits = await bb.listCommits(repo, 790);
+    expect(commits).toEqual([
+      {
+        sha: "aa11",
+        date: "2026-10-04T09:00:00+00:00",
+        message: "",
+        author: { id: "sam", name: "Sam Ortiz" },
+      },
+      {
+        sha: "cc33",
+        date: "2026-10-05T16:00:00+00:00",
+        message: "",
+        author: { id: "sam", name: "Sam Ortiz" },
       },
     ]);
   });

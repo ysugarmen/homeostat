@@ -39,9 +39,10 @@
   },
   "dependencies": {
     "@homeostat/core": "workspace:*",
-    "commander": "^15.0.0",
+    "@homeostat/dashboard": "workspace:*",
     "@homeostat/mcp": "workspace:*",
-    "@homeostat/dashboard": "workspace:*"
+    "commander": "^15.0.0",
+    "minimatch": "^10.2.6"
   },
   "publishConfig": {
     "access": "public",

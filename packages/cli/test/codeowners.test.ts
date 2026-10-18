@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -26,28 +26,56 @@ function copyKb(name: string) {
 describe("homeostat codeowners", () => {
   test("the committed starter-kb CODEOWNERS is up to date", async () => {
     const { code, stdout } = await run("codeowners", join(examples, "starter-kb"), "--check");
-    expect(stdout).toBe("CODEOWNERS is up to date\n");
+    expect(stdout).toBe(".bitbucket/CODEOWNERS is up to date\n");
     expect(code).toBe(0);
   });
 
-  test("writes CODEOWNERS at the KB root", async () => {
+  test("on Bitbucket, writes .bitbucket/CODEOWNERS, the only place Bitbucket Cloud reads", async () => {
     const dir = copyKb("starter-kb");
-    writeFileSync(join(dir, "CODEOWNERS"), "stale\n");
+    writeFileSync(join(dir, ".bitbucket/CODEOWNERS"), "stale\n");
+    const { code, stdout } = await run("codeowners", dir);
+    expect(code).toBe(0);
+    expect(stdout).toBe("wrote .bitbucket/CODEOWNERS\n");
+    expect(readFileSync(join(dir, ".bitbucket/CODEOWNERS"), "utf8")).toBe(
+      readFileSync(join(examples, "starter-kb/.bitbucket/CODEOWNERS"), "utf8"),
+    );
+    expect(existsSync(join(dir, "CODEOWNERS"))).toBe(false);
+  });
+
+  test("creates .bitbucket/ when the KB has none", async () => {
+    const dir = copyKb("starter-kb");
+    rmSync(join(dir, ".bitbucket"), { recursive: true });
+    expect((await run("codeowners", dir)).code).toBe(0);
+    expect(existsSync(join(dir, ".bitbucket/CODEOWNERS"))).toBe(true);
+  });
+
+  test("on GitHub, writes CODEOWNERS at the KB root", async () => {
+    const dir = copyKb("starter-kb");
+    const config = join(dir, "homeostat.yaml");
+    writeFileSync(config, readFileSync(config, "utf8").replace("host: bitbucket", "host: github"));
+    const entry = join(dir, "knowledge/integrations/outbound-http-retry-helper.md");
+    writeFileSync(
+      entry,
+      readFileSync(entry, "utf8").replace(
+        "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33",
+        "https://github.com/acme/integrations-api/pull/812#discussion_r33",
+      ),
+    );
     const { code, stdout } = await run("codeowners", dir);
     expect(code).toBe(0);
     expect(stdout).toBe("wrote CODEOWNERS\n");
     expect(readFileSync(join(dir, "CODEOWNERS"), "utf8")).toBe(
-      readFileSync(join(examples, "starter-kb/CODEOWNERS"), "utf8"),
+      readFileSync(join(examples, "starter-kb/.bitbucket/CODEOWNERS"), "utf8"),
     );
   });
 
   test("--check fails without writing when the file is stale or missing", async () => {
     const dir = copyKb("starter-kb");
-    writeFileSync(join(dir, "CODEOWNERS"), "stale\n");
+    writeFileSync(join(dir, ".bitbucket/CODEOWNERS"), "stale\n");
     const stale = await run("codeowners", dir, "--check");
     expect(stale.code).toBe(1);
-    expect(stale.stdout).toBe("CODEOWNERS is out of date; run homeostat codeowners\n");
-    expect(readFileSync(join(dir, "CODEOWNERS"), "utf8")).toBe("stale\n");
+    expect(stale.stdout).toBe(".bitbucket/CODEOWNERS is out of date; run homeostat codeowners\n");
+    expect(readFileSync(join(dir, ".bitbucket/CODEOWNERS"), "utf8")).toBe("stale\n");
   });
 
   test("refuses to generate from an invalid KB", async () => {

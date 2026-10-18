@@ -1,4 +1,4 @@
-import { requestJson } from "./http.ts";
+import { ProviderError, requestJson } from "./http.ts";
 import {
   type Commit,
   type NewPullRequest,
@@ -16,6 +16,7 @@ interface BbUser {
   display_name?: string;
   nickname?: string;
   account_id?: string;
+  uuid?: string;
 }
 
 interface BbPage<T> {
@@ -45,6 +46,11 @@ interface BbComment {
   links: { html: { href: string } };
 }
 
+/** One entry of a PR's activity log; `update` entries record each push to the source branch. */
+interface BbActivity {
+  update?: { date: string; author?: BbUser; source: { commit?: { hash: string } } };
+}
+
 interface BbCommit {
   hash: string;
   date: string;
@@ -63,6 +69,7 @@ export class BitbucketProvider implements Provider {
   private readonly fetch: typeof fetch;
   private readonly baseUrl: string;
   private readonly token: string;
+  private readonly members = new Map<string, Promise<BbUser[]>>();
 
   constructor(opts: ProviderOptions) {
     this.token = opts.token;
@@ -133,15 +140,49 @@ export class BitbucketProvider implements Provider {
   }
 
   async listCommits(repo: RepoRef, pullRequestId: number): Promise<Commit[]> {
-    const commits = await this.paginate<BbCommit>(
-      `${this.repoUrl(repo)}/pullrequests/${pullRequestId}/commits?pagelen=100`,
-    );
+    let commits: BbCommit[];
+    try {
+      commits = await this.paginate<BbCommit>(
+        `${this.repoUrl(repo)}/pullrequests/${pullRequestId}/commits?pagelen=100`,
+      );
+    } catch (e) {
+      if (e instanceof ProviderError && e.status === 404) return this.pushes(repo, pullRequestId);
+      throw e;
+    }
     return commits.map((c) => ({
       sha: c.hash,
       date: c.date,
       message: c.message.trimEnd(),
       ...(c.author.user ? { author: person(c.author.user) } : {}),
     }));
+  }
+
+  /**
+   * Bitbucket answers 404 for the commits of a merged PR whose source branch was deleted, so the
+   * pushes recorded in its activity stand in: one per new head commit, dated when it was pushed,
+   * without a message.
+   */
+  private async pushes(repo: RepoRef, pullRequestId: number): Promise<Commit[]> {
+    const activity = await this.paginate<BbActivity>(
+      `${this.repoUrl(repo)}/pullrequests/${pullRequestId}/activity?pagelen=50`,
+    );
+    const updates = activity
+      .flatMap((a) => (a.update?.source.commit ? [a.update] : []))
+      .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+    const seen = new Set<string>();
+    const commits: Commit[] = [];
+    for (const u of updates) {
+      const sha = u.source.commit?.hash ?? "";
+      if (seen.has(sha)) continue;
+      seen.add(sha);
+      commits.push({
+        sha,
+        date: u.date,
+        message: "",
+        ...(u.author ? { author: person(u.author) } : {}),
+      });
+    }
+    return commits;
   }
 
   async openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }> {
@@ -176,6 +217,43 @@ export class BitbucketProvider implements Provider {
         body: { merge_strategy: "squash", close_source_branch: true },
       },
     );
+  }
+
+  /**
+   * Bitbucket names reviewers by account, not nickname, so the logins are looked up among the
+   * workspace's members (needs `read:workspace:bitbucket`). The PR's reviewer list is replaced
+   * wholesale, so it is sent back with the existing reviewers kept.
+   */
+  async requestReviewers(repo: RepoRef, pullRequestId: number, logins: string[]): Promise<void> {
+    if (logins.length === 0) return;
+    const members = await this.workspaceMembers(repo.owner);
+    const added = logins.map((login) => {
+      const user = members.find((u) => u.nickname?.toLowerCase() === login.toLowerCase());
+      if (!user?.uuid) throw new Error(`${login} is not a member of the ${repo.owner} workspace`);
+      return user.uuid;
+    });
+    const url = `${this.repoUrl(repo)}/pullrequests/${pullRequestId}`;
+    const { body } = await requestJson("Bitbucket", this.fetch, url, { headers: this.headers() });
+    const pr = body as { title: string; reviewers?: BbUser[] };
+    const uuids = [...new Set([...(pr.reviewers ?? []).flatMap((r) => r.uuid ?? []), ...added])];
+    await requestJson("Bitbucket", this.fetch, url, {
+      method: "PUT",
+      headers: this.headers(),
+      body: { title: pr.title, reviewers: uuids.map((uuid) => ({ uuid })) },
+    });
+  }
+
+  private workspaceMembers(workspace: string): Promise<BbUser[]> {
+    let members = this.members.get(workspace);
+    if (!members) {
+      members = this.paginate<{ user: BbUser }>(
+        `${this.baseUrl}/workspaces/${encodeURIComponent(workspace)}/members?pagelen=100`,
+      ).then((ms) => ms.map((m) => m.user));
+      // A failed lookup is retried on the next call rather than cached.
+      members.catch(() => this.members.delete(workspace));
+      this.members.set(workspace, members);
+    }
+    return members;
   }
 
   private repoUrl(repo: RepoRef) {

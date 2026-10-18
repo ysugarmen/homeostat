@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import {
-  CODEOWNERS_FILE,
+  codeownersFile,
   generateCodeowners,
   readKbFiles,
   validate,
@@ -9,8 +9,10 @@ import {
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { formatIssues } from "./format.ts";
+import { git } from "./git.ts";
+import { detectHost } from "./init.ts";
 
-/** `homeostat codeowners [dir]`: writes CODEOWNERS, or with `--check` only reports whether it is stale. */
+/** `homeostat codeowners [dir]`: writes CODEOWNERS where the git host reads it, or with `--check` only reports whether it is stale. */
 export function runCodeowners(dir: string, opts: { check?: boolean }, io: Io): number {
   const root = resolve(dir);
   const result = validate(readKbFiles(root));
@@ -31,19 +33,22 @@ export function runCodeowners(dir: string, opts: { check?: boolean }, io: Io): n
     return 1;
   }
 
-  const path = join(root, CODEOWNERS_FILE);
+  const remote = git(root, "remote", "get-url", "origin");
+  const file = codeownersFile(
+    result.config.sources?.host ?? (remote ? detectHost(remote) : undefined),
+  );
+  const path = join(root, file);
   const current = existsSync(path) ? readFileSync(path, "utf8") : undefined;
   if (opts.check) {
     const fresh = current === text;
     io.stdout(
-      fresh
-        ? `${CODEOWNERS_FILE} is up to date\n`
-        : `${CODEOWNERS_FILE} is out of date; run homeostat codeowners\n`,
+      fresh ? `${file} is up to date\n` : `${file} is out of date; run homeostat codeowners\n`,
     );
     return fresh ? 0 : 1;
   }
 
-  writeKbFile(root, CODEOWNERS_FILE, text);
-  io.stdout(`wrote ${CODEOWNERS_FILE}\n`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeKbFile(root, file, text);
+  io.stdout(`wrote ${file}\n`);
   return 0;
 }

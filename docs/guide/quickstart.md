@@ -5,9 +5,11 @@ You need Node 22.18 or later and a git repo for the knowledge base (KB). It can 
 ## 1. Create the knowledge base
 
 ```sh
-git clone git@github.com:your-org/team-kb.git && cd team-kb
-npx --yes homeostat@0.1.7 init --member your-id --handle @your-github-user
+git clone git@github.com:your-org/team-kb.git && cd team-kb   # or git@bitbucket.org:your-workspace/team-kb.git
+npx --yes homeostat@0.1.7 init --member your-id --handle @your-user
 ```
+
+A handle is your GitHub login or, on Bitbucket, your Bitbucket nickname (Personal settings > Account), written exactly as it appears there.
 
 `init` writes `homeostat.yaml`, `knowledge/core/`, and CI jobs for your git host (GitHub Actions or Bitbucket Pipelines):
 - validation on every PR
@@ -29,12 +31,12 @@ areas:
   integrations: ["services/integrations/**"]
   frontend: ["apps/web/**"]
 sources:
-  host: github
+  host: github            # or bitbucket
   kbRepo: your-org/team-kb
   repos: [your-org/api, your-org/web]
 ```
 
-Then generate CODEOWNERS, so each area's owners review its changes:
+Then generate CODEOWNERS, so each area's owners review its changes (on Bitbucket it goes in `.bitbucket/CODEOWNERS`, where Bitbucket reads it):
 
 ```sh
 npx --yes homeostat@0.1.7 codeowners

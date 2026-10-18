@@ -129,6 +129,9 @@ describe("homeostat init", () => {
     expect(code).toBe(0);
     expect(read(dir, "bitbucket-pipelines.yml")).toBe("image: node:24\n");
     expect(stdout).toContain("bitbucket-pipelines.yml already exists; add this to it");
+    // Every scheduled agent, not only validate and the curator.
+    for (const pipeline of ["homeostat-curator:", "homeostat-deep-dive:", "homeostat-digest:"])
+      expect(stdout).toContain(pipeline);
   });
 
   test("an invalid handle writes nothing", async () => {

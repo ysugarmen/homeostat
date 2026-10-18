@@ -158,6 +158,52 @@ const GITHUB_DEEP_DIVE = githubAgentWorkflow(
   DEEP_DIVE_STEP,
 );
 
+const BITBUCKET_PIPELINES = `image: node:24
+
+clone:
+  depth: full
+
+definitions:
+  steps:
+    - step: &homeostat-validate
+        name: homeostat validate
+        script:
+          - ${VALIDATE_STEP}
+
+pipelines:
+  pull-requests:
+    "**":
+      - step: *homeostat-validate
+  branches:
+    main:
+      - step: *homeostat-validate
+  custom:
+    # Scheduled in Repository settings > Pipelines > Schedules (daily).
+    homeostat-curator:
+      - step:
+          name: homeostat curator
+          script:
+            - git config user.name "homeostat curator"
+            - git config user.email "homeostat-curator@noreply.invalid"
+            # With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}
+            - ${DAILY_STEP}
+    # Scheduled weekly the same way.
+    homeostat-deep-dive:
+      - step:
+          name: homeostat deep dive
+          script:
+            - git config user.name "homeostat deep-dive"
+            - git config user.email "homeostat-deep-dive@noreply.invalid"
+            # With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}
+            - ${DEEP_DIVE_STEP}
+    # Scheduled weekly; posts to the webhook in the secured variable HOMEOSTAT_SLACK_WEBHOOK.
+    homeostat-digest:
+      - step:
+          name: homeostat digest
+          script:
+            - ${DIGEST_STEP}
+`;
+
 const CI_FILES: Record<Host, CiFile[]> = {
   github: [
     {
@@ -203,77 +249,25 @@ jobs:
   bitbucket: [
     {
       path: "bitbucket-pipelines.yml",
-      content: `image: node:24
-
-clone:
-  depth: full
-
-definitions:
-  steps:
-    - step: &homeostat-validate
-        name: homeostat validate
-        script:
-          - ${VALIDATE_STEP}
-
-pipelines:
-  pull-requests:
-    "**":
-      - step: *homeostat-validate
-  branches:
-    main:
-      - step: *homeostat-validate
-  custom:
-    # Scheduled in Repository settings > Pipelines > Schedules (daily).
-    homeostat-curator:
-      - step:
-          name: homeostat curator
-          script:
-            - git config user.name "homeostat curator"
-            - git config user.email "homeostat-curator@noreply.invalid"
-            # With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}
-            - ${DAILY_STEP}
-    # Scheduled weekly the same way.
-    homeostat-deep-dive:
-      - step:
-          name: homeostat deep dive
-          script:
-            - git config user.name "homeostat deep-dive"
-            - git config user.email "homeostat-deep-dive@noreply.invalid"
-            # With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}
-            - ${DEEP_DIVE_STEP}
-    # Scheduled weekly; posts to the webhook in the secured variable HOMEOSTAT_SLACK_WEBHOOK.
-    homeostat-digest:
-      - step:
-          name: homeostat digest
-          script:
-            - ${DIGEST_STEP}
-`,
-      snippet: `pipelines:
-  pull-requests:
-    "**":
-      - step:
-          name: homeostat validate
-          script:
-            - ${VALIDATE_STEP}
-  custom:
-    homeostat-curator:
-      - step:
-          name: homeostat curator
-          script:
-            - ${DAILY_STEP}`,
+      content: BITBUCKET_PIPELINES,
+      // One file holds every pipeline, so an existing one needs all of them merged in.
+      snippet: BITBUCKET_PIPELINES,
     },
   ],
 };
 
 const TOKEN_HELP: Record<Host, string> = {
   bitbucket: `The curator reads PRs from your code repos and opens one PR on this repo each day.
-Ask a workspace admin for a workspace access token with:
+It needs one token that reaches all of them: a workspace access token on Bitbucket Premium, or
+on other plans an API token of a bot account in the workspace (a repository access token reaches
+one repo only). Give it:
   code repos:  pullrequest:read, repository:read
   this repo:   pullrequest:write, repository:write
+  workspace:   read:workspace (to ask reviewers by their Bitbucket nickname)
 Store it as the secured repository variable HOMEOSTAT_BITBUCKET_TOKEN, and a Claude Console API key
 as ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-commercial use
-only; a team KB needs a Console key or a Team/Enterprise plan.) Then schedule the homeostat-curator pipeline daily and homeostat-deep-dive weekly under
-Repository settings > Pipelines > Schedules, and add a sources section to homeostat.yaml.`,
+only; a team KB needs a Console key or a Team/Enterprise plan.) Then schedule the homeostat-curator pipeline daily, and homeostat-deep-dive and homeostat-digest
+weekly, under Repository settings > Pipelines > Schedules, and add a sources section to homeostat.yaml.`,
   github: `The curator reads PRs from your code repos and opens one PR on this repo each day.
 The workflow's GITHUB_TOKEN covers this repo. To read other repos, create a fine-grained
 token or GitHub App with:
@@ -290,10 +284,13 @@ a team KB needs a Console key or a Team/Enterprise plan.) Then add a sources sec
  */
 const PROTECTION_HELP: Record<Host, string> = {
   bitbucket: `Protect main (Repository settings > Branch restrictions and Merge checks):
-  - require a pull request, 1 approval from default reviewers or code owners, and a passing build
-  - exempt only the curator's token. It merges an entry unreviewed only when every gate in
-    scoring.autoMerge passes, after validating the whole knowledge base itself; everything else
-    waits for a reviewer.`,
+  - require a pull request, 1 approval and a passing build, and turn on "Prevent a merge with
+    unresolved merge checks". Only Bitbucket Premium enforces merge checks; on other plans they
+    are advice, so keep the KB's writers few.
+  - homeostat codeowners writes .bitbucket/CODEOWNERS, which adds each area's owners as reviewers.
+  - let only the curator's token merge without an approval. It merges an entry unreviewed only
+    when every gate in scoring.autoMerge passes, after validating the whole knowledge base itself;
+    if Bitbucket refuses the merge, those lessons wait for a reviewer instead.`,
   github: `Protect main (Settings > Rules > Rulesets, targeting the default branch):
   - require a pull request with 1 approval, review from Code Owners, and the "validate" check
   - add the curator's GitHub App (or token user) to the bypass list. It merges an entry unreviewed
