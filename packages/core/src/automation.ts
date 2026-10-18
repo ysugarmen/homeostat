@@ -70,6 +70,10 @@ export interface RunReport {
   lessons: {
     member: string;
     id: string;
+    /** What the lesson said, so a decision can be checked after its text is gone. */
+    title?: string;
+    rule?: string;
+    url?: string;
     decision: Decision;
     confidence?: number;
     reason: string;

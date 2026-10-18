@@ -477,9 +477,13 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
 
   // 5. Record decisions, heartbeats and the report for the laptops and the dashboard.
   for (const l of lessons) {
+    const rule = l.kind === "doc" ? undefined : parseEntry(l.text).entry?.sections.rule;
     report.lessons.push({
       member: l.member,
       id: l.id,
+      title: l.title,
+      ...(rule ? { rule: excerpt(rule) } : {}),
+      ...(l.url ? { url: l.url } : {}),
       decision: l.decision,
       ...(l.confidence ? { confidence: l.confidence.score } : {}),
       reason: l.reason,
@@ -523,6 +527,12 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   if (opts.dryRun) io.stdout("dry run: nothing committed, opened or merged\n");
   return 0;
 }
+
+/** The start of a rule, for the run report: enough to tell lessons apart. */
+const excerpt = (text: string, max = 240) => {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
+};
 
 /** `2026-10-17T10-26-28Z`: sortable, and safe in a file name. */
 export const runName = (at: Date) => `${at.toISOString().slice(0, 19).replace(/:/g, "-")}Z`;

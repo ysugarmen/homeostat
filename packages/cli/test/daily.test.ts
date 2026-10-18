@@ -232,6 +232,14 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(report.members).toEqual([
       expect.objectContaining({ member: "lee", merged: 1, review: 1, declined: 0 }),
     ]);
+    // What each lesson said stays in the report, so a decision can be checked later.
+    expect(report.lessons).toContainEqual(
+      expect.objectContaining({
+        id: "use-the-shared-button-component",
+        title: "Use the shared button component",
+        rule: "Render buttons with <Button> from apps/web/ui, never a raw button tag.",
+      }),
+    );
     expect(t.g(t.origin, "show", "homeostat/state:heartbeats/lee.json")).toContain(
       '"member": "lee"',
     );
