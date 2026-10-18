@@ -4,7 +4,7 @@ The dashboard as a Mac app. It runs the same local dashboard as `homeostat dashb
 
 ## Install
 
-Download `Homeostat-<version>-arm64.dmg` (Apple silicon) or `Homeostat-<version>.dmg` (Intel) from the [releases](https://github.com/ysugarmen/homeostat/releases), open it, and drag Homeostat to Applications.
+The app is not in a release yet; until it is, build it from source (below). Once it is, download `Homeostat-<version>-arm64.dmg` (Apple silicon) or `Homeostat-<version>.dmg` (Intel) from the [releases](https://github.com/ysugarmen/homeostat/releases), open it, and drag Homeostat to Applications.
 
 The app is not signed with an Apple Developer ID yet, so macOS asks once before the first launch:
 - **macOS 15 and later:** open it, choose *Done* at the warning, then go to System Settings > Privacy & Security, scroll to Homeostat and choose *Open Anyway*.
@@ -33,4 +33,4 @@ node scripts/package-desktop.mjs    # packages/desktop/release/*.dmg
 cd packages/desktop && pnpm start   # run from source
 ```
 
-The release workflow builds both .dmg files on a macOS runner and attaches them to each GitHub release.
+The release workflow builds both .dmg files on a macOS runner and attaches them to the GitHub release when the repository variable `RELEASE_DESKTOP` is `true`.

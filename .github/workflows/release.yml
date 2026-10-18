@@ -54,6 +54,9 @@ jobs:
   desktop:
     # The macOS app (arm64 and x64 .dmg), attached to the release the publish job created. It is
     # ad-hoc signed, not with a Developer ID, so macOS asks once before the first launch.
+    # Off until the app has been tried by hand: set the repository variable RELEASE_DESKTOP to
+    # "true" to attach it to the next release.
+    if: vars.RELEASE_DESKTOP == 'true'
     needs: publish
     runs-on: macos-latest
     permissions:
