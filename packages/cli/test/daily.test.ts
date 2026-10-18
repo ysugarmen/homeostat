@@ -130,8 +130,12 @@ class FakeProvider implements Provider {
     this.open = this.open.filter((p) => p.id !== id);
   }
   reviewError?: Error;
+  /** A login the host refuses, as GitHub does for the PR's own author. */
+  refuse?: string;
   async requestReviewers(_repo: RepoRef, id: number, logins: string[]) {
     if (this.reviewError) throw this.reviewError;
+    if (this.refuse && logins.includes(this.refuse))
+      throw new Error("GitHub API 422: Review cannot be requested from pull request author.");
     this.reviewers.push({ id, logins });
   }
 }
@@ -318,6 +322,40 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
       "--area",
       "integrations",
       "--title",
+      "Use the shared job lock for partner sync jobs",
+      "--rule",
+      "Wrap every partner sync job in withLock() from services/integrations/lock.ts.",
+      "--why",
+      "Two runners once synced the same partner twice.",
+    ]);
+    await run(["sync", "--dir", t.lee]);
+    const drafter = new FakeDrafter({
+      title: "Use withLock for partner sync jobs",
+      rule: "Call withLock() from services/integrations/lock.ts around every partner sync job.",
+      why: "Hand-rolled loops dropped the request-id header.",
+      area: "integrations",
+    });
+    const { stdout } = await run(["daily", "--dir", t.ci, "--dry-run"], {
+      provider: new FakeProvider("services/integrations/partner.ts"),
+      drafter,
+      patcher: { propose: async () => null },
+    });
+    expect(
+      stdout.match(/the same lesson as [a-z0-9-]+ in this run, which carries it/g),
+    ).toHaveLength(1);
+  });
+
+  test("copies of a lesson the KB already has all reconfirm it; none is added", async () => {
+    const t = team();
+    await run([
+      "learn",
+      "--dir",
+      t.lee,
+      "--author",
+      "lee",
+      "--area",
+      "integrations",
+      "--title",
       "Use the shared retry helper for partner calls",
       "--rule",
       "Wrap every partner API call in withRetry() from services/integrations/http.ts.",
@@ -336,9 +374,8 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
       drafter,
       patcher: { propose: async () => null },
     });
-    expect(
-      stdout.match(/the same lesson as [a-z0-9-]+ in this run, which carries it/g),
-    ).toHaveLength(1);
+    expect(stdout).not.toContain("merged   use-");
+    expect(stdout.match(/outbound-http-retry-helper/g)?.length).toBe(2);
   });
 
   test("a pending document edit and a review patch to the same document become one change", async () => {
@@ -393,7 +430,7 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     provider.reviewError = new Error("Reviews may only be requested from collaborators");
     const { stdout } = await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
     expect(stdout).toContain(
-      "could not request @sam: Reviews may only be requested from collaborators",
+      "could not request @sam (Reviews may only be requested from collaborators)",
     );
     expect(stdout).toContain("reviewers must be collaborators on acme/team-kb");
     const report = JSON.parse(
@@ -490,6 +527,30 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
         ["use-the-shared-button-component", "merged", "merged by a reviewer"],
         ["knowledge/integrations/docs/partner-calls.md", "merged", "merged by a reviewer"],
       ]),
+    );
+  });
+
+  test("one refused reviewer doesn't stop the others being asked", async () => {
+    const t = team();
+    await leeLearns(t.lee);
+    // Two owners for frontend: dana (refused, as GitHub refuses a PR's own author) and sam.
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace(
+        "areas: [integrations, core]",
+        "areas: [integrations, core, frontend]",
+      ),
+    );
+    t.g(t.ci, "commit", "-qam", "dana owns frontend too");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    const provider = new FakeProvider();
+    provider.refuse = "dana";
+    const { stdout } = await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
+    expect(provider.reviewers.map((r) => r.logins)).toEqual([["sam"]]);
+    expect(stdout).toContain("asked @sam to review");
+    expect(stdout).toContain(
+      "could not request @dana (Review cannot be requested from pull request author.)",
     );
   });
 });

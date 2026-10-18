@@ -122,6 +122,24 @@ describe("sameLesson", () => {
     ).toBe(true);
   });
 
+  test("a mostly similar title about some of the same code is the same lesson", () => {
+    // From the demo: one review comment, two wordings of the same rule.
+    expect(
+      sameLesson(
+        entry(
+          "Build Cents values with cents(), never a cast",
+          "Create amounts with cents() from src/money.ts; never write `500 as Cents`, which skips the integer check.",
+          ["**"],
+        ),
+        entry(
+          "Build Cents values with cents(), never cast with as Cents",
+          "Use cents() to make Cents values, including in tests; `as Cents` bypasses the whole-number check.",
+          ["**"],
+        ),
+      ),
+    ).toBe(true);
+  });
+
   test("different code, or scopes that do not overlap, are different lessons", () => {
     const retry = entry(
       "Use the retry helper",

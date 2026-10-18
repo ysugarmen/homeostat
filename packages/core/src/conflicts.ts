@@ -182,5 +182,9 @@ export function sameLesson(a: Entry, b: Entry): boolean {
   const rb = codeReferences(b.sections.rule ?? "");
   if (ra.size === 0 || rb.size === 0) return false;
   const shared = [...ra].filter((r) => rb.has(r)).length;
-  return shared / new Set([...ra, ...rb]).size >= 0.5;
+  // Mostly the same code, or a mostly similar title about some of the same code.
+  return (
+    shared / new Set([...ra, ...rb]).size >= 0.5 ||
+    (shared > 0 && titleSimilarity(a.frontmatter.title, b.frontmatter.title) >= 0.6)
+  );
 }

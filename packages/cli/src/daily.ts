@@ -314,6 +314,14 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     l.decision = "review";
     l.reason = `the same lesson as ${twin.frontmatter.id}, which is waiting in review: decide them together`;
   }
+  // If any copy of a lesson repeats a rule already in force, every copy reconfirms that rule.
+  for (const [l, group] of groups) {
+    const existing = group.find((x) => x.duplicateOf)?.duplicateOf;
+    if (!existing || l.duplicateOf || l.decision === "declined") continue;
+    l.decision = "declined";
+    l.reason = `the same lesson as ${existing}, already in force, which it reconfirms`;
+    l.duplicateOf = existing;
+  }
   for (const [l, group] of groups) {
     if (group.length < 2) continue;
     const winner = group.reduce((best, x) =>
@@ -409,14 +417,23 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
         row.reviewPr = pr.pr.url;
         const logins = reviewerLogins(config, review, member);
         if (logins.length && provider.requestReviewers) {
-          try {
-            await provider.requestReviewers(kbRepo, pr.pr.id, logins);
-            io.stdout(`  asked ${logins.map((l) => `@${l}`).join(", ")} to review ${pr.pr.url}\n`);
-          } catch (e) {
-            // Usually: they are not collaborators on the KB repo. The PR still waits in the queue.
-            row.reviewError = `could not request ${logins.map((l) => `@${l}`).join(", ")}: ${(e as Error).message}`;
+          // One at a time: the host refuses the whole request if any login can't review (the PR's
+          // own author, or someone who isn't a collaborator), and the others should still be asked.
+          const asked: string[] = [];
+          const refused: string[] = [];
+          for (const login of logins) {
+            try {
+              await provider.requestReviewers(kbRepo, pr.pr.id, [login]);
+              asked.push(`@${login}`);
+            } catch (e) {
+              refused.push(`@${login} (${(e as Error).message.replace(/^.*: /, "")})`);
+            }
+          }
+          if (asked.length) io.stdout(`  asked ${asked.join(", ")} to review ${pr.pr.url}\n`);
+          if (refused.length) {
+            row.reviewError = `could not request ${refused.join(", ")}`;
             io.stdout(
-              `  ${row.reviewError}; reviewers must be collaborators on ${sources.kbRepo}\n`,
+              `  ${row.reviewError}; reviewers must be collaborators on ${sources.kbRepo}, and not the PR's author\n`,
             );
           }
         }
