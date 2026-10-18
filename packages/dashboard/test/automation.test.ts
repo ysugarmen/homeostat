@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DecisionsFile, Heartbeat, RunReport } from "@homeostat/core";
 import { afterAll, describe, expect, test } from "vitest";
-import { automationView, readAutomation } from "../src/automation.ts";
+import { automationView, lamps, readAutomation } from "../src/automation.ts";
 import { startDashboard } from "../src/server.ts";
 
 const starter = new URL("../../../examples/starter-kb", import.meta.url).pathname;
@@ -161,6 +161,28 @@ describe("the Automation page (automation, step 5)", () => {
       { day: "2026-10-15", merged: 1, review: 1, declined: 0 },
       { day: "2026-10-16", merged: 2, review: 1, declined: 1 },
     ]);
+  });
+
+  test("the sync lamp warns about developers who stopped, not members who never synced", () => {
+    // From the demo: a reviewer who only reviews never syncs, and the lamp stayed yellow.
+    const view = (states: ("ok" | "stale" | "never")[]) =>
+      ({
+        present: true,
+        runs: [],
+        queue: [],
+        byDay: [],
+        health: states.map((state, i) => ({ member: `m${i}`, role: "member", state })),
+      }) as never;
+    const kb = { stability: 1, accepted: 1, flagged: 0, disputed: 0 };
+    const sync = (states: ("ok" | "stale" | "never")[]) =>
+      lamps(view(states), kb, NOW).find((l) => l.key === "sync");
+    expect(sync(["ok", "ok", "never"])).toMatchObject({
+      state: "good",
+      value: "2 of 2",
+      detail: "m2 never synced",
+    });
+    expect(sync(["ok", "stale", "never"])).toMatchObject({ state: "warning", value: "1 of 2" });
+    expect(sync(["never", "never"])).toMatchObject({ state: "warning", value: "0 of 0" });
   });
 
   test("renders the page, linked from the nav", async () => {

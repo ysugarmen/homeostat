@@ -146,7 +146,10 @@ export function info(html: string): string {
  * A smooth area chart: one series as a curve over a soft gradient, with day labels below and the
  * last point marked and labelled. Each point has a hover title.
  */
-export function areaChart(data: readonly Datum[], opts: { title: string; id: string }): string {
+export function areaChart(
+  data: readonly Datum[],
+  opts: { title: string; id: string; unit?: string },
+): string {
   const w = 560;
   const h = 170;
   const pad = { top: 26, bottom: 24, left: 4, right: 14 };
@@ -171,6 +174,8 @@ export function areaChart(data: readonly Datum[], opts: { title: string; id: str
   const area = pts.length ? `${line} L${pts.at(-1)?.[0]},${base} L${pts[0]?.[0]},${base} Z` : "";
   const last = data.at(-1);
   const lp = pts.at(-1);
+  // Wide enough for the value and its unit, at about 7.5px a character.
+  const cw = Math.max(70, 16 + 7.5 * `${last?.value ?? ""} ${opts.unit ?? ""}`.length);
   const grid = [0.25, 0.5, 0.75]
     .map(
       (f) =>
@@ -192,7 +197,7 @@ export function areaChart(data: readonly Datum[], opts: { title: string; id: str
     .join("");
   return `<svg class="area" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opts.title)}"><defs><linearGradient id="g-${opts.id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity="0.45"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#g-${opts.id})"/><path class="curve" d="${line}"/>${labels}${hits}${
     last && lp
-      ? `<circle class="last" cx="${lp[0].toFixed(1)}" cy="${lp[1].toFixed(1)}" r="5"/><g class="callout" transform="translate(${(lp[0] - 84).toFixed(1)},${Math.max(lp[1] - 17, 4).toFixed(1)})"><rect width="70" height="34" rx="6"/><text x="8" y="14" class="cl">${esc(last.label)}</text><text x="8" y="28" class="cv">${last.value}</text></g>`
+      ? `<circle class="last" cx="${lp[0].toFixed(1)}" cy="${lp[1].toFixed(1)}" r="5"/><g class="callout" transform="translate(${(lp[0] - 14 - cw).toFixed(1)},${Math.max(lp[1] - 17, 4).toFixed(1)})"><rect width="${cw}" height="34" rx="6"/><text x="8" y="14" class="cl">${esc(last.label)}</text><text x="8" y="28" class="cv">${last.value}${opts.unit ? ` <tspan class="cu">${esc(opts.unit)}</tspan>` : ""}</text></g>`
       : ""
   }</svg>`;
 }

@@ -162,6 +162,7 @@ h3 { font-size: 15px; }
 .area .callout rect { fill: var(--ink); }
 .area .callout .cl { fill: var(--ink-3); font: 11px var(--sans); }
 .area .callout .cv { fill: var(--paper); font: 700 14px var(--sans); }
+.area .callout .cu { font: 500 11px var(--sans); }
 
 /* Decisions card: total, legend, rings. */
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 16px; align-items: center; }
@@ -553,7 +554,11 @@ export function overviewPage(
       <div class="big">${h.byStatus.accepted}<span class="trend ${x.newThisWeek > 0 ? "up" : "flat"}">${arrow(x.newThisWeek)}${x.newThisWeek > 0 ? `+${x.newThisWeek}` : "0"} this week</span></div>
       <p class="big-sub">${h.flagged.length + h.byStatus.disputed} flagged, ${h.stale.length} stale</p>
     </div>
-    <div>${areaChart(daily, { title: "Sessions given team rules, per day", id: "sessions" })}</div>
+    <div>${areaChart(daily, {
+      title: "Sessions given team rules, per day",
+      id: "sessions",
+      unit: "sessions",
+    })}</div>
   </div>
   <div class="kpis">
     ${kpi("Merged", sum(last, "merged"), prev ? sum(prev, "merged") : undefined, "Lessons the last daily run merged on its own: confident, safe and not repeats.")}

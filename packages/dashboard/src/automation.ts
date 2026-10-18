@@ -310,8 +310,11 @@ export function lamps(
         ? ""
         : `Oldest ${Math.floor(oldest?.ageDays ?? 0)} days${overdue ? `, ${overdue} overdue` : ""}`,
   };
+  // Members who never synced (a reviewer who only reviews, or someone not set up yet) are named,
+  // not warned about: the lamp is for developers who stopped.
   const syncing = v.health.filter((h) => h.state === "ok").length;
-  const silent = v.health.filter((h) => h.state !== "ok").map((h) => h.member);
+  const silent = v.health.filter((h) => h.state === "stale").map((h) => h.member);
+  const never = v.health.filter((h) => h.state === "never").map((h) => h.member);
   const sync: Lamp = {
     key: "sync",
     label: "Developer sync",
@@ -320,13 +323,20 @@ export function lamps(
       "Each developer's sessions sync their KB clone in the background and report in. A developer silent for two days isn't sending lessons or getting the team's.",
     state: !v.present
       ? "off"
-      : silent.length === 0
-        ? "good"
-        : syncing === 0
-          ? "critical"
-          : "warning",
-    value: `${syncing} of ${v.health.length}`,
-    detail: silent.length ? `${silent.join(", ")} silent` : "",
+      : syncing + silent.length === 0
+        ? "warning"
+        : silent.length === 0
+          ? "good"
+          : syncing === 0
+            ? "critical"
+            : "warning",
+    value: `${syncing} of ${syncing + silent.length}`,
+    detail: [
+      silent.length ? `${silent.join(", ")} silent` : "",
+      never.length ? `${never.join(", ")} never synced` : "",
+    ]
+      .filter(Boolean)
+      .join("; "),
   };
   const pct = Math.round(kb.stability * 100);
   const issues = kb.flagged + kb.disputed;

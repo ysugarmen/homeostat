@@ -36,6 +36,16 @@ describe("areaChart and rings", () => {
     expect(svg).toContain("<title>17 Oct: 6 sessions</title>");
   });
 
+  test("with a unit, the callout names what it counts", () => {
+    // From the demo: a bare 13 under "Rules in force" read as 13 rules.
+    const svg = areaChart([{ label: "18 Oct", value: 13 }], {
+      title: "S",
+      id: "u",
+      unit: "sessions",
+    });
+    expect(svg).toContain('class="cv">13 <tspan class="cu">sessions</tspan></text>');
+  });
+
   test("rings draw one arc per segment, the largest the longest", () => {
     const svg = rings(
       [
