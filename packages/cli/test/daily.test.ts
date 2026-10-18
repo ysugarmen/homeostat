@@ -378,6 +378,38 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(stdout.match(/outbound-http-retry-helper/g)?.length).toBe(2);
   });
 
+  test("two developers flagging one rule make one change carrying both flags", async () => {
+    // From the demo: each flag went into its own daily PR, and the second conflicted.
+    const t = team();
+    const dana = mkdtempSync(join(tmpdir(), "homeostat-daily-dana-"));
+    execFileSync("git", ["clone", "-q", t.origin, dana]);
+    execFileSync("git", ["-C", dana, "config", "user.name", "Dana"]);
+    execFileSync("git", ["-C", dana, "config", "user.email", "dana@example.com"]);
+    const rule = "outbound-http-retry-helper";
+    for (const [dir, reason] of [
+      [t.lee, "withRetry moved to packages/net"],
+      [dana, "withRetry was renamed"],
+    ] as const) {
+      await run(["flag", rule, "--dir", dir, "--reason", reason]);
+      await run(["sync", "--dir", dir]);
+    }
+    const provider = new FakeProvider();
+    const { stdout } = await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
+    expect(stdout.match(/merged {3}outbound-http-retry-helper/g)?.length).toBe(2);
+    const path = "knowledge/integrations/outbound-http-retry-helper.md";
+    const carrying = provider.opened.filter(
+      (o) =>
+        o.pr.sourceBranch.startsWith("homeostat/daily-") &&
+        t.g(t.origin, "show", `${o.pr.sourceBranch}:${path}`) !==
+          t.g(t.origin, "show", `main:${path}`),
+    );
+    expect(carrying).toHaveLength(1);
+    const text = t.g(t.origin, "show", `${carrying[0]?.pr.sourceBranch}:${path}`);
+    expect(text).toContain("status: disputed");
+    expect(text).toContain("withRetry moved to packages/net");
+    expect(text).toContain("withRetry was renamed");
+  });
+
   test("a pending document edit and a review patch to the same document become one change", async () => {
     const t = team();
     await run(

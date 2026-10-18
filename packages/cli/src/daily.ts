@@ -13,6 +13,7 @@ import {
   decisionsPath,
   type Entry,
   explainConfidence,
+  flagEntry,
   HEARTBEAT_PATH,
   isDocPath,
   lessonHash,
@@ -73,6 +74,8 @@ interface Lesson {
   reason: string;
   confidence?: Confidence;
   duplicateOf?: string;
+  /** Another developer's daily PR commits this change, combined with theirs. */
+  carriedBy?: string;
 }
 
 const repoRef = (ref: string): RepoRef => {
@@ -332,6 +335,33 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     l.reason = `the same lesson as ${winner.id} in this run, which carries it (${winner.decision})`;
   }
 
+  // Flags on one rule from several developers go in as one change, or the second PR conflicts.
+  const flagged = new Map<string, Lesson[]>();
+  for (const l of lessons.filter((x) => x.kind === "flag")) {
+    flagged.set(l.path, [...(flagged.get(l.path) ?? []), l]);
+  }
+  for (const [path, [first, ...rest]] of flagged) {
+    if (!first || rest.length === 0) continue;
+    let text = onBase(path);
+    const seen = new Set(
+      (parseEntry(text ?? "").entry?.frontmatter.flags ?? []).map((f) => JSON.stringify(f)),
+    );
+    for (const l of [first, ...rest]) {
+      for (const f of parseEntry(l.text).entry?.frontmatter.flags ?? []) {
+        const entry = parseEntry(text ?? "").entry;
+        if (!entry || seen.has(JSON.stringify(f))) continue;
+        seen.add(JSON.stringify(f));
+        text = flagEntry(entry, f, config);
+      }
+    }
+    if (!text) continue;
+    first.text = text.replace(/^status: accepted$/m, "status: disputed");
+    for (const l of rest) {
+      l.carriedBy = first.member;
+      l.reason = `${l.reason}; carried by ${first.member}'s daily PR with the other flags`;
+    }
+  }
+
   // 3–4. Per developer: one daily PR (merged), one review PR (assigned).
   const report: RunReport = {
     at: now.toISOString(),
@@ -369,7 +399,10 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
         l.duplicateOf ? [reconfirmChange(files, kb.entries, l.duplicateOf, today)] : [],
       )
       .filter((c): c is FileChange => c !== undefined);
-    const changes = [...merged.map((l) => change(l, "merge")), ...reconfirm];
+    const changes = [
+      ...merged.filter((l) => !l.carriedBy).map((l) => change(l, "merge")),
+      ...reconfirm,
+    ];
     if (changes.length) {
       const pr = await publish({
         root,
