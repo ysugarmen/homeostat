@@ -136,6 +136,15 @@ export {
 export { explainEntry, hitLine, kbReport } from "./describe.ts";
 export { buildDigest, type DigestInput } from "./digest.ts";
 export {
+  ClaudeRuleFixer,
+  FIX_SYSTEM,
+  type FixedRule,
+  fixProblems,
+  fixPrompt,
+  type RuleFixer,
+  resolveDispute,
+} from "./dispute.ts";
+export {
   DOC_SECTION_MAX_WORDS,
   type Doc,
   type DocFrontmatter,

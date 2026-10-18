@@ -1,6 +1,14 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
-import type { ConflictJudge, DocPatcher, Drafter, Merger, Provider, Seeder } from "@homeostat/core";
+import type {
+  ConflictJudge,
+  DocPatcher,
+  Drafter,
+  Merger,
+  Provider,
+  RuleFixer,
+  Seeder,
+} from "@homeostat/core";
 import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
 import { runCodeowners } from "./codeowners.ts";
@@ -48,6 +56,7 @@ export interface Io {
   seeder?: Seeder;
   merger?: Merger;
   judge?: ConflictJudge;
+  fixer?: RuleFixer;
 }
 
 async function readStdin(): Promise<string> {

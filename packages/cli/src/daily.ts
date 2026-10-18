@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import {
   ClaudeDocPatcher,
   ClaudeDrafter,
+  ClaudeRuleFixer,
   type Confidence,
   type Config,
   type CuratedEntry,
@@ -13,6 +14,7 @@ import {
   decisionsPath,
   type Entry,
   explainConfidence,
+  fixProblems,
   flagEntry,
   HEARTBEAT_PATH,
   isDocPath,
@@ -24,6 +26,7 @@ import {
   type RepoRef,
   type RunReport,
   readKbFiles,
+  resolveDispute,
   STATE_BRANCH,
   sameLesson,
   validate,
@@ -66,7 +69,7 @@ interface Lesson {
   hash: string;
   id: string;
   title: string;
-  kind: "new" | "update" | "flag" | "doc";
+  kind: "new" | "update" | "flag" | "doc" | "dispute" | "retire";
   origin: "pending" | "review";
   originator: string;
   url?: string;
@@ -140,6 +143,8 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     (await provider.listOpenPullRequests(kbRepo)).map((p: OpenPullRequest) => p.sourceBranch),
   );
   let settled = 0;
+  // A dispute PR closed without merging retires its rule.
+  const retiring: DecisionRecord[] = [];
   const closed = [...decisions.values()].flatMap((d) =>
     d.decided.filter((r) => r.decision === "review" && r.pr && !open.has(r.pr)),
   );
@@ -159,6 +164,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       } else {
         r.decision = "declined";
         r.reason = "closed by a reviewer";
+        if (r.pr?.startsWith(DISPUTE_PREFIX)) retiring.push(r);
       }
       r.at = now.toISOString();
       settled++;
@@ -362,6 +368,64 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     }
   }
 
+  // Disputed rules: one review PR each, proposing a fix drafted from the flags, or retirement.
+  // Merging applies it; closing retires the rule (next run, through the daily PR).
+  const ownerOf = (e: Entry) => {
+    const by = e.frontmatter.flags?.[0]?.by;
+    return by && members.includes(by) ? by : (members[0] ?? "");
+  };
+  for (const r of retiring) {
+    const entry = parseEntry(onBase(r.path) ?? "").entry;
+    if (!entry || entry.frontmatter.status !== "disputed") continue;
+    const text = resolveDispute(entry, null, today, config);
+    lessons.push({
+      member: ownerOf(entry),
+      path: r.path,
+      text,
+      hash: lessonHash(text),
+      id: entry.frontmatter.id,
+      title: entry.frontmatter.title,
+      kind: "retire",
+      origin: "pending",
+      originator: ownerOf(entry),
+      decision: "merged",
+      reason: "retired: a reviewer closed its dispute PR",
+    });
+  }
+  // --no-reviews runs without the model: a dispute PR then proposes retiring the rule.
+  const fixer =
+    io.fixer ??
+    (opts.noReviews
+      ? { fix: async () => null }
+      : new ClaudeRuleFixer(askerFor(config, "curator", io, root)));
+  for (const { path, entry } of kb.entries) {
+    const id = entry.frontmatter.id;
+    if (entry.frontmatter.status !== "disputed") continue;
+    if (lessons.some((l) => l.kind === "retire" && l.id === id)) continue;
+    if ([...open].some((b) => b.startsWith(`${DISPUTE_PREFIX}${id}-`))) continue;
+    let fixed = await fixer.fix(entry);
+    const problems = fixed ? fixProblems(fixed) : [];
+    if (problems.length) {
+      io.stdout(`  the drafted fix for ${id} was unusable (${problems.join("; ")})\n`);
+      fixed = null;
+    }
+    lessons.push({
+      member: ownerOf(entry),
+      path,
+      text: resolveDispute(entry, fixed, today, config),
+      hash: lessonHash(onBase(path) ?? ""),
+      id,
+      title: entry.frontmatter.title,
+      kind: "dispute",
+      origin: "pending",
+      originator: ownerOf(entry),
+      decision: "review",
+      reason: fixed
+        ? "flagged as wrong; the PR proposes a fix (close it to retire the rule)"
+        : "flagged as wrong; the PR proposes retiring it",
+    });
+  }
+
   // 3–4. Per developer: one daily PR (merged), one review PR (assigned).
   const report: RunReport = {
     at: now.toISOString(),
@@ -379,7 +443,8 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   for (const l of lessons) byMember.set(l.member, [...(byMember.get(l.member) ?? []), l]);
   for (const [member, list] of byMember) {
     const merged = list.filter((l) => l.decision === "merged");
-    const review = list.filter((l) => l.decision === "review");
+    const review = list.filter((l) => l.decision === "review" && l.kind !== "dispute");
+    const disputes = list.filter((l) => l.kind === "dispute");
     const declined = list.filter((l) => l.decision === "declined");
     const row: RunReport["members"][number] = {
       member,
@@ -388,6 +453,28 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       review: review.length,
     };
     report.members.push(row);
+    // One at a time: the host refuses the whole request if any login can't review (the PR's own
+    // author, or someone who isn't a collaborator), and the others should still be asked.
+    const askReviewers = async (pr: { id: number; url: string }, logins: string[]) => {
+      if (!logins.length || !provider.requestReviewers) return;
+      const asked: string[] = [];
+      const refused: string[] = [];
+      for (const login of logins) {
+        try {
+          await provider.requestReviewers(kbRepo, pr.id, [login]);
+          asked.push(`@${login}`);
+        } catch (e) {
+          refused.push(`@${login} (${(e as Error).message.replace(/^.*: /, "")})`);
+        }
+      }
+      if (asked.length) io.stdout(`  asked ${asked.join(", ")} to review ${pr.url}\n`);
+      if (refused.length) {
+        row.reviewError = `could not request ${refused.join(", ")}`;
+        io.stdout(
+          `  ${row.reviewError}; reviewers must be collaborators on ${sources.kbRepo}, and not the PR's author\n`,
+        );
+      }
+    };
     io.stdout(
       `${member}: ${merged.length} merged, ${review.length} to review, ${declined.length} declined\n`,
     );
@@ -448,30 +535,28 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       });
       if (pr.pr) {
         row.reviewPr = pr.pr.url;
-        const logins = reviewerLogins(config, review, member);
-        if (logins.length && provider.requestReviewers) {
-          // One at a time: the host refuses the whole request if any login can't review (the PR's
-          // own author, or someone who isn't a collaborator), and the others should still be asked.
-          const asked: string[] = [];
-          const refused: string[] = [];
-          for (const login of logins) {
-            try {
-              await provider.requestReviewers(kbRepo, pr.pr.id, [login]);
-              asked.push(`@${login}`);
-            } catch (e) {
-              refused.push(`@${login} (${(e as Error).message.replace(/^.*: /, "")})`);
-            }
-          }
-          if (asked.length) io.stdout(`  asked ${asked.join(", ")} to review ${pr.pr.url}\n`);
-          if (refused.length) {
-            row.reviewError = `could not request ${refused.join(", ")}`;
-            io.stdout(
-              `  ${row.reviewError}; reviewers must be collaborators on ${sources.kbRepo}, and not the PR's author\n`,
-            );
-          }
-        }
+        await askReviewers(pr.pr, reviewerLogins(config, review, member));
       }
       for (const l of review) Object.assign(l, { pr: pr.branch });
+    }
+    for (const l of disputes) {
+      const flags = parseEntry(onBase(l.path) ?? "").entry?.frontmatter.flags ?? [];
+      const pr = await publish({
+        root,
+        branch: `${DISPUTE_PREFIX}${l.id}-${today}`,
+        changes: [change(l, "review")],
+        provider,
+        kbRepo,
+        base,
+        title: `homeostat: fix or retire ${l.id}`,
+        body: disputeBody(l, flags),
+        io,
+      });
+      if (pr.pr) {
+        io.stdout(`  opened ${pr.pr.url} for the disputed ${l.id}\n`);
+        await askReviewers(pr.pr, reviewerLogins(config, [l], member));
+      }
+      Object.assign(l, { pr: pr.branch });
     }
   }
 
@@ -526,6 +611,24 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   if (lessons.length === 0) io.stdout("no new lessons\n");
   if (opts.dryRun) io.stdout("dry run: nothing committed, opened or merged\n");
   return 0;
+}
+
+/** Review PRs for disputed rules: one per rule, named so `homeostat review` and settling find them. */
+const DISPUTE_PREFIX = "homeostat/review-dispute-";
+
+function disputeBody(l: Lesson, flags: { by: string; reason: string; date: string }[]): string {
+  const retire = /status: retired/.test(l.text);
+  return [
+    `\`${l.id}\` was flagged as wrong, so sessions stopped getting it.`,
+    "",
+    ...flags.map((f) => `- ${f.by} (${f.date}): ${f.reason}`),
+    "",
+    retire
+      ? "This PR retires it: no fix could be drafted from the flags. Merge to retire it, or edit the rule here and set `status: accepted` to keep a corrected version."
+      : "This PR proposes a corrected rule, drafted from the flags. Merge to put it back in force (edit it here first if needed); close the PR to retire the rule.",
+    "",
+    "Decided through `homeostat daily`; the next run records the outcome.",
+  ].join("\n");
 }
 
 /** The start of a rule, for the run report: enough to tell lessons apart. */

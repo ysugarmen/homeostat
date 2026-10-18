@@ -11,9 +11,10 @@ Homeostat's agents run in your KB repo's CI (or on one shared box with `homeosta
 3. **Decides** each one: merge at 70 or above (80 for `core`), decline below 35 or as a duplicate, and a reviewer for anything in between. Risky content, conflicts, document patches and areas outside `scoring.autoMerge` always go to a reviewer.
 4. **Opens one daily PR** with the merged lessons, each decision explained in the body, and merges it.
 5. **Opens one review PR** for the middle band and requests the area's owners as reviewers. Merging it accepts them; closing it declines them.
-6. **Records** the decisions on the `homeostat/state` branch. Developers' sessions pick them up and tell them, and the dashboard's Automation page shows them.
+6. **Opens one dispute PR per flagged rule.** A flag takes the rule out of sessions at once; the PR proposes a fix drafted from the flags (a renamed helper, a moved file), keeping the parts nobody disputed. Merging puts it back in force; closing retires the rule.
+7. **Records** the decisions on the `homeostat/state` branch. Developers' sessions pick them up and tell them, and the dashboard's Automation page shows them.
 
-`--dry-run` prints every decision and writes nothing. `--no-reviews` skips the model and decides pending lessons only. Weights and thresholds: `scoring.confidence` ([config](config.md)). If Slack is set up, the run posts the review queue each morning and repeats lessons waiting more than 2 days.
+`--dry-run` prints every decision and writes nothing. `--no-reviews` skips the model and decides pending lessons only; dispute PRs then propose retiring the rule. Weights and thresholds: `scoring.confidence` ([config](config.md)). If Slack is set up, the run posts the review queue each morning and repeats lessons waiting more than 2 days.
 
 Protect the base branch and let only the daily run's token bypass it (`init` prints how). If the host refuses the merge, the daily PR stays open for a reviewer.
 

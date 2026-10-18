@@ -153,11 +153,12 @@ A long session gets only the rules that are new since its start, on the next pro
    - merge at 70 or more (80 for `core` or a `**` scope)
    - decline below 35, or on a validation error, or as a duplicate (which reconfirms the original)
    - otherwise review, and always for risky content, conflicts, documents and areas outside `scoring.autoMerge`
-   - a flag merges at once (the rule becomes `disputed`) and a reviewer resolves it
+   - a flag merges at once (the rule becomes `disputed`) and a reviewer resolves it, in a dispute PR (below)
 4. opens **one daily PR** per developer with the merged lessons and reconfirmations, every decision and its score breakdown in the body, validates the whole KB, and squash-merges it. If the host refuses the merge (branch protection, a failing check), the PR stays open and its lessons count as review
 5. opens one **review PR** per developer for the middle band, and requests the area owners as reviewers (the owning team, else members with that area, else seniors and leads)
-6. settles review PRs from earlier runs: merged by a reviewer means merged, closed means declined
-7. writes decisions, heartbeats and the run report to `homeostat/state`, and posts the review queue to Slack, repeating lessons that have waited more than 2 days
+6. opens one **dispute PR** (`homeostat/review-dispute-<id>-<date>`) per disputed rule, with a fix the model drafts from the flags, or the rule retired when no fix can be drafted. Merging puts the fixed rule back in force; closing retires the rule
+7. settles review PRs from earlier runs: merged by a reviewer means merged, closed means declined (for a dispute PR, the rule is retired through the next daily PR)
+8. writes decisions, heartbeats and the run report to `homeostat/state`, and posts the review queue to Slack, repeating lessons that have waited more than 2 days
 
 All thresholds and weights are in `scoring.confidence`. `--dry-run` decides and prints without writing anything.
 

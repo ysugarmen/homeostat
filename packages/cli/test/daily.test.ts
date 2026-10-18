@@ -418,6 +418,59 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(text).toContain("withRetry was renamed");
   });
 
+  test("a disputed rule gets a review PR with a drafted fix; closing it retires the rule", async () => {
+    // From the demo: three rules stayed disputed for days with nothing asking anyone to act.
+    const t = team();
+    const path = "knowledge/integrations/outbound-http-retry-helper.md";
+    await run([
+      "flag",
+      "outbound-http-retry-helper",
+      "--dir",
+      t.ci,
+      "--by",
+      "lee",
+      "--reason",
+      "withRetry moved to @acme/net",
+      "--branch",
+      "main",
+      "--push",
+    ]);
+    t.g(t.ci, "reset", "-q", "--hard", "origin/main");
+    const fixer = {
+      fix: async () => ({
+        title: "Use the shared retry helper from @acme/net",
+        rule: "Wrap every outbound HTTP call in withRetry() from @acme/net.",
+        why: "Hand-rolled retries skipped the request-id header.",
+      }),
+    };
+    const provider = new FakeProvider();
+    const first = await run(["daily", "--dir", t.ci, "--no-reviews"], { provider, fixer });
+    const branch = "homeostat/review-dispute-outbound-http-retry-helper-2026-10-16";
+    expect(first.stdout).toContain("for the disputed outbound-http-retry-helper");
+    expect(provider.opened.map((o) => o.pr.sourceBranch)).toEqual([branch]);
+    const proposed = t.g(t.origin, "show", `${branch}:${path}`);
+    expect(proposed).toContain("status: accepted");
+    expect(proposed).toContain("withRetry() from @acme/net");
+    expect(proposed).not.toContain("flags:");
+    expect(provider.reviewers.length).toBeGreaterThan(0);
+
+    // The same day again: the PR is still open, so no second one.
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider, fixer });
+    expect(provider.opened).toHaveLength(1);
+
+    // A reviewer closes it: the next run retires the rule through the daily PR.
+    provider.open = [];
+    const next = await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider,
+      fixer,
+      now: () => new Date("2026-10-17T06:00:00Z"),
+    });
+    expect(next.stdout).toContain("retired: a reviewer closed its dispute PR");
+    const daily = provider.opened.at(-1)?.pr.sourceBranch ?? "";
+    expect(daily).toBe("homeostat/daily-lee-2026-10-17");
+    expect(t.g(t.origin, "show", `${daily}:${path}`)).toContain("status: retired");
+  });
+
   test("a pending document edit and a review patch to the same document become one change", async () => {
     const t = team();
     await run(
