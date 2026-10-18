@@ -18,6 +18,7 @@ It turns accepted code-review feedback into short, scored rules and team documen
 - [The agents](guide/agents.md): the daily run, sync, deep dive, seeding, the digest, and model runtimes
 - [Using it from your tools](guide/clients.md): the Claude Code plugin, MCP, and exports
 - [Dashboard](guide/dashboard.md)
+- [Desktop app](guide/desktop.md): the dashboard as a Mac app that keeps itself current
 
 ## Trust
 

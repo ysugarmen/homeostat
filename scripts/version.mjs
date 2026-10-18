@@ -21,7 +21,7 @@ const edit = (path, fn) => {
   }
 };
 
-for (const pkg of ["cli", "core", "mcp", "dashboard", "plugin"]) {
+for (const pkg of ["cli", "core", "mcp", "dashboard", "desktop", "plugin"]) {
   const path =
     pkg === "plugin"
       ? "packages/plugin/.claude-plugin/plugin.json"

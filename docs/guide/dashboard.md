@@ -4,6 +4,8 @@
 homeostat dashboard --dir path/to/team-kb     # http://localhost:4747
 ```
 
+Prefer an app that keeps itself current? See the [desktop app](desktop.md).
+
 A local, read-mostly view of the KB, the daily run's records (from the clone's copy of the `homeostat/state` branch, as of its last sync) and this machine's event log. It binds to localhost, loads nothing external, and sends nothing anywhere.
 
 | Page | Shows |

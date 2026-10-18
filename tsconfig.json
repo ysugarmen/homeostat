@@ -12,6 +12,9 @@
     },
     {
       "path": "packages/dashboard"
+    },
+    {
+      "path": "packages/desktop"
     }
   ]
 }

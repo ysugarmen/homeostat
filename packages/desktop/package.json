@@ -1,0 +1,25 @@
+{
+  "name": "@homeostat/desktop",
+  "version": "0.1.7",
+  "private": true,
+  "description": "The homeostat dashboard as a desktop app, kept current from your KB checkout.",
+  "license": "Apache-2.0",
+  "author": "Yonatan Sugarmen",
+  "type": "module",
+  "main": "dist/src/main.js",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "@homeostat/core": "workspace:*",
+    "@homeostat/dashboard": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3"
+  },
+  "scripts": {
+    "start": "tsc -b ../.. && electron .",
+    "package": "node ../../scripts/package-desktop.mjs"
+  }
+}
