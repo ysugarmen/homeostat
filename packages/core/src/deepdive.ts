@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parseBody } from "./body.ts";
 import type { Asker } from "./claude.ts";
 import type { Config } from "./config.ts";
-import { detectConflicts, scopesOverlap } from "./conflicts.ts";
+import { sameLesson, scopesOverlap } from "./conflicts.ts";
 import { type Entry, formatEntry } from "./entry.ts";
 import type { Frontmatter } from "./schema.ts";
 import { score } from "./score.ts";
@@ -96,12 +96,14 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
     }
   }
 
-  const pairs = detectConflicts(accepted().map((w) => w.fm)).filter(
-    (c) => c.kind === "possible-duplicate",
-  );
-  for (const { ids } of pairs) {
-    const [a, b] = ids.map((id) => work.get(id));
-    if (!a || !b || a.fm.status !== "accepted" || b.fm.status !== "accepted") continue;
+  // The same test the daily run uses, so a duplicate it let through is caught here.
+  const pairs: [Working, Working][] = [];
+  const pool = accepted();
+  for (const [i, a] of pool.entries()) {
+    for (const b of pool.slice(i + 1)) if (sameLesson(a.entry, b.entry)) pairs.push([a, b]);
+  }
+  for (const [a, b] of pairs) {
+    if (a.fm.status !== "accepted" || b.fm.status !== "accepted") continue;
     const [keep, drop] = survivorFirst(a, b);
     if (keep.fm.supersedes !== undefined) {
       notes.push(

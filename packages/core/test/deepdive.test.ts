@@ -115,6 +115,24 @@ describe("deepDive: duplicates", () => {
     expect(result.notes[0]).toContain("## Rule has 70 words");
   });
 
+  test("merges the same lesson worded twice, as the daily run judges it", async () => {
+    // From the demo: one review comment saved by two people, titles only 75% alike.
+    const files = kb({
+      "knowledge/integrations/cents-a.md": entryText(
+        { id: "cents-a", title: "Build Cents values with cents(), never a cast", score: 4 },
+        "Create amounts with cents() from src/money.ts; never write `500 as Cents`.",
+      ),
+      "knowledge/integrations/cents-b.md": entryText(
+        { id: "cents-b", title: "Build Cents values with cents(), never cast with as Cents" },
+        "Use cents() to make Cents values, including in tests; `as Cents` skips the check.",
+      ),
+    });
+    const result = await deepDive({ files, today: TODAY });
+    expect(change(result, "knowledge/integrations/cents-a.md")?.actions).toEqual([
+      { action: "merged", note: "absorbed cents-b" },
+    ]);
+  });
+
   test("a survivor that already supersedes something is left for a human", async () => {
     const files = kb();
     files[KEEP] = (files[KEEP] ?? "").replace(
