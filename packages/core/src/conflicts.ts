@@ -171,20 +171,22 @@ export function codeReferences(text: string): Set<string> {
 }
 
 /**
- * Whether two rules teach the same lesson, for the daily run: near-identical titles, or the same
- * code named in both (two people rarely word a lesson alike, but they name the same function).
+ * Whether two rules teach the same lesson, for the daily run: near-identical titles, similar titles
+ * with the same reason, or the same code named in both (two people rarely word a lesson alike, but
+ * they name the same function).
  * Scopes must overlap either way.
  */
 export function sameLesson(a: Entry, b: Entry): boolean {
   if (!scopesOverlap(a.frontmatter.scope, b.frontmatter.scope)) return false;
-  if (titleSimilarity(a.frontmatter.title, b.frontmatter.title) >= TITLE_SIMILARITY) return true;
+  const titles = titleSimilarity(a.frontmatter.title, b.frontmatter.title);
+  if (titles >= TITLE_SIMILARITY) return true;
+  // A mostly similar title for the same reason, though each names its own example.
+  if (titles >= 0.6 && titleSimilarity(a.sections.why ?? "", b.sections.why ?? "") >= 0.6)
+    return true;
   const ra = codeReferences(a.sections.rule ?? "");
   const rb = codeReferences(b.sections.rule ?? "");
   if (ra.size === 0 || rb.size === 0) return false;
   const shared = [...ra].filter((r) => rb.has(r)).length;
   // Mostly the same code, or a mostly similar title about some of the same code.
-  return (
-    shared / new Set([...ra, ...rb]).size >= 0.5 ||
-    (shared > 0 && titleSimilarity(a.frontmatter.title, b.frontmatter.title) >= 0.6)
-  );
+  return shared / new Set([...ra, ...rb]).size >= 0.5 || (shared > 0 && titles >= 0.6);
 }

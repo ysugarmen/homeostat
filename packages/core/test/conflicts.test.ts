@@ -140,6 +140,28 @@ describe("sameLesson", () => {
     ).toBe(true);
   });
 
+  test("a mostly similar title with the same reason is the same lesson, though the examples differ", () => {
+    // From the demo: one rule drafted from two pull requests, each naming its own function.
+    const why = (rule: string, reason: string) =>
+      ({
+        frontmatter: { title: "", scope: ["**"] },
+        sections: { rule, why: reason },
+      }) as unknown as Entry;
+    const a = why(
+      "Doc comments on exported functions (e.g. handlePaymentWebhook in src/webhooks.ts) must list every AppError code they throw.",
+      "The API reference is generated from these doc comments, so omitting thrown AppError codes leaves the published reference incomplete.",
+    );
+    const b = why(
+      "When changing a doc comment on a function in src/orders.ts (e.g. refundPart), list every AppError code it can throw.",
+      "The API reference is generated from these doc comments, so omitting the thrown AppError codes leaves the published reference incomplete for callers.",
+    );
+    a.frontmatter.title = "Document thrown AppError codes in function doc comments";
+    b.frontmatter.title = "Document thrown AppError codes in doc comments of exported functions";
+    expect(sameLesson(a, b)).toBe(true);
+    b.sections.why = "Callers need to know which failures to handle.";
+    expect(sameLesson(a, b)).toBe(false);
+  });
+
   test("different code, or scopes that do not overlap, are different lessons", () => {
     const retry = entry(
       "Use the retry helper",
