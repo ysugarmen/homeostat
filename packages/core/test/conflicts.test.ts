@@ -162,6 +162,24 @@ describe("sameLesson", () => {
     expect(sameLesson(a, b)).toBe(false);
   });
 
+  test("rules that only name the same file are different lessons", () => {
+    // From the demo: a docs rule was declined as a duplicate of the cents() rule.
+    expect(
+      sameLesson(
+        entry(
+          "Build Cents values with cents(), never a cast",
+          "Construct amounts with cents() from src/money.ts, including in tests.",
+          ["**"],
+        ),
+        entry(
+          "Add a doc comment to every new exported function in src/money.ts",
+          "Every exported function in src/money.ts gets a one-line doc comment.",
+          ["**"],
+        ),
+      ),
+    ).toBe(false);
+  });
+
   test("different code, or scopes that do not overlap, are different lessons", () => {
     const retry = entry(
       "Use the retry helper",
