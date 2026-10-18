@@ -79,6 +79,123 @@ const sameToken = (a: string, b: string) =>
  * its event log on every request, so it is always live. Binds to loopback and rejects requests
  * whose Host or Origin is not this server, so other web pages cannot drive its forms.
  */
+/** Everything the pages are built from, read from the KB checkout at one moment. */
+export function readSnapshot(kbRoot: string, now: Date): Snapshot | undefined {
+  const kb = validate(readKbFiles(kbRoot));
+  if (!kb.config) return undefined;
+  const since = new Date(now.getTime() - 90 * 86_400_000).toISOString();
+  return {
+    config: kb.config,
+    entries: kb.entries.map((e) => e.entry),
+    docs: kb.docs,
+    events: readEvents(kbRoot, { since }),
+    now,
+  };
+}
+
+export interface DashboardView {
+  kbRoot: string;
+  snap: Snapshot;
+  autoState: ReturnType<typeof readAutomation>;
+  auto: ReturnType<typeof automationView>;
+  health: ReturnType<typeof health>;
+  /** The console lamps on every page: the daily run, the review queue, sync and the KB. */
+  lamps: Lamp[];
+}
+
+export function dashboardView(kbRoot: string, snap: Snapshot): DashboardView {
+  const autoState = readAutomation(kbRoot);
+  const auto = automationView(autoState, snap.config, snap.now);
+  const kbHealth = health(snap);
+  return {
+    kbRoot,
+    snap,
+    autoState,
+    auto,
+    health: kbHealth,
+    lamps: lamps(
+      auto,
+      {
+        stability: kbHealth.stability,
+        accepted: kbHealth.byStatus.accepted,
+        flagged: kbHealth.flagged.length,
+        disputed: kbHealth.byStatus.disputed,
+      },
+      snap.now,
+      agentLiveness(snap).find((a) => a.agent === "curator")?.nextRun,
+    ),
+  };
+}
+
+/**
+ * One GET page. With a `token` the settings pages are forms; without one (the shared, static
+ * build) they are read-only, and the greeting, which names the checkout's git user, is left out.
+ */
+export function renderPage(
+  v: DashboardView,
+  pathname: string,
+  params: URLSearchParams,
+  opts: { token?: string },
+): { title: string; body: string; status: number } {
+  const { snap, auto, autoState } = v;
+  const ok = (title: string, body: string) => ({ title, body, status: 200 });
+  const notFound = (text: string) => ({
+    title: "Not found",
+    body: messagePage("Not found", text),
+    status: 404,
+  });
+  const week = new Date(snap.now.getTime() - 7 * 86_400_000).toISOString();
+  const name = opts.token ? firstName(v.kbRoot) : undefined;
+  switch (pathname) {
+    case "/": {
+      const recent: Event[] = snap.events.slice(-60).reverse();
+      return ok(
+        "Overview",
+        overviewPage(v.health, agentLiveness(snap), impact(snap), recent, auto, v.lamps, {
+          ...(name ? { name } : {}),
+          newThisWeek: snap.entries.filter(
+            (e) =>
+              e.frontmatter.status === "accepted" && e.frontmatter.created >= week.slice(0, 10),
+          ).length,
+          decided: decidedLessons(autoState),
+        }),
+      );
+    }
+    case "/automation":
+      return ok("Automation", automationPage(auto));
+    case "/entries":
+      return ok("Entries", entriesPage(snap.entries, params.get("status"), params.get("q")));
+    case "/members":
+      return ok("Members", membersPage(contributions(snap)));
+    case "/coverage":
+      return ok("Coverage", coveragePage(coverage(snap)));
+    case "/impact":
+      return ok("Impact", impactPage(impact(snap)));
+    case "/documents":
+      return ok("Documents", documentsPage(sectionUsage(snap.docs ?? [], snap.events, snap.now)));
+    case "/desire-paths":
+      return ok("Desire paths", desirePathsPage(desirePaths(snap)));
+    case "/events":
+      return ok(
+        "Events",
+        eventsPage(snap.events.filter((e) => e.ts >= week).reverse(), params.get("type")),
+      );
+    case "/settings":
+      return ok("Settings", settingsIndex());
+  }
+  const entry = /^\/entries\/([a-z0-9-]+)$/.exec(pathname);
+  if (entry) {
+    const found = snap.entries.find((e) => e.frontmatter.id === entry[1]);
+    return found
+      ? ok(found.frontmatter.title, entryPage(found, snap.config))
+      : notFound(`No entry with id ${entry[1]}.`);
+  }
+  const settings = /^\/settings\/([a-z]+)$/.exec(pathname);
+  const section = settings && SECTIONS.find((s) => s.id === settings[1]);
+  if (section) return ok(section.title, settingsPage(section, snap.config, opts.token));
+  return notFound("Nothing here.");
+}
+
 export function startDashboard(opts: DashboardOptions): Promise<{ server: Server; url: string }> {
   const host = opts.host ?? "127.0.0.1";
   const token = randomBytes(24).toString("hex");
@@ -106,18 +223,7 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
     }
   };
 
-  const snapshot = (): Snapshot | undefined => {
-    const kb = validate(readKbFiles(opts.kbRoot));
-    if (!kb.config) return undefined;
-    const since = new Date(now().getTime() - 90 * 86_400_000).toISOString();
-    return {
-      config: kb.config,
-      entries: kb.entries.map((e) => e.entry),
-      docs: kb.docs,
-      events: readEvents(opts.kbRoot, { since }),
-      now: now(),
-    };
-  };
+  const snapshot = () => readSnapshot(opts.kbRoot, now());
 
   const send = (res: ServerResponse, status: number, html: string) => {
     res.writeHead(status, {
@@ -171,21 +277,8 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
         500,
       );
     }
-    // The console lamps on every page: the daily run, the review queue, sync and the KB.
-    const autoState = readAutomation(opts.kbRoot);
-    const auto = automationView(autoState, snap.config, snap.now);
-    const kbHealth = health(snap);
-    lampsNow = lamps(
-      auto,
-      {
-        stability: kbHealth.stability,
-        accepted: kbHealth.byStatus.accepted,
-        flagged: kbHealth.flagged.length,
-        disputed: kbHealth.byStatus.disputed,
-      },
-      snap.now,
-      agentLiveness(snap).find((a) => a.agent === "curator")?.nextRun,
-    );
+    const v = dashboardView(opts.kbRoot, snap);
+    lampsNow = v.lamps;
 
     if (req.method === "POST") {
       // Our own pages send their origin; "null" or anything unreadable is refused, never parsed blind.
@@ -220,64 +313,8 @@ export function startDashboard(opts: DashboardOptions): Promise<{ server: Server
     }
 
     if (req.method !== "GET") return send(res, 405, "Method not allowed");
-    const week = new Date(snap.now.getTime() - 7 * 86_400_000).toISOString();
-    switch (url.pathname) {
-      case "/": {
-        const recent: Event[] = snap.events.slice(-60).reverse();
-        return page(
-          "Overview",
-          overviewPage(kbHealth, agentLiveness(snap), impact(snap), recent, auto, lampsNow, {
-            ...(firstName(opts.kbRoot) ? { name: firstName(opts.kbRoot) } : {}),
-            newThisWeek: snap.entries.filter(
-              (e) =>
-                e.frontmatter.status === "accepted" && e.frontmatter.created >= week.slice(0, 10),
-            ).length,
-            decided: decidedLessons(autoState),
-          }),
-        );
-      }
-      case "/automation":
-        return page("Automation", automationPage(auto));
-      case "/entries":
-        return page(
-          "Entries",
-          entriesPage(snap.entries, url.searchParams.get("status"), url.searchParams.get("q")),
-        );
-      case "/members":
-        return page("Members", membersPage(contributions(snap)));
-      case "/coverage":
-        return page("Coverage", coveragePage(coverage(snap)));
-      case "/impact":
-        return page("Impact", impactPage(impact(snap)));
-      case "/documents":
-        return page(
-          "Documents",
-          documentsPage(sectionUsage(snap.docs ?? [], snap.events, snap.now)),
-        );
-      case "/desire-paths":
-        return page("Desire paths", desirePathsPage(desirePaths(snap)));
-      case "/events":
-        return page(
-          "Events",
-          eventsPage(
-            snap.events.filter((e) => e.ts >= week).reverse(),
-            url.searchParams.get("type"),
-          ),
-        );
-      case "/settings":
-        return page("Settings", settingsIndex());
-    }
-    const entry = /^\/entries\/([a-z0-9-]+)$/.exec(url.pathname);
-    if (entry) {
-      const found = snap.entries.find((e) => e.frontmatter.id === entry[1]);
-      return found
-        ? page(found.frontmatter.title, entryPage(found, snap.config))
-        : page("Not found", messagePage("Not found", `No entry with id ${entry[1]}.`), 404);
-    }
-    const settings = /^\/settings\/([a-z]+)$/.exec(url.pathname);
-    const section = settings && SECTIONS.find((s) => s.id === settings[1]);
-    if (section) return page(section.title, settingsPage(section, snap.config, token));
-    return page("Not found", messagePage("Not found", "Nothing here."), 404);
+    const r = renderPage(v, url.pathname, url.searchParams, { token });
+    return page(r.title, r.body, r.status);
   };
 
   const server = createServer((req, res) => {

@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { type AgentName, digestDue, dueAgents, readKbFiles, validate } from "@homeostat/core";
-import { startDashboard } from "@homeostat/dashboard";
+import { buildDashboard, startDashboard } from "@homeostat/dashboard";
 import type { Io } from "./cli.ts";
 import { runDaily } from "./daily.ts";
 import { runDeepDive } from "./deep-dive.ts";
@@ -100,13 +100,19 @@ export async function runUp(opts: UpOptions, io: Io): Promise<number> {
 
 /** `homeostat dashboard`: just the dashboard, until Ctrl-C. */
 export async function runDashboard(
-  opts: { dir: string; port: string; host?: string },
+  opts: { dir: string; port: string; host?: string; build?: string },
   io: Io,
 ): Promise<number> {
   const root = resolve(opts.dir);
   if (!validate(readKbFiles(root)).config) {
     io.stderr(`homeostat.yaml is missing or invalid in ${root}; run homeostat validate\n`);
     return 1;
+  }
+  if (opts.build) {
+    const out = resolve(opts.build);
+    const files = buildDashboard({ kbRoot: root, out, ...(io.now ? { now: io.now() } : {}) });
+    io.stdout(`built ${files.length} files into ${out}\n`);
+    return 0;
   }
   const { url, server } = await startDashboard({
     kbRoot: root,

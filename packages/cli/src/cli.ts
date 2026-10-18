@@ -475,7 +475,11 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--dir <dir>", "knowledge base root", ".")
     .option("--port <port>", "port", "4747")
     .option("--host <host>", "interface (default 127.0.0.1; 0.0.0.0 in a container)")
-    .action(async (opts: { dir: string; port: string; host?: string }) => {
+    .option(
+      "--build <out>",
+      "write a shared, read-only static copy into <out> instead of serving (for CI to publish)",
+    )
+    .action(async (opts: { dir: string; port: string; host?: string; build?: string }) => {
       exitCode = await runDashboard(opts, io);
     });
 

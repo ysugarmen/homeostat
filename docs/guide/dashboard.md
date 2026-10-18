@@ -20,3 +20,73 @@ A local, read-mostly view of the KB, the daily run's records (from the clone's c
 | Settings | Forms for every key in `homeostat.yaml`; changes are written to the file, to commit on a branch |
 
 `homeostat up` serves it too, alongside the scheduled agents. In Docker it listens on all interfaces: put it behind your own authentication.
+
+## Share it with your team
+
+`homeostat dashboard --build <dir>` writes the dashboard as static, read-only pages instead of serving it. CI rebuilds it on every push to the KB and publishes it, so the shared copy is never more than one CI run behind the repo, and no server runs anywhere. The recipe below uses Cloudflare Pages behind Cloudflare Access, both free (Access up to 50 users), so only your team can open it.
+
+What the shared copy leaves out: event data never leaves a laptop, so Impact, Desire paths and Events are not built, and agent activity on the Overview is empty (the daily run's own records, on the Automation page, are there). Settings are read-only; change them through a PR to `homeostat.yaml`. Search and the theme switch need a server, so they are off.
+
+**Once, in Cloudflare:**
+1. Create a Pages project: `npx --yes wrangler@4.151.1 pages project create team-kb-dashboard --production-branch main` (or Workers & Pages > Create > Pages > Direct Upload).
+2. Create an API token with the *Cloudflare Pages: Edit* permission, and note your account id.
+3. In Zero Trust > Access > Applications, add a self-hosted application for `team-kb-dashboard.pages.dev` and `*.team-kb-dashboard.pages.dev` (the preview URLs), with an Allow policy for your team, e.g. emails ending in your company's domain, signing in with a one-time PIN or your identity provider. Open the URL in a private window to check it asks you to sign in.
+
+**In the KB repo**, store `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as secured variables (Bitbucket) or secrets (GitHub), and `CLOUDFLARE_PAGES_PROJECT` as a plain variable.
+
+**Bitbucket Pipelines** (`bitbucket-pipelines.yml`): add the step to the `main` pipeline and give `homeostat/state`, which the daily run pushes, its own. Bitbucket runs only the most specific matching pipeline per push.
+
+```yaml
+definitions:
+  steps:
+    - step: &homeostat-dashboard
+        name: homeostat dashboard
+        script:
+          # A push to homeostat/state checks out the state branch; the dashboard is built from main.
+          - git fetch --quiet origin "+refs/heads/*:refs/remotes/origin/*"
+          - git checkout --quiet --detach origin/main
+          - npx --yes homeostat@0.1.7 dashboard --build site
+          - npx --yes wrangler@4.151.1 pages deploy site --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch main
+
+pipelines:
+  branches:
+    main:
+      - step: *homeostat-validate
+      - step: *homeostat-dashboard
+    homeostat/state:
+      - step: *homeostat-dashboard
+```
+
+**GitHub Actions** (`.github/workflows/homeostat-dashboard.yml`):
+
+```yaml
+name: homeostat dashboard
+on:
+  push:
+    branches: [main, homeostat/state]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: homeostat-dashboard
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - run: git fetch --quiet origin "+refs/heads/*:refs/remotes/origin/*"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npx --yes homeostat@0.1.7 dashboard --build site
+      - run: npx --yes wrangler@4.151.1 pages deploy site --project-name "${{ vars.CLOUDFLARE_PAGES_PROJECT }}" --branch main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+Each build takes about a minute of CI time. Bitbucket's Free plan has 50 minutes a month, which a busy KB outgrows; Standard has 2,500. Developers' syncs push to `candidates/*` and only change the sync column on the Automation page; add `candidates/**` to the triggers if you want that live too, at the cost of a build per sync.

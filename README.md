@@ -51,7 +51,7 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat deep-dive` | The deep-dive run (CI) |
 | `homeostat export --out <repo>` | Write accepted entries into a code repo as each tool's rules files |
 | `homeostat up` | Serve the dashboard and run the daily run and deep dive on their schedules (a shared box; also the Docker image) |
-| `homeostat dashboard` | Serve just the dashboard on localhost:4747 |
+| `homeostat dashboard [--build <dir>]` | Serve just the dashboard on localhost:4747, or build a shared read-only copy for CI to publish |
 | `homeostat search`, `explain`, `list`, `status` | Read the KB from the terminal (`--json` for agents) |
 | `homeostat events` | The local event log, one line per event |
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |

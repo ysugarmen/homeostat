@@ -327,6 +327,9 @@ const NAV: [string, string][] = [
   ["/settings", "Settings"],
 ];
 
+/** Pages built only from a laptop's git-ignored event log: a shared build has nothing to show. */
+export const LOCAL_ONLY_PAGES = ["/impact", "/desire-paths", "/events"];
+
 export function layout(opts: {
   title: string;
   path: string;
@@ -335,7 +338,11 @@ export function layout(opts: {
   theme?: "light" | "dark";
   /** The console lamps, shown on every page. */
   status?: Lamp[];
+  /** A shared, read-only build of the KB repo rather than the local server. */
+  shared?: { repo: string; builtAt: string };
 }): string {
+  const shared = opts.shared;
+  const nav = shared ? NAV.filter(([href]) => !LOCAL_ONLY_PAGES.includes(href)) : NAV;
   const current = (href: string) =>
     href === "/" ? opts.path === "/" : opts.path === href || opts.path.startsWith(`${href}/`);
   return `<!doctype html>
@@ -350,15 +357,19 @@ export function layout(opts: {
 <div class="app">
 <aside class="side">
   <a class="logo" href="/" aria-label="Homeostat overview"><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><rect width="30" height="30" rx="9" fill="url(#lg)"/><path d="M7 19a8 8 0 0 1 16 0" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><path d="M15 19l4-6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg><span>Homeostat</span></a>
-  <nav class="menu" aria-label="Sections">${NAV.map(([href, label]) => `<a href="${href}"${current(href) ? ' aria-current="page"' : ""} title="${label}">${icon(ICON[href] ?? "")}<span>${label}</span></a>`).join("")}</nav>
+  <nav class="menu" aria-label="Sections">${nav.map(([href, label]) => `<a href="${href}"${current(href) ? ' aria-current="page"' : ""} title="${label}">${icon(ICON[href] ?? "")}<span>${label}</span></a>`).join("")}</nav>
   <div class="side-foot">
-    <span class="kbname" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}${info("A local view of this KB checkout and its git-ignored event log. It sends nothing anywhere. Settings changes are written to homeostat.yaml here: commit them on a branch and open a PR.")}</span>
-    <a class="switch${opts.theme === "light" ? "" : " on"}" href="?theme=${opts.theme === "light" ? "dark" : "light"}" role="switch" aria-checked="${opts.theme === "light" ? "false" : "true"}">Dark mode<span class="track"><span class="knob"></span></span></a>
+    ${
+      shared
+        ? `<span class="kbname" title="${esc(shared.repo)}">${esc(shared.repo.split("/").at(-1) ?? shared.repo)}${info(`A shared, read-only view of ${esc(shared.repo)}, rebuilt on every push; built ${fmtTime(shared.builtAt)} UTC. Event data (impact, desire paths, events) stays on each laptop, so it is not here: run homeostat dashboard for yours. Settings change through a PR to homeostat.yaml.`)}</span>`
+        : `<span class="kbname" title="${esc(opts.kbRoot)}">${esc(opts.kbRoot.split("/").filter(Boolean).at(-1) ?? opts.kbRoot)}${info("A local view of this KB checkout and its git-ignored event log. It sends nothing anywhere. Settings changes are written to homeostat.yaml here: commit them on a branch and open a PR.")}</span>
+    <a class="switch${opts.theme === "light" ? "" : " on"}" href="?theme=${opts.theme === "light" ? "dark" : "light"}" role="switch" aria-checked="${opts.theme === "light" ? "false" : "true"}">Dark mode<span class="track"><span class="knob"></span></span></a>`
+    }
   </div>
 </aside>
 <div class="main">
   <header class="topbar">
-    <form class="search" action="/entries" role="search">${icon('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>', 18)}<input type="search" name="q" placeholder="Search rules" aria-label="Search rules"></form>
+    ${shared ? "" : `<form class="search" action="/entries" role="search">${icon('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>', 18)}<input type="search" name="q" placeholder="Search rules" aria-label="Search rules"></form>`}
     ${opts.status?.length ? `<div class="status" aria-label="Status">${opts.status.map((l) => `<a class="pill" href="${l.href}" title="${esc(`${l.label}: ${l.value}${l.detail ? `, ${l.detail}` : ""}`)}">${stateIcon(l.state, 15)}${esc(SHORT[l.key])} <b>${esc(l.value)}</b></a>`).join("")}</div>` : ""}
     <a class="btn primary" href="/automation#queue">${icon('<path d="M4 12l5 5L20 6"/>', 18)}Review queue</a>
   </header>
@@ -848,10 +859,11 @@ function rowEditor(section: Section, config: Config): string {
     )}</tbody></table></div><p class="muted">Adding rows${info("Blank rows add areas. Globs are comma-separated.")}</p>`;
 }
 
+/** Without a `token` (the shared build) the form is shown read-only: nothing there can save. */
 export function settingsPage(
   section: Section,
   config: Config,
-  token: string,
+  token: string | undefined,
   notice?: { saved?: boolean; issues?: Issue[] },
 ): string {
   const banner = notice?.saved
@@ -863,7 +875,11 @@ export function settingsPage(
     ? rowEditor(section, config)
     : (section.fields ?? []).map((f) => input(f, currentValue(config, f))).join("");
   return `<section class="panel"><p><a href="/settings">Back to settings</a></p><h2>${esc(section.title)}${info(esc(section.intro))}</h2>${banner}
-<form class="settings" method="post" action="/settings/${section.id}"><input type="hidden" name="_token" value="${esc(token)}">${body}<button type="submit">Save</button></form></section>`;
+${
+  token === undefined
+    ? `<div class="notice" role="status">Read-only here. Change it in homeostat.yaml through a pull request, or in homeostat dashboard on your own checkout.</div><form class="settings"><fieldset disabled>${body}</fieldset></form>`
+    : `<form class="settings" method="post" action="/settings/${section.id}"><input type="hidden" name="_token" value="${esc(token)}">${body}<button type="submit">Save</button></form>`
+}</section>`;
 }
 
 export function messagePage(title: string, text: string): string {
