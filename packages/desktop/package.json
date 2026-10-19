@@ -1,6 +1,6 @@
 {
   "name": "@homeostat/desktop",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "The homeostat dashboard as a desktop app, kept current from your KB checkout.",
   "license": "Apache-2.0",

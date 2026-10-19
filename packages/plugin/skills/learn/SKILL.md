@@ -2,7 +2,7 @@
 name: learn
 description: Capture a lesson from this session, or from a PR review comment, as a candidate entry in the team's homeostat knowledge base. Use when the user corrects you on a team convention, says "remember this for the team", or passes a PR comment URL.
 argument-hint: "[lesson or PR comment URL]"
-allowed-tools: Bash(homeostat learn:*), Bash(npx --yes homeostat@0.1.10 learn:*), Read, Glob
+allowed-tools: Bash(homeostat learn:*), Bash(npx --yes homeostat@0.1.11 learn:*), Read, Glob
 ---
 
 # Capture a lesson for the team
@@ -22,7 +22,7 @@ Use the first that applies:
 
 Read its `homeostat.yaml` to learn the member ids under `team.members` and the area names under `areas` (`core` always exists).
 
-Run the CLI as `homeostat` if it is on the PATH, otherwise as `npx --yes homeostat@0.1.10`.
+Run the CLI as `homeostat` if it is on the PATH, otherwise as `npx --yes homeostat@0.1.11`.
 
 ## 2. Draft the entry
 
