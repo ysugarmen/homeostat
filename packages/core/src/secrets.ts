@@ -52,6 +52,12 @@ function looksRandom(s: string): boolean {
 
 const preview = (s: string) => `${s.slice(0, Math.min(4, Math.floor(s.length / 4)))}…`;
 
+/** `password=config.password`: the value is a dotted name in code, which holds no secret. */
+function namesAValue(match: string): boolean {
+  const value = match.replace(/^[^:=]*[:=]\s*["']?/, "");
+  return /^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+[,;)]*$/.test(value);
+}
+
 export function scanSecrets(text: string): SecretFinding[] {
   const found: SecretFinding[] = [];
   const covered = (start: number, end: number) => found.some((f) => start < f.end && end > f.start);
@@ -59,6 +65,7 @@ export function scanSecrets(text: string): SecretFinding[] {
     for (const m of text.matchAll(re)) {
       const start = m.index ?? 0;
       const end = start + m[0].length;
+      if (kind === "password-assignment" && namesAValue(m[0])) continue;
       if (!covered(start, end)) found.push({ kind, start, end, preview: preview(m[0]) });
     }
   }

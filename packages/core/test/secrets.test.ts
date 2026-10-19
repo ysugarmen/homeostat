@@ -63,6 +63,9 @@ describe("scanSecrets", () => {
     ["a path", "services/integrations/partner-availability-client.ts"],
     ["prose about secrets", "Never log the password or the API token in plain text."],
     ["a placeholder", "set ANTHROPIC_API_KEY=<your key>"],
+    // From a real document: code that passes a credential along names it, it does not hold it.
+    ["a value read from config", "username=config.username, password=config.password,"],
+    ["a settings attribute", "api_key: settings.PARTNER_API_KEY"],
   ])("does not flag %s", (_, text) => {
     expect(scanSecrets(text)).toEqual([]);
   });
