@@ -325,6 +325,30 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(posts[1]).toContain("• use-the-shared-button-component (lee, since 2026-10-16)");
   });
 
+  test("the morning notice mentions the named reviewers in Slack", async () => {
+    const t = team();
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8")
+        .replace("team:\n  members:", "team:\n  reviewers: [dana]\n  members:")
+        .replace('handle: "@dana"', 'handle: "@dana"\n      slack: U0DANA01'),
+    );
+    t.g(t.ci, "commit", "-qam", "dana reviews, on Slack");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    await leeLearns(t.lee);
+    const posts: string[] = [];
+    await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider: new FakeProvider(),
+      env: { GITHUB_TOKEN: "t", HOMEOSTAT_SLACK_WEBHOOK: "https://hooks.slack.com/services/x" },
+      fetch: (async (_u: string, init: RequestInit) => {
+        posts.push(JSON.parse(String(init.body)).text);
+        return new Response("ok");
+      }) as typeof fetch,
+    });
+    expect(posts[0]?.startsWith("<@U0DANA01> *Homeostat: 1 lesson waiting for review*")).toBe(true);
+  });
+
   test("a refused merge leaves the daily PR open and records its lessons for review", async () => {
     const t = team();
     const provider = new FakeProvider();

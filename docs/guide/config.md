@@ -7,7 +7,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `version` | (required) | Always `1` |
-| `team.members` | (required) | Each member has an `id` (lowercase), `role` (`junior`, `member`, `senior` or `lead`; seniors and leads own the config), and `areas` they review. Optional: `handle` (`@user`, `@org/team` or an email, used for CODEOWNERS and to recognise reviewers on the git host), and `optOut: true` (the curator never reads their PRs or review comments) |
+| `team.members` | (required) | Each member has an `id` (lowercase), `role` (`junior`, `member`, `senior` or `lead`; seniors and leads own the config), and `areas` they review. Optional: `handle` (`@user`, `@org/team` or an email, used for CODEOWNERS and to recognise reviewers on the git host), `slack` (their Slack member ID; the morning review notice mentions named reviewers), and `optOut: true` (the curator never reads their PRs or review comments) |
 | `teams` | `{}` | Team name → `handle` (`@org/team`), `members`, `areas` it owns, and `repos` it works in. The owning team approves its areas' rules and documents. Every session still reads every team's rules for the files it touches |
 | `areas` | (required) | Area name → path globs in your code repos. `core` is implicit and applies everywhere |
 
@@ -15,7 +15,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `team.reviewers` | (unset) | Member ids who decide the lessons the daily run is unsure about. When set, only they are asked to review its PRs and listed in CODEOWNERS; other members' roles only weigh their lessons. Unset, area owners decide, then seniors and leads |
+| `team.reviewers` | (unset) | Member ids who decide the lessons the daily run is unsure about. When set, only they are asked to review its PRs and listed in CODEOWNERS; other members' roles only weigh their lessons. Unset, area owners decide, then seniors and leads. Give them a `slack` member ID to be mentioned in the morning notice |
 | `scoring.weights.prFeedbackChangedCode` | `3` | Review feedback followed by a code change |
 | `scoring.weights.prFeedback` | `0` | Review feedback with no code change after it |
 | `scoring.weights.manual` | `2` | Written by a member by hand |

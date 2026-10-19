@@ -375,11 +375,13 @@ export function applySection(
       const id = form.get(`member.${i}.id`)?.trim();
       if (!id || form.get(`member.${i}.remove`)) return [];
       const handle = form.get(`member.${i}.handle`)?.trim();
+      const slack = form.get(`member.${i}.slack`)?.trim();
       const areas = lines(form.get(`member.${i}.areas`) ?? "");
       return [
         {
           id,
           ...(handle ? { handle } : {}),
+          ...(slack ? { slack } : {}),
           role: form.get(`member.${i}.role`) ?? "member",
           areas,
           ...(form.get(`member.${i}.optOut`) ? { optOut: true } : {}),

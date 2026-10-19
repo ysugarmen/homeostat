@@ -200,7 +200,9 @@ describe("homeostat init Claude runtime in CI", () => {
       const workflow = read(dir, `.github/workflows/${file}`);
       expect(workflow).toMatch(/^ {10}ANTHROPIC_API_KEY: \$\{\{ secrets.ANTHROPIC_API_KEY \}\}$/m);
       expect(workflow).toContain("# CLAUDE_CODE_OAUTH_TOKEN:");
-      expect(workflow).toContain("# - run: npm install -g @anthropic-ai/claude-code");
+      expect(workflow).toContain(
+        "# - run: npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code",
+      );
     }
     expect(stdout).toContain("Claude Console API key as\nANTHROPIC_API_KEY");
     expect(stdout).toContain("personal, non-commercial use only");

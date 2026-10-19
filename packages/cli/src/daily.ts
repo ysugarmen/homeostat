@@ -554,6 +554,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
         io,
       });
       if (pr.pr) {
+        row.disputePrs = [...(row.disputePrs ?? []), pr.pr.url];
         io.stdout(`  opened ${pr.pr.url} for the disputed ${l.id}\n`);
         await askReviewers(pr.pr, reviewerLogins(config, [l], member));
       }
@@ -800,6 +801,8 @@ async function notifyReviewQueue(
   const variable = config.notifications.slackWebhookEnv;
   const url = variable ? io.env?.[variable] : undefined;
   const waiting = report.members.filter((m) => m.review > 0 && m.reviewPr);
+  const disputes = report.members.flatMap((m) => m.disputePrs ?? []);
+  const refused = report.members.filter((m) => m.mergeError && m.dailyPr);
   const cutoff = new Date(now.getTime() - REVIEW_REMINDER_DAYS * 86_400_000).toISOString();
   const overdue = decisions.flatMap((d) =>
     d.decided
@@ -807,8 +810,13 @@ async function notifyReviewQueue(
       .map((r) => ({ member: d.member, ...r })),
   );
   if (!url || !/^https:\/\/hooks\.slack\.com\//.test(url)) return;
-  if (waiting.length === 0 && overdue.length === 0) return;
-  const text = [
+  if (!waiting.length && !overdue.length && !disputes.length && !refused.length) return;
+  // Mention the named reviewers, so Slack notifies them wherever the webhook posts.
+  const mentions = (config.team.reviewers ?? [])
+    .map((id) => config.team.members.find((m) => m.id === id)?.slack)
+    .filter((s): s is string => Boolean(s))
+    .map((s) => `<@${s}>`);
+  const lines = [
     ...(waiting.length
       ? [
           `*Homeostat: ${plural(
@@ -816,6 +824,15 @@ async function notifyReviewQueue(
             "lesson",
           )} waiting for review*`,
           ...waiting.map((m) => `• ${m.member}: ${m.review} — ${m.reviewPr}`),
+        ]
+      : []),
+    ...(disputes.length
+      ? [`*Rules flagged as wrong: fix or retire*`, ...disputes.map((u) => `• ${u}`)]
+      : []),
+    ...(refused.length
+      ? [
+          `*Daily PRs the host refused to merge*`,
+          ...refused.map((m) => `• ${m.member}: ${m.dailyPr}`),
         ]
       : []),
     ...(overdue.length
@@ -826,7 +843,9 @@ async function notifyReviewQueue(
           ),
         ]
       : []),
-  ].join("\n");
+  ];
+  if (mentions.length && lines[0]) lines[0] = `${mentions.join(" ")} ${lines[0]}`;
+  const text = lines.join("\n");
   try {
     await (io.fetch ?? fetch)(url, {
       method: "POST",

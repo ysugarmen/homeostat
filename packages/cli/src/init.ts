@@ -92,7 +92,9 @@ jobs:
           HOMEOSTAT_SLACK_WEBHOOK: \${{ secrets.HOMEOSTAT_SLACK_WEBHOOK }}
 `;
 /** With agents.runtime: claude-code, the agents' CI jobs also install Claude Code. */
-const INSTALL_CLAUDE = "npm install -g @anthropic-ai/claude-code";
+// npm 11 skips install scripts unless allowed, and Claude Code's postinstall sets up the CLI.
+const INSTALL_CLAUDE =
+  "npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code";
 
 interface CiFile {
   path: string;

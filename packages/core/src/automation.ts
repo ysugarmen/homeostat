@@ -59,6 +59,8 @@ export interface RunReport {
     review: number;
     dailyPr?: string;
     reviewPr?: string;
+    /** Review PRs opened this run for disputed rules. */
+    disputePrs?: string[];
     mergeError?: string;
     /** Why the host refused to request the reviewers, e.g. they are not collaborators. */
     reviewError?: string;

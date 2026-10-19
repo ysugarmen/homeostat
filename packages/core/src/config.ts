@@ -82,6 +82,11 @@ export const configSchema = z.strictObject({
               "handle must be @user, @org/team or an email",
             )
             .optional(),
+          /** Slack member ID (profile > ⋯ > Copy member ID): the morning notice mentions reviewers. */
+          slack: z
+            .string()
+            .regex(/^[UW][A-Z0-9]{6,}$/, "slack must be a Slack member ID, like U0123ABCD")
+            .optional(),
         }),
       )
       .min(1),

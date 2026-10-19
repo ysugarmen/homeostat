@@ -819,10 +819,10 @@ function input(field: Field, value: unknown): string {
 function rowEditor(section: Section, config: Config): string {
   if (section.rows === "team") {
     const members = [...config.team.members, ...Array(3).fill(undefined)];
-    return `<div class="table-wrap"><table class="rows"><thead><tr><th>Id</th><th>Handle</th><th>Role</th><th>Areas</th><th title="The curator never reads this member's pull requests or review comments">Opted out</th><th>Remove</th></tr></thead><tbody>${members
+    return `<div class="table-wrap"><table class="rows"><thead><tr><th>Id</th><th>Handle</th><th title="Slack member ID; the morning notice mentions reviewers">Slack</th><th>Role</th><th>Areas</th><th title="The curator never reads this member's pull requests or review comments">Opted out</th><th>Remove</th></tr></thead><tbody>${members
       .map(
         (m, i) =>
-          `<tr><td><input type="text" name="member.${i}.id" value="${esc(m?.id ?? "")}" aria-label="Member id"></td><td><input type="text" name="member.${i}.handle" value="${esc(m?.handle ?? "")}" aria-label="Handle"></td><td><select name="member.${i}.role" aria-label="Role">${["junior", "member", "senior", "lead"].map((r) => `<option${(m?.role ?? "member") === r ? " selected" : ""}>${r}</option>`).join("")}</select></td><td><input type="text" name="member.${i}.areas" value="${esc(m?.areas.join(", ") ?? "")}" aria-label="Areas"></td><td><input type="checkbox" name="member.${i}.optOut"${m?.optOut ? " checked" : ""} aria-label="Opted out"></td><td>${m ? `<input type="checkbox" name="member.${i}.remove" aria-label="Remove ${esc(m.id)}">` : ""}</td></tr>`,
+          `<tr><td><input type="text" name="member.${i}.id" value="${esc(m?.id ?? "")}" aria-label="Member id"></td><td><input type="text" name="member.${i}.handle" value="${esc(m?.handle ?? "")}" aria-label="Handle"></td><td><input type="text" name="member.${i}.slack" value="${esc(m?.slack ?? "")}" aria-label="Slack member ID"></td><td><select name="member.${i}.role" aria-label="Role">${["junior", "member", "senior", "lead"].map((r) => `<option${(m?.role ?? "member") === r ? " selected" : ""}>${r}</option>`).join("")}</select></td><td><input type="text" name="member.${i}.areas" value="${esc(m?.areas.join(", ") ?? "")}" aria-label="Areas"></td><td><input type="checkbox" name="member.${i}.optOut"${m?.optOut ? " checked" : ""} aria-label="Opted out"></td><td>${m ? `<input type="checkbox" name="member.${i}.remove" aria-label="Remove ${esc(m.id)}">` : ""}</td></tr>`,
       )
       .join(
         "",
