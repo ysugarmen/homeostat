@@ -85,6 +85,12 @@ export const configSchema = z.strictObject({
         }),
       )
       .min(1),
+    /**
+     * Who decides the lessons the daily run is unsure about. When set, only these members are
+     * asked to review its PRs and listed in CODEOWNERS; everyone else's role only weighs their
+     * lessons. Unset, area owners decide, then seniors and leads.
+     */
+    reviewers: z.array(name).optional(),
   }),
   /**
    * Teams: who owns which areas (and so approves changes to them and their documents) and which
@@ -298,6 +304,17 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
         file,
       }),
     );
+  }
+  const ids = new Set(config.team.members.map((m) => m.id));
+  for (const id of config.team.reviewers ?? []) {
+    if (!ids.has(id)) {
+      issues.push(
+        error("config.team.reviewer", `team.reviewers: "${id}" is not in team.members`, {
+          path: "team.reviewers",
+          file,
+        }),
+      );
+    }
   }
   const seen = new Set<string>();
   config.team.members.forEach((m, i) => {

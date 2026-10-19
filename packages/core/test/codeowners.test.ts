@@ -113,3 +113,40 @@ describe("member handle in homeostat.yaml", () => {
     expect(() => config([{ id: "a", role: "senior", handle }])).toThrow(/handle/);
   });
 });
+
+describe("team.reviewers", () => {
+  const withReviewers = (reviewers: string[]) =>
+    parseConfig(
+      stringify({
+        version: 1,
+        team: {
+          members: [
+            { id: "ana", role: "lead", areas: [], handle: "@ana" },
+            { id: "bo", role: "senior", areas: ["api"], handle: "@bo" },
+            { id: "yo", role: "member", areas: [], handle: "@Yo Nat" },
+          ],
+          reviewers,
+        },
+        areas: { api: ["api/**"] },
+      }),
+    );
+
+  test("the named reviewers own everything; leads and area owners are not asked", () => {
+    // From a one-person trial: the team's lead and senior teach, the trialist decides.
+    const { config } = withReviewers(["yo"]);
+    if (!config) throw new Error("config did not parse");
+    const { text, issues } = generateCodeowners(config, [entry("x", "api", "bo")]);
+    expect(issues).toEqual([]);
+    const owners = text
+      .split("\n")
+      .filter((l) => l && !l.startsWith("#"))
+      .map((l) => l.split(/\s+/).slice(1).join(" "));
+    expect(new Set(owners)).toEqual(new Set(['@"Yo Nat"']));
+  });
+
+  test("a reviewer must be a team member", () => {
+    const { config, issues } = withReviewers(["nobody"]);
+    expect(config).toBeUndefined();
+    expect(issues.map((i) => i.code)).toContain("config.team.reviewer");
+  });
+});

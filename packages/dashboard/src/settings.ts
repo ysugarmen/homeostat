@@ -66,6 +66,21 @@ export const SECTIONS: Section[] = [
     rows: "team",
   },
   {
+    id: "reviewers",
+    title: "Reviewers",
+    intro:
+      "Who decides the lessons the daily run is unsure about. Leave empty to ask area owners, then seniors and leads.",
+    fields: [
+      {
+        path: ["team", "reviewers"],
+        label: "Reviewers",
+        kind: "lines",
+        help: "One member id per line; only they are asked to review",
+        optional: true,
+      },
+    ],
+  },
+  {
     id: "areas",
     title: "Areas",
     intro: "Parts of your code repos, as path globs. Core is implicit and applies everywhere.",
@@ -404,9 +419,10 @@ export function applySection(
         doc.deleteIn(["sources"]);
         break;
       }
-      // An empty number or optional text means "use the default", so the key is removed.
+      // An empty number, optional list or optional text means "use the default": the key goes.
       const clear =
         (field.kind === "number" && (raw === null || raw === "")) ||
+        (field.kind === "lines" && field.optional && lines(raw ?? "").length === 0) ||
         (field.kind !== "checkbox" &&
           field.kind !== "checks" &&
           field.kind !== "lines" &&

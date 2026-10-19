@@ -33,7 +33,9 @@ export function generateCodeowners(
       return handle ? [handle] : [];
     });
 
-  const seniors = members.filter((m) => isSenior(m.role)).map((m) => m.id);
+  // Named reviewers, when the team has them, own everything: they decide the uncertain lessons.
+  const reviewers = config.team.reviewers?.length ? config.team.reviewers : undefined;
+  const seniors = reviewers ?? members.filter((m) => isSenior(m.role)).map((m) => m.id);
   if (seniors.length === 0) {
     issues.push(
       error(
@@ -56,7 +58,8 @@ export function generateCodeowners(
     const listed = members.filter((m) => m.areas.includes(area)).map((m) => m.id);
     areaOwners.set(
       area,
-      team ? (team.handle ? [team.handle] : team.members) : listed.length ? listed : seniors,
+      reviewers ??
+        (team ? (team.handle ? [team.handle] : team.members) : listed.length ? listed : seniors),
     );
   }
 
@@ -71,7 +74,8 @@ export function generateCodeowners(
   );
   for (const e of sorted) {
     const owners = areaOwners.get(e.area) ?? seniors;
-    if (!owners.includes(e.owner)) {
+    // With named reviewers, a lesson's own author is not asked to review it.
+    if (!reviewers && !owners.includes(e.owner)) {
       rules.push([`/knowledge/${e.area}/${e.id}.md`, [e.owner, ...owners]]);
     }
   }

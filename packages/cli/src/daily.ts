@@ -745,7 +745,12 @@ function reconfirmChange(
 
 function reviewerLogins(config: Config, review: Lesson[], member: string): string[] {
   const handles = new Set<string>();
-  for (const l of review) {
+  const named = config.team.reviewers ?? [];
+  for (const id of named) {
+    const h = config.team.members.find((m) => m.id === id)?.handle;
+    if (h?.startsWith("@") && !h.includes("/")) handles.add(h.slice(1));
+  }
+  for (const l of named.length ? [] : review) {
     const area = parseEntry(l.text).entry?.frontmatter.area ?? "core";
     const team = Object.values(config.teams).find((t) => t.areas.includes(area));
     const owners = team

@@ -254,6 +254,24 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     );
   });
 
+  test("with named reviewers, only they are asked, not the area's senior", async () => {
+    const t = team();
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace(
+        "team:\n  members:",
+        "team:\n  reviewers: [dana]\n  members:",
+      ),
+    );
+    t.g(t.ci, "commit", "-qam", "dana reviews");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    await leeLearns(t.lee);
+    const provider = new FakeProvider();
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
+    expect(provider.reviewers.map((r) => r.logins)).toEqual([["dana"]]);
+  });
+
   test("the next run settles a closed review PR as declined, and Lee's sync clears the lesson", async () => {
     const t = team();
     await leeLearns(t.lee);
