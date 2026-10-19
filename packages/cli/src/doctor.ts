@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { type Config, readKbFiles, VERSION, validate } from "@homeostat/core";
+import { bitbucketAuth, type Config, readKbFiles, VERSION, validate } from "@homeostat/core";
 import { minimatch } from "minimatch";
 import type { Io } from "./cli.ts";
 import { painter } from "./format.ts";
-import { CliError, TOKEN_VARS } from "./provider.ts";
+import { BITBUCKET_USER_VAR, CliError, TOKEN_VARS } from "./provider.ts";
 
 export type Level = "ok" | "warn" | "fail" | "info";
 export interface Check {
@@ -35,7 +35,12 @@ function hostApi(host: "github" | "bitbucket", io: Io) {
   const get = async (path: string, auth: boolean) => {
     try {
       const headers: Record<string, string> = { Accept: "application/json" };
-      if (auth && token) headers.Authorization = `Bearer ${token}`;
+      if (auth && token) {
+        headers.Authorization =
+          host === "bitbucket"
+            ? bitbucketAuth(token, io.env?.[BITBUCKET_USER_VAR])
+            : `Bearer ${token}`;
+      }
       const res = await (io.fetch ?? fetch)(`${base}${path}`, { headers });
       const body = res.ok ? ((await res.json()) as Record<string, unknown>) : undefined;
       return { status: res.status, body };

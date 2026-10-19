@@ -94,6 +94,7 @@ describe("homeostat init", () => {
     expect(stdout).toContain("Git host: Bitbucket (from the origin remote)");
     expect(stdout).toContain("pullrequest:write");
     expect(stdout).toContain("HOMEOSTAT_BITBUCKET_TOKEN");
+    expect(stdout).toContain("HOMEOSTAT_BITBUCKET_EMAIL");
   });
 
   test("--host overrides detection", async () => {

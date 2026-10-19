@@ -264,7 +264,8 @@ one repo only). Give it:
   code repos:  pullrequest:read, repository:read
   this repo:   pullrequest:write, repository:write
   workspace:   read:workspace (to ask reviewers by their Bitbucket nickname)
-Store it as the secured repository variable HOMEOSTAT_BITBUCKET_TOKEN, and a Claude Console API key
+Store it as the secured repository variable HOMEOSTAT_BITBUCKET_TOKEN; for an API token, also store
+the email of the account it belongs to as HOMEOSTAT_BITBUCKET_EMAIL. Add a Claude Console API key
 as ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-commercial use
 only; a team KB needs a Console key or a Team/Enterprise plan.) Then schedule the homeostat-curator pipeline daily, and homeostat-deep-dive and homeostat-digest
 weekly, under Repository settings > Pipelines > Schedules, and add a sources section to homeostat.yaml.`,

@@ -92,6 +92,11 @@ export interface Provider {
 export interface ProviderOptions {
   /** Access token owned by the team (see the permissions model in the execution plan). */
   token: string;
+  /**
+   * Bitbucket only: the Atlassian account email that owns `token`. With it, `token` is an API
+   * token, sent as Basic auth; without it, an access token, sent as Bearer.
+   */
+  user?: string;
   /** Injected for tests; defaults to the global fetch. */
   fetch?: typeof fetch;
   /** API base URL, for self-hosted or proxied instances. */

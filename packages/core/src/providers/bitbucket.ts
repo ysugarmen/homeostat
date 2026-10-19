@@ -75,16 +75,26 @@ const person = (u: BbUser): Person => ({
   ...(u.display_name ? { name: u.display_name } : {}),
 });
 
-/** Bitbucket Cloud REST 2.0. Auth is a workspace or repository access token (Bearer). */
+/**
+ * The Authorization header for a Bitbucket token: an access token (workspace, project or
+ * repository) is Bearer; an Atlassian API token is Basic with its account email.
+ */
+export function bitbucketAuth(token: string, user?: string): string {
+  return user ? `Basic ${Buffer.from(`${user}:${token}`).toString("base64")}` : `Bearer ${token}`;
+}
+
+/** Bitbucket Cloud REST 2.0, with an access token or an account's API token (see bitbucketAuth). */
 export class BitbucketProvider implements Provider {
   readonly kind = "bitbucket";
   private readonly fetch: typeof fetch;
   private readonly baseUrl: string;
   private readonly token: string;
+  private readonly user: string | undefined;
   private readonly members = new Map<string, Promise<BbUser[]>>();
 
   constructor(opts: ProviderOptions) {
     this.token = opts.token;
+    this.user = opts.user;
     this.fetch = opts.fetch ?? globalThis.fetch;
     this.baseUrl = opts.baseUrl ?? "https://api.bitbucket.org/2.0";
   }
@@ -341,7 +351,7 @@ export class BitbucketProvider implements Provider {
   }
 
   private headers() {
-    return { Authorization: `Bearer ${this.token}`, Accept: "application/json" };
+    return { Authorization: bitbucketAuth(this.token, this.user), Accept: "application/json" };
   }
 
   private async paginate<T>(url: string): Promise<T[]> {

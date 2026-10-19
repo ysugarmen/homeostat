@@ -34,6 +34,19 @@ describe("BitbucketProvider", () => {
     expect(sent[0]?.headers.Authorization).toBe("Bearer test-token");
   });
 
+  test("with an account email, sends an API token as Basic auth", async () => {
+    // Atlassian API tokens are Basic auth (email:token); only access tokens take Bearer.
+    const replay = provider();
+    const bb = new BitbucketProvider({
+      token: "api-token",
+      user: "dev@example.com",
+      fetch: replay.fetch,
+    });
+    await bb.listCommits(repo, 812);
+    const basic = Buffer.from("dev@example.com:api-token").toString("base64");
+    expect(replay.sent[0]?.headers.Authorization).toBe(`Basic ${basic}`);
+  });
+
   test("maps inline comments and replies, and drops deleted ones", async () => {
     const { bb } = provider();
     const comments = await bb.listReviewComments(repo, 812);

@@ -79,7 +79,7 @@ Each model call is logged locally by size, never content. Details: [runtimes](..
 | Where | How |
 | --- | --- |
 | GitHub Actions | `init` writes `homeostat-curator.yml` (the daily run), `homeostat-deep-dive.yml` and `homeostat-digest.yml` |
-| Bitbucket Pipelines | `init` writes custom pipelines; schedule them under Repository settings → Pipelines → Schedules |
+| Bitbucket Pipelines | `init` writes custom pipelines; schedule them under Repository settings → Pipelines → Schedules. The token is the secured variable `HOMEOSTAT_BITBUCKET_TOKEN`: an access token, or an Atlassian API token with its account's email in `HOMEOSTAT_BITBUCKET_EMAIL` |
 | One shared box | `homeostat up` runs the daily run and the deep dive on their cron schedules and the digest on `digestDay`, and serves the dashboard. The Docker image does the same |
 
 Check a setup with `homeostat doctor --security`.
