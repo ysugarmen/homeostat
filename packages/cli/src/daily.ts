@@ -20,6 +20,7 @@ import {
   isDocPath,
   lessonHash,
   logEvent,
+  loginKey,
   type OpenPullRequest,
   parseEntry,
   REVIEW_REMINDER_DAYS,
@@ -760,8 +761,8 @@ function reviewerLogins(config: Config, review: Lesson[], member: string): strin
     for (const h of owners.length ? owners : fallback)
       if (h?.startsWith("@") && !h.includes("/")) handles.add(h.slice(1));
   }
-  const self = config.team.members.find((m) => m.id === member)?.handle?.slice(1);
-  return [...handles].filter((h) => h !== self);
+  const self = config.team.members.find((m) => m.id === member)?.handle;
+  return [...handles].filter((h) => !self || loginKey(h) !== loginKey(self));
 }
 
 function prBody(member: string, today: string, list: Lesson[], kind: "daily" | "review"): string {

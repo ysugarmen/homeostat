@@ -9,7 +9,7 @@ git clone git@github.com:your-org/team-kb.git && cd team-kb   # or git@bitbucket
 npx --yes homeostat@0.1.9 init --member your-id --handle @your-user
 ```
 
-A handle is your GitHub login or, on Bitbucket, your Bitbucket nickname (Personal settings > Account), written exactly as it appears there.
+A handle is your GitHub login or, on Bitbucket, your Bitbucket nickname (Personal settings > Account). Bitbucket nicknames often hold spaces and accents; write them as they are, quoted in YAML: `handle: "@Ana Ruiz"`. Case does not matter.
 
 `init` writes `homeostat.yaml`, `knowledge/core/`, and CI jobs for your git host (GitHub Actions or Bitbucket Pipelines):
 - validation on every PR

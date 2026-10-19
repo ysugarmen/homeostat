@@ -1,5 +1,6 @@
 import { CORE_AREA } from "./check.ts";
 import { CONFIG_FILE, type Config, isSenior } from "./config.ts";
+import { codeownersHandle } from "./handles.ts";
 import { error, type Issue } from "./issues.ts";
 import type { Frontmatter } from "./schema.ts";
 
@@ -77,7 +78,7 @@ export function generateCodeowners(
 
   const lines = rules
     .filter(([, ids]) => ids.length > 0)
-    .map(([path, ids]) => [path, handles(ids).join(" ")] as const);
+    .map(([path, ids]) => [path, handles(ids).map(codeownersHandle).join(" ")] as const);
 
   for (const id of [...missingHandle].sort()) {
     issues.push(

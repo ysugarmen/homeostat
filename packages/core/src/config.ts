@@ -71,11 +71,14 @@ export const configSchema = z.strictObject({
           /** The curator never reads this member's pull requests or review comments. */
           optOut: z.boolean().optional(),
           areas: z.array(z.string()).default([]),
-          /** CODEOWNERS identity: `@user`, `@org/team` or an email. */
+          /**
+           * The member's git-host identity: `@login`, `@org/team` or an email. On Bitbucket it is
+           * the nickname, which may hold spaces and accents (`@Javier Gallostra Acín`).
+           */
           handle: z
             .string()
             .regex(
-              /^(@[\w.-]+(\/[\w.-]+)?|[^@\s]+@[^@\s]+\.[^@\s]+)$/,
+              /^(@[\p{L}\p{N}._-]+(?: [\p{L}\p{N}._-]+)*(\/[\w.-]+)?|[^@\s]+@[^@\s]+\.[^@\s]+)$/u,
               "handle must be @user, @org/team or an email",
             )
             .optional(),

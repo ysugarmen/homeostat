@@ -99,11 +99,17 @@ describe("generateCodeowners", () => {
 });
 
 describe("member handle in homeostat.yaml", () => {
-  test.each(["@dana", "@acme/platform", "dana@example.com"])("accepts %s", (handle) => {
+  test.each([
+    "@dana",
+    "@acme/platform",
+    "dana@example.com",
+    "@Dana Ruiz",
+    "@Javier Gallostra Acín",
+  ])("accepts %s", (handle) => {
     expect(() => config([{ id: "a", role: "senior", handle }])).not.toThrow();
   });
 
-  test.each(["dana", "@", "@a b"])("rejects %s", (handle) => {
+  test.each(["dana", "@", "@ a", "@a b ", "@a  b"])("rejects %s", (handle) => {
     expect(() => config([{ id: "a", role: "senior", handle }])).toThrow(/handle/);
   });
 });

@@ -13,6 +13,7 @@ import {
   type KbFiles,
   type Kind,
   logEvent,
+  memberForLogin,
   PatchError,
   parseCommentUrl,
   type RepoRef,
@@ -140,7 +141,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     io.stdout(`${comment.body.replace(/^/gm, "> ")}\n\n`);
     if (!author) {
       const handle = `@${comment.author.id}`;
-      author = config.team.members.find((m) => m.handle === handle)?.id;
+      author = memberForLogin(config.team.members, comment.author.id)?.id;
       if (!author) throw new LearnError(`no member has handle "${handle}"; pass --author`);
     }
     source = { type: "pr-feedback", url, author, changedCode };

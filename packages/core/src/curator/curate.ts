@@ -4,6 +4,7 @@ import type { Config } from "../config.ts";
 import { isDocPath, parseDoc } from "../doc.ts";
 import { applySectionPatch } from "../doc-patch.ts";
 import { formatEntry } from "../entry.ts";
+import { loginKey, memberForLogin } from "../handles.ts";
 import type { Issue } from "../issues.ts";
 import type { Provider } from "../providers/types.ts";
 import type { Frontmatter } from "../schema.ts";
@@ -99,7 +100,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
 
   const excludedRepos = new Set(sources.exclude.repos.map((r) => r.toLowerCase()));
   const optedOut = new Set(
-    config.team.members.filter((m) => m.optOut && m.handle).map((m) => m.handle?.slice(1)),
+    config.team.members.filter((m) => m.optOut && m.handle).map((m) => loginKey(m.handle ?? "")),
   );
   const excludedPath = (path: string | undefined) =>
     path !== undefined && sources.exclude.paths.some((g) => minimatch(path, g, { dot: true }));
@@ -118,7 +119,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         result.skipped.push({ url: pr.url, reason: "marked homeostat:skip" });
         continue;
       }
-      if (optedOut.has(pr.author.id)) {
+      if (optedOut.has(loginKey(pr.author.id))) {
         result.skipped.push({ url: pr.url, reason: "the author opted out" });
         continue;
       }
@@ -148,7 +149,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         });
         const skip = (reason: string) => result.skipped.push({ url, reason });
 
-        if (optedOut.has(thread.root.author.id)) {
+        if (optedOut.has(loginKey(thread.root.author.id))) {
           skip("the reviewer opted out");
           continue;
         }
@@ -164,7 +165,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
           skip("no code change after the comment");
           continue;
         }
-        const reviewer = config.team.members.find((m) => m.handle === `@${thread.root.author.id}`);
+        const reviewer = memberForLogin(config.team.members, thread.root.author.id);
         if (!reviewer) {
           skip(`reviewer ${thread.root.author.id} has no member handle in homeostat.yaml`);
           continue;
@@ -224,7 +225,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         files = { ...files, [entry.path]: entry.text };
         ids.add(entry.frontmatter.id);
         known.add(key);
-        const prAuthor = config.team.members.find((m) => m.handle === `@${pr.author.id}`)?.id;
+        const prAuthor = memberForLogin(config.team.members, pr.author.id)?.id;
         result.entries.push(prAuthor ? { ...entry, prAuthor } : entry);
       }
     }
@@ -298,9 +299,7 @@ async function docPatchStep(
   }
   const risks = errors.map((i) => i.message);
   const existing = ctx.result.docs.find((d) => d.path === proposal.path);
-  const prAuthor = ctx.config.team.members.find(
-    (m) => m.handle === `@${thread.pullRequest.author.id}`,
-  )?.id;
+  const prAuthor = memberForLogin(ctx.config.team.members, thread.pullRequest.author.id)?.id;
   const section = {
     id: proposal.sectionId,
     reason: proposal.reason,
