@@ -1,8 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { CORE_AREA, convertDoc, readKbFiles, slugify, validate } from "@homeostat/core";
+import {
+  areaMap,
+  CORE_AREA,
+  convertDoc,
+  docFilePath,
+  readKbFiles,
+  slugify,
+  validate,
+} from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { formatIssues } from "./format.ts";
+import { resolveRepo } from "./repo-option.ts";
 
 export interface ConvertDocsOptions {
   dir?: string;
@@ -10,6 +19,9 @@ export interface ConvertDocsOptions {
   owner: string;
   scope?: string[];
   force?: boolean;
+  /** A multi-repo KB: the repo the documents describe; --shared for knowledge/core/docs/. */
+  repo?: string;
+  shared?: boolean;
 }
 
 /**
@@ -23,18 +35,26 @@ export function runConvertDocs(files: string[], opts: ConvertDocsOptions, io: Io
     io.stderr("homeostat.yaml is missing or invalid; run homeostat validate\n");
     return 1;
   }
-  if (opts.area !== CORE_AREA && !config.areas[opts.area]) {
+  let repo: string | undefined;
+  try {
+    repo = resolveRepo(config, opts);
+  } catch (e) {
+    io.stderr(`${(e as Error).message}\n`);
+    return 1;
+  }
+  const areas = areaMap(config, repo);
+  if ((opts.area !== CORE_AREA && !areas[opts.area]) || (opts.shared && opts.area !== CORE_AREA)) {
     io.stderr(
-      `unknown area "${opts.area}"; use one of: ${[CORE_AREA, ...Object.keys(config.areas)].join(", ")}\n`,
+      `unknown area "${opts.area}"${repo ? ` in repo ${repo}` : ""}; use one of: ${opts.shared ? CORE_AREA : [CORE_AREA, ...Object.keys(areas)].join(", ")}\n`,
     );
     return 1;
   }
-  const scope = opts.scope?.length ? opts.scope : (config.areas[opts.area] ?? ["**"]);
+  const scope = opts.scope?.length ? opts.scope : [...(areas[opts.area] ?? ["**"])];
   const today = (io.now?.() ?? new Date()).toISOString().slice(0, 10);
   const written: string[] = [];
   for (const file of files) {
     const name = slugify(basename(file).replace(/\.md$/i, "")) ?? "document";
-    const path = `knowledge/${opts.area}/docs/${name}.md`;
+    const path = docFilePath(config, { repo, area: opts.area, topic: name });
     const target = join(root, ...path.split("/"));
     if (existsSync(target) && !opts.force) {
       io.stderr(`${path} already exists; use --force to overwrite\n`);

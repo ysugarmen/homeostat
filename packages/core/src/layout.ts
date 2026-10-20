@@ -66,3 +66,39 @@ export function isKnownArea(config: Pick<Config, "repos" | "areas">, name: strin
     areasOf(config, repo).includes(area)
   );
 }
+
+/** A repo's areas (name → globs); in a one-repo KB, the top-level areas. */
+export function areaMap(
+  config: Pick<Config, "repos" | "areas">,
+  repo?: string,
+): Record<string, readonly string[]> {
+  return repo ? (config.repos?.[repo]?.areas ?? {}) : config.areas;
+}
+
+/** The short name of the repo whose source is `owner/name`, in a multi-repo KB. */
+export function repoForSource(config: Pick<Config, "repos">, source: string): string | undefined {
+  const key = source.toLowerCase();
+  return Object.entries(config.repos ?? {}).find(([, r]) => r.source.toLowerCase() === key)?.[0];
+}
+
+/**
+ * Where a rule is filed: `knowledge/<area>/<id>.md` in a one-repo KB; in a multi-repo one,
+ * `knowledge/<repo>/<area>/<id>.md`, or `knowledge/core/<id>.md` for a shared rule (no repo).
+ * In a topic KB this is the rule's virtual path, which foldRules places in its topic file.
+ */
+export function ruleFilePath(
+  config: Pick<Config, "repos">,
+  at: { repo?: string | undefined; area: string; id: string },
+): string {
+  if (!isMultiRepo(config) || !at.repo) return `knowledge/${at.area}/${at.id}.md`;
+  return `knowledge/${at.repo}/${at.area}/${at.id}.md`;
+}
+
+/** Where a document is filed: the rule's folder, plus `docs/`. */
+export function docFilePath(
+  config: Pick<Config, "repos">,
+  at: { repo?: string | undefined; area: string; topic: string },
+): string {
+  const folder = isMultiRepo(config) && at.repo ? `${at.repo}/${at.area}` : at.area;
+  return `knowledge/${folder}/docs/${at.topic.replace(/\.md$/, "")}.md`;
+}

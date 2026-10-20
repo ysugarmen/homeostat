@@ -148,6 +148,11 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--rule <text>", "the rule, one paragraph of at most 60 words")
     .option("--why <text>", "why the rule exists, at most 100 words")
     .option("--area <area>", "area from homeostat.yaml (default: core)")
+    .option(
+      "--repo <name>",
+      "multi-repo KB: the rule's repo (default: the PR's, else this checkout's)",
+    )
+    .option("--shared", "multi-repo KB: a rule for every repo, in knowledge/core/")
     .option("--scope <glob>", "path glob the rule applies to; repeatable", collect)
     .option("--author <id>", "member who originated it (default: comment author or git user)")
     .option("--owner <id>", "member who answers for it (default: author)")
@@ -228,6 +233,8 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     )
     .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
     .option("--force", "overwrite documents that already exist")
+    .option("--repo <name>", "multi-repo KB: the repo the documents describe")
+    .option("--shared", "multi-repo KB: shared documents, in knowledge/core/docs/")
     .action((files: string[], opts: ConvertDocsOptions) => {
       exitCode = runConvertDocs(files, opts, io);
     });
@@ -244,6 +251,8 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
     .option("--dry-run", "print exactly what would be sent; send nothing, write nothing")
     .option("--force", "replace documents that already exist")
+    .option("--repo <name>", "multi-repo KB: the repo the documents describe")
+    .option("--shared", "multi-repo KB: shared documents, in knowledge/core/docs/")
     .action(async (repo: string, opts: SeedOptions) => {
       exitCode = await runSeed(repo, opts, io);
     });

@@ -6,6 +6,7 @@ import { applySectionPatch } from "../doc-patch.ts";
 import { formatEntry } from "../entry.ts";
 import { loginKey, memberForLogin } from "../handles.ts";
 import type { Issue } from "../issues.ts";
+import { areaMap, repoForSource, repoOf, ruleFilePath } from "../layout.ts";
 import type { Provider } from "../providers/types.ts";
 import type { Frontmatter } from "../schema.ts";
 import { score } from "../score.ts";
@@ -109,6 +110,9 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     if (excludedRepos.has(repoName.toLowerCase())) continue;
     const [owner = "", name = ""] = repoName.split("/");
     const repo = { owner, name };
+    // A multi-repo KB files each PR's lessons under its repo, with that repo's areas.
+    const kbRepo = repoForSource(config, repoName);
+    const areas = areaMap(config, kbRepo);
     const scanned = { repo: repoName, pullRequests: 0, threads: 0 };
     result.scanned.push(scanned);
 
@@ -173,10 +177,10 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
 
         const { thread: safe, redacted } = redactThread(thread);
         result.redacted += redacted;
-        let draft = await input.drafter.draft(safe, { areas: config.areas });
+        let draft = await input.drafter.draft(safe, { areas });
         if (input.patcher) {
           await docPatchStep(
-            { files, config, result, today: input.today },
+            { files, config, result, today: input.today, repo: kbRepo },
             input.patcher,
             safe,
             url,
@@ -187,9 +191,10 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
           continue;
         }
         const check = (d: Draft) => {
-          const area = d.area === CORE_AREA || config.areas[d.area] ? d.area : CORE_AREA;
+          const area = d.area === CORE_AREA || areas[d.area] ? d.area : CORE_AREA;
           const built = buildEntry(config, {
             draft: { ...d, area },
+            repo: kbRepo,
             id: uniqueId(slugify(d.title) ?? `review-${pr.id}-${thread.root.id}`, ids),
             url,
             author: reviewer.id,
@@ -207,7 +212,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         if (blocking.length > 0 && blocking.every(isLengthIssue)) {
           const problems = blocking.map((i) => i.message);
           const second = await input.drafter.draft(safe, {
-            areas: config.areas,
+            areas,
             revise: { previous: draft, problems },
           });
           if (second) {
@@ -239,7 +244,14 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
  * skipped; one with risky content is kept and marked, so the PR shows it but validate blocks it.
  */
 async function docPatchStep(
-  ctx: { files: KbFiles; config: Config; result: CurateResult; today: string },
+  ctx: {
+    files: KbFiles;
+    config: Config;
+    result: CurateResult;
+    today: string;
+    /** The PR's repo in a multi-repo KB: only shared documents and that repo's are patched. */
+    repo?: string | undefined;
+  },
   patcher: DocPatcher,
   thread: ReviewThread,
   url: string,
@@ -251,6 +263,8 @@ async function docPatchStep(
   const candidates: DocCandidate[] = [];
   for (const p of Object.keys(ctx.files)) {
     if (!isDocPath(p)) continue;
+    const own = repoOf(p, ctx.config);
+    if (own !== undefined && own !== ctx.repo) continue;
     const doc = parseDoc(current(p)).doc;
     if (!doc?.frontmatter.scope.some((g) => minimatch(path, g, { dot: true }))) continue;
     candidates.push({
@@ -329,6 +343,8 @@ function buildEntry(
   config: Config,
   args: {
     draft: { title: string; rule: string; why: string; area: string };
+    /** The multi-repo KB's repo the PR is from; undefined in a one-repo KB. */
+    repo?: string | undefined;
     id: string;
     url: string;
     author: string;
@@ -341,7 +357,7 @@ function buildEntry(
     id: args.id,
     title: draft.title,
     area: draft.area,
-    scope: [...(config.areas[draft.area] ?? ["**"])],
+    scope: [...(areaMap(config, args.repo)[draft.area] ?? ["**"])],
     status: "candidate",
     score: 0,
     owner: args.author,
@@ -353,7 +369,7 @@ function buildEntry(
   frontmatter.score = score(frontmatter, { config }).score;
   if (frontmatter.score >= config.scoring.autoMergeThreshold) frontmatter.status = "accepted";
   return {
-    path: `knowledge/${draft.area}/${args.id}.md`,
+    path: ruleFilePath(config, { repo: args.repo, area: draft.area, id: args.id }),
     text: formatEntry(frontmatter, body),
     frontmatter,
     risks: [],

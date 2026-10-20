@@ -698,3 +698,58 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     );
   });
 });
+
+describe("homeostat daily in a multi-repo KB", { timeout: 30_000 }, () => {
+  /** The multi-repo starter on a bare origin; the curator reads only repo web (acme/web-app). */
+  function multiTeam() {
+    const origin = mkdtempSync(join(tmpdir(), "homeostat-daily-multi-origin-"));
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", origin]);
+    const ci = mkdtempSync(join(tmpdir(), "homeostat-daily-multi-ci-"));
+    cpSync(new URL("../../../examples/starter-multi-kb", import.meta.url).pathname, ci, {
+      recursive: true,
+    });
+    const config = join(ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8")
+        .replace("host: bitbucket", "host: github")
+        .replace("    repos: []", "    repos: [acme/integrations-api]"),
+    );
+    const retry = join(ci, "knowledge/api/integrations/outbound-http-retry-helper.md");
+    writeFileSync(
+      retry,
+      readFileSync(retry, "utf8").replace(
+        "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33",
+        "https://github.com/acme/integrations-api/pull/812#discussion_r33",
+      ),
+    );
+    const g = (...a: string[]) =>
+      execFileSync(
+        "git",
+        ["-C", ci, "-c", "user.name=ci", "-c", "user.email=ci@example.com", ...a],
+        {
+          encoding: "utf8",
+        },
+      ).trim();
+    g("init", "-q", "-b", "main");
+    g("add", "-A");
+    g("commit", "-qm", "kb");
+    g("remote", "add", "origin", origin);
+    g("push", "-q", "origin", "main");
+    return { origin, ci };
+  }
+
+  test("a review comment on repo web's PR becomes a rule under knowledge/web/", async () => {
+    const t = multiTeam();
+    const provider = new FakeProvider();
+    const { code, stdout } = await run(["daily", "--dir", t.ci], { provider });
+    expect(code).toBe(0);
+    expect(stdout).toContain("lee: 1 merged");
+    const daily = provider.opened[0]?.pr.sourceBranch ?? "";
+    const show = (path: string) =>
+      execFileSync("git", ["-C", t.origin, "show", `${daily}:${path}`], { encoding: "utf8" });
+    const rule = show("knowledge/web/frontend/use-colour-tokens-instead-of-hex-values.md");
+    expect(rule).toContain("area: frontend");
+    expect(rule).toContain("apps/web/**");
+  });
+});

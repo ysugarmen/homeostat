@@ -1,8 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import {
+  areaMap,
   ClaudeSeeder,
   CORE_AREA,
+  docFilePath,
   logEvent,
   type RepoRef,
   readKbFiles,
@@ -20,6 +22,7 @@ import { formatIssues } from "./format.ts";
 import { git } from "./git.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { publish } from "./publish.ts";
+import { resolveRepo } from "./repo-option.ts";
 
 export interface SeedOptions {
   dir?: string;
@@ -28,6 +31,9 @@ export interface SeedOptions {
   topic?: string[];
   dryRun?: boolean;
   force?: boolean;
+  /** A multi-repo KB: the repo the documents describe (default: the scanned checkout's). */
+  repo?: string;
+  shared?: boolean;
 }
 
 /**
@@ -52,9 +58,12 @@ async function seed(repoDir: string, opts: SeedOptions, io: Io): Promise<number>
   const files = readKbFiles(root);
   const { config } = validate(files);
   if (!config) throw new CliError("homeostat.yaml is missing or invalid; run homeostat validate");
-  if (opts.area !== CORE_AREA && !config.areas[opts.area]) {
+  // A multi-repo KB: the documents belong to the scanned checkout's repo (or --repo, --shared).
+  const kbRepo = resolveRepo(config, { ...opts, checkout: repo });
+  const areas = areaMap(config, kbRepo);
+  if ((opts.area !== CORE_AREA && !areas[opts.area]) || (opts.shared && opts.area !== CORE_AREA)) {
     throw new CliError(
-      `unknown area "${opts.area}"; use one of: ${[CORE_AREA, ...Object.keys(config.areas)].join(", ")}`,
+      `unknown area "${opts.area}"${kbRepo ? ` in repo ${kbRepo}` : ""}; use one of: ${opts.shared ? CORE_AREA : [CORE_AREA, ...Object.keys(areas)].join(", ")}`,
     );
   }
   if (!config.team.members.some((m) => m.id === opts.owner)) {
@@ -95,7 +104,7 @@ async function seed(repoDir: string, opts: SeedOptions, io: Io): Promise<number>
 
   const seeder = io.seeder ?? new ClaudeSeeder(askerFor(config, "curator", io, root));
   const today = (io.now?.() ?? new Date()).toISOString().slice(0, 10);
-  const scope = config.areas[opts.area] ?? ["**"];
+  const scope = [...(areas[opts.area] ?? ["**"])];
   logEvent(root, {
     type: "seed-run",
     repo: name,
@@ -106,7 +115,7 @@ async function seed(repoDir: string, opts: SeedOptions, io: Io): Promise<number>
 
   let failed = false;
   for (const topic of topics) {
-    const path = `knowledge/${opts.area}/docs/${topic}.md`;
+    const path = docFilePath(config, { repo: kbRepo, area: opts.area, topic });
     if (files[path] !== undefined && !opts.force) {
       io.stdout(`skip ${path}: it already exists (seed writes first versions; --force replaces)\n`);
       continue;

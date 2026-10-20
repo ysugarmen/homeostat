@@ -203,14 +203,18 @@ export { type Flag, flagEntry } from "./flag.ts";
 export { codeownersHandle, loginKey, memberForLogin } from "./handles.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export {
+  areaMap,
   areasOf,
+  docFilePath,
   isKnownArea,
   isMultiRepo,
   type KbLocation,
   locate,
   RESERVED_REPO_NAMES,
+  repoForSource,
   repoNames,
   repoOf,
+  ruleFilePath,
 } from "./layout.ts";
 export * from "./providers/index.ts";
 export { detectRepo, remoteRepo, repoFor } from "./repo-detect.ts";

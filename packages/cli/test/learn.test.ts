@@ -310,3 +310,64 @@ describe("homeostat learn <PR comment URL>", () => {
     expect(stderr).toContain(message);
   });
 });
+
+describe("homeostat learn in a multi-repo KB", () => {
+  const multi = () => {
+    const dir = mkdtempSync(join(tmpdir(), "homeostat-learn-multi-"));
+    cpSync(join(examples, "starter-multi-kb"), dir, { recursive: true });
+    return dir;
+  };
+
+  test("--repo files the rule under that repo, --shared under knowledge/core/", async () => {
+    const dir = multi();
+    const id = "validate-webhook-signatures-before-parsing-the-body";
+    const inRepo = await run([
+      "learn",
+      "--dir",
+      dir,
+      ...basic,
+      "--repo",
+      "api",
+      "--area",
+      "integrations",
+    ]);
+    expect(inRepo.code).toBe(0);
+    expect(entryAt(dir, `knowledge/api/integrations/${id}.md`).frontmatter.scope).toEqual([
+      "services/integrations/**",
+      "packages/http-client/**",
+    ]);
+
+    const shared = await run(["learn", "--dir", multi(), ...basic, "--shared"]);
+    expect(shared.code).toBe(0);
+    expect(shared.stdout).toContain(`saved ${id}`);
+  });
+
+  test("with no repo to go on, or an area of another repo, it says what to pass", async () => {
+    const dir = multi();
+    const none = await run(["learn", "--dir", dir, ...basic]);
+    expect(none.code).toBe(1);
+    expect(none.stderr).toContain("pass --repo <name> (one of api, web), or --shared");
+    const wrong = await run([
+      "learn",
+      "--dir",
+      dir,
+      ...basic,
+      "--repo",
+      "web",
+      "--area",
+      "integrations",
+    ]);
+    expect(wrong.code).toBe(1);
+    expect(wrong.stdout).toContain('area "integrations" is not in the areas of repo web');
+    const sharedArea = await run([
+      "learn",
+      "--dir",
+      dir,
+      ...basic,
+      "--shared",
+      "--area",
+      "integrations",
+    ]);
+    expect(sharedArea.stderr).toContain("a shared rule holds in every repo");
+  });
+});

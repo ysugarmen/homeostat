@@ -2,11 +2,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {
   applySectionPatch,
+  areaMap,
   CORE_AREA,
   type CommentRef,
   CommentUrlError,
   type Config,
   countTokens,
+  docFilePath,
   type Frontmatter,
   formatEntry,
   ID_PATTERN,
@@ -19,6 +21,7 @@ import {
   type RepoRef,
   type ReviewComment,
   readKbView,
+  ruleFilePath,
   score,
   slugify,
   validate,
@@ -29,6 +32,7 @@ import { formatIssues } from "./format.ts";
 import { commitFile, existsOnRef, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { CliError, providerFor } from "./provider.ts";
+import { resolveRepo } from "./repo-option.ts";
 
 export interface LearnOptions {
   dir: string;
@@ -36,6 +40,10 @@ export interface LearnOptions {
   rule?: string;
   why?: string;
   area?: string;
+  /** A multi-repo KB: the repo the rule belongs to (default: the PR's, else the current checkout's). */
+  repo?: string;
+  /** A multi-repo KB: file the rule in knowledge/core/, shared by every repo. */
+  shared?: boolean;
   scope?: string[];
   author?: string;
   owner?: string;
@@ -128,6 +136,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     author: "",
   };
   let author = opts.author;
+  let prRepo: string | undefined;
   if (url) {
     let ref: CommentRef;
     try {
@@ -136,6 +145,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
       if (e instanceof CommentUrlError) throw new LearnError(e.message);
       throw e;
     }
+    prRepo = `${ref.repo.owner}/${ref.repo.name}`;
     const { comment, changedCode } = await fetchComment(ref, io);
     io.stdout(`${comment.author.name ?? comment.author.id} on ${comment.path ?? "the PR"}:\n`);
     io.stdout(`${comment.body.replace(/^/gm, "> ")}\n\n`);
@@ -167,11 +177,21 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     throw new LearnError(`missing ${stillMissing.map((k) => `--${k}`).join(", ")}`);
   }
   area ??= CORE_AREA;
+  const repo = resolveRepo(config, { ...opts, prRepo, checkout: process.cwd() });
+  if (opts.shared && area !== CORE_AREA) {
+    throw new LearnError(
+      `a shared rule holds in every repo, so its area is ${CORE_AREA}; drop --area or --shared`,
+    );
+  }
 
   const id = opts.id ?? slugify(fields.title) ?? "";
   if (!ID_PATTERN.test(id)) throw new LearnError(`cannot derive an id from the title; pass --id`);
-  const path = `knowledge/${area}/${id}.md`;
-  if (opts.branch ? existsOnRef(root, opts.branch, path) : existsSync(join(root, path))) {
+  const path = ruleFilePath(config, { repo, area, id });
+  const taken = validate(files).entries.some((e) => e.entry.frontmatter.id === id);
+  if (
+    (opts.branch ? existsOnRef(root, opts.branch, path) : existsSync(join(root, path))) ||
+    (!opts.branch && taken)
+  ) {
     throw new LearnError(
       `${path} already exists${opts.branch ? ` on ${opts.branch}` : ""}; pass --id`,
     );
@@ -189,7 +209,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     id,
     title: fields.title ?? "",
     area,
-    scope: opts.scope?.length ? opts.scope : (config.areas[area] ?? ["**"]),
+    scope: opts.scope?.length ? opts.scope : [...(areaMap(config, repo)[area] ?? ["**"])],
     status: "candidate",
     score: 0,
     owner: opts.owner ?? author,
@@ -260,7 +280,13 @@ function learnDoc(
   const [area, topic] = (opts.doc ?? "").split("/");
   if (!area || !topic)
     throw new LearnError("--doc takes <area>/<topic>, e.g. integrations/partner-calls");
-  const path = `knowledge/${area}/docs/${topic.replace(/\.md$/, "")}.md`;
+  const repo = resolveRepo(config, { ...opts, checkout: process.cwd() });
+  if (opts.shared && area !== CORE_AREA) {
+    throw new LearnError(
+      `a shared document's area is ${CORE_AREA}; use --doc ${CORE_AREA}/${topic}`,
+    );
+  }
+  const path = docFilePath(config, { repo, area, topic });
   const body = (opts.text ?? opts.rule ?? "").trim();
   if (!opts.section || !body) throw new LearnError("--doc needs --section and --text");
   const author = opts.author ?? memberIdFrom(git(root, "config", "user.name"));

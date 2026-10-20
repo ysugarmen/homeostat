@@ -1,0 +1,67 @@
+# A multi-repo homeostat knowledge base: the starter's team and rules, one folder per repo.
+version: 1
+
+team:
+  members:
+    - id: dana
+      handle: "@dana"
+      role: senior
+      areas: [api/integrations, core]
+    - id: lee
+      handle: "@lee"
+      role: member
+      areas: [web/frontend]
+    - id: sam
+      handle: "@sam"
+      role: senior
+      areas: [web/frontend, core]
+
+# The team's code repos, by short name (their folder under knowledge/). knowledge/core/ is
+# shared by both; a session gets the shared rules plus its own repo's.
+repos:
+  api:
+    source: acme/integrations-api
+    areas:
+      integrations: ["services/integrations/**", "packages/http-client/**"]
+  web:
+    source: acme/web-app
+    areas:
+      frontend: ["apps/web/**", "packages/ui/**"]
+
+scoring:
+  autoMergeThreshold: 3
+  reviewCadence: weekly
+  # Any weight can be overridden; unset ones keep their defaults.
+  weights:
+    prFeedbackChangedCode: 3
+    manual: 2
+    seniorAuthor: 1
+    conflict: -2
+
+agents:
+  curator: { enabled: true, schedule: "0 6 * * *" }
+  deepDive: { enabled: true, schedule: "0 7 * * 1" }
+
+distribution:
+  exports: [claude, cursor, agents-md, copilot]
+  tokenBudget: 2000
+
+notifications:
+  # Name of the CI secret holding the webhook URL. Never put the URL here.
+  slackWebhookEnv: HOMEOSTAT_SLACK_WEBHOOK
+  digestDay: monday
+
+# Domains rules may link to; any other URL in a rule needs a member's riskReviewedBy sign-off.
+security:
+  allowedDomains: []
+
+# Where the curator reads merged PRs and opens its daily PR (one git host per KB).
+sources:
+  host: bitbucket
+  kbRepo: acme/team-kb
+  baseBranch: main
+  # Never read these repos, or review comments on these files. A PR with homeostat:skip in its
+  # title or description (or, on GitHub, as a label) is skipped too.
+  exclude:
+    repos: []
+    paths: []
