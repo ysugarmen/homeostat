@@ -7,11 +7,17 @@ export interface Draft {
   rule: string;
   why: string;
   area: string;
+  /** With topics configured: the topic it belongs in, or general. */
+  topic?: string;
+  /** When no topic fits: a short name for a new one, for a person to consider. */
+  suggestedTopic?: string;
 }
 
 export interface DraftContext {
   /** Area name → path globs, from homeostat.yaml. `core` is always available. */
   areas: Record<string, readonly string[]>;
+  /** Topic name → description, when the KB groups rules by topic. */
+  topics?: Record<string, string>;
   /** A second try: the previous draft and the limits it broke. */
   revise?: { previous: Draft; problems: string[] };
 }
@@ -31,6 +37,16 @@ export const draftSchema = z.object({
   rule: z.string().describe("one paragraph, at most 60 words: what to do from now on"),
   why: z.string().describe("at most 100 words: the reason, from the thread"),
   area: z.string().describe("one of the listed areas, or core"),
+  topic: z
+    .string()
+    .optional()
+    .describe("one of the listed topics, or general; only when topics are listed"),
+  suggested_topic: z
+    .string()
+    .optional()
+    .describe(
+      "only with topic general: a short lowercase-hyphenated name for a new topic it would fit",
+    ),
 });
 
 export const DRAFT_SYSTEM = `You maintain a software team's knowledge base of coding rules that AI coding agents follow.
@@ -64,6 +80,13 @@ ${conversation}
 
 Areas and the paths they cover:
 ${areas.map((a) => `- ${a}`).join("\n")}${
+  ctx.topics
+    ? `
+
+Topics (put the rule in the one it belongs to; if none fits, use general and suggest a new topic name):
+${[...Object.entries(ctx.topics), ["general", "anything that fits no other topic"]].map(([name, about]) => `- ${name}: ${about}`).join("\n")}`
+    : ""
+}${
   ctx.revise
     ? `
 
@@ -96,6 +119,8 @@ export class ClaudeDrafter implements Drafter {
       rule: out.rule.trim(),
       why: out.why.trim(),
       area: out.area.trim(),
+      ...(out.topic?.trim() ? { topic: out.topic.trim() } : {}),
+      ...(out.suggested_topic?.trim() ? { suggestedTopic: out.suggested_topic.trim() } : {}),
     };
   }
 }

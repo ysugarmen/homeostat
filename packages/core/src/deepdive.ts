@@ -7,6 +7,7 @@ import { type Entry, formatEntry } from "./entry.ts";
 import type { Frontmatter } from "./schema.ts";
 import { score } from "./score.ts";
 import { countTokens } from "./tokens.ts";
+import { overlayPending } from "./topics.ts";
 import { type KbFiles, validate } from "./validate.ts";
 
 export interface RuleText {
@@ -179,7 +180,11 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
     .filter((w) => w.actions.length > 0)
     .map((w) => ({ path: w.path, id: w.fm.id, actions: w.actions, text: render(w, config) }));
 
-  const after = { ...input.files, ...Object.fromEntries(changes.map((c) => [c.path, c.text])) };
+  // Changed rules replace their own files, or their sections in topic files.
+  const after = overlayPending(
+    input.files,
+    Object.fromEntries(changes.map((c) => [c.path, c.text])),
+  );
   const errors = validate(after).issues.filter((i) => i.severity === "error");
   if (errors.length > 0) {
     throw new DeepDiveError(

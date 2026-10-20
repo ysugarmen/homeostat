@@ -261,11 +261,14 @@ export {
 export { slugify } from "./slug.ts";
 export { countTokens } from "./tokens.ts";
 export {
+  findRule,
   foldRules,
   formatTopicFile,
   GENERAL_TOPIC,
   isTopicFile,
+  matchTopic,
   mergeTopicFile,
+  overlayPending,
   parseTopicFile,
   rulePath,
   ruleSection,

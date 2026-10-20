@@ -14,6 +14,7 @@ import {
   decisionsPath,
   type Entry,
   explainConfidence,
+  findRule,
   fixProblems,
   flagEntry,
   HEARTBEAT_PATH,
@@ -22,6 +23,7 @@ import {
   logEvent,
   loginKey,
   type OpenPullRequest,
+  overlayPending,
   parseEntry,
   REVIEW_REMINDER_DAYS,
   type RepoRef,
@@ -36,6 +38,7 @@ import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
 import { commitTree, forcePush, git, mergeText, showFile } from "./git.ts";
+import { foldChanges, showRule } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { type FileChange, publish } from "./publish.ts";
 
@@ -80,6 +83,8 @@ interface Lesson {
   duplicateOf?: string;
   /** Another developer's daily PR commits this change, combined with theirs. */
   carriedBy?: string;
+  /** Filed under general: the topic the drafter would add for it. */
+  suggestedTopic?: string;
 }
 
 const repoRef = (ref: string): RepoRef => {
@@ -127,7 +132,13 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   );
   git(root, "fetch", "--quiet", "origin", `+refs/heads/${STATE_BRANCH}:${remote(STATE_BRANCH)}`);
   const onState = (path: string) => git(root, "show", `${remote(STATE_BRANCH)}:${path}`);
-  const onBase = (path: string) => showFile(root, remote(base), path);
+  // A rule's path reads through its topic file when the KB groups rules by topic.
+  const onBase = (path: string) => showRule(root, remote(base), path);
+  // Each PR is folded onto the latest base: an earlier PR of this run may have merged since.
+  const onFreshBase = (changes: FileChange[]) => {
+    git(root, "fetch", "--quiet", "origin", `+refs/heads/${base}:${remote(base)}`);
+    return foldChanges(root, remote(base), changes, config);
+  };
 
   const members = config.team.members.map((m) => m.id);
   const decisions = new Map<string, DecisionsFile>();
@@ -183,7 +194,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   const inReview = [...decisions.values()].flatMap((d) =>
     d.decided.flatMap((r) => {
       if (r.decision !== "review" || !r.pr || !open.has(r.pr)) return [];
-      const entry = parseEntry(showFile(root, remote(r.pr), r.path) ?? "").entry;
+      const entry = parseEntry(showRule(root, remote(r.pr), r.path) ?? "").entry;
       return entry ? [entry] : [];
     }),
   );
@@ -219,7 +230,8 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       const text = showFile(root, ref, path) ?? "";
       const hash = lessonHash(text);
       if (seen.has(hash)) continue;
-      lessons.push(pendingLesson(m, path, text, hash, status === "A" ? undefined : onBase(path)));
+      // A pending flag on a rule in a topic file arrives as a new one-rule file; the base has it.
+      lessons.push(pendingLesson(m, path, text, hash, onBase(path)));
     }
   }
 
@@ -255,6 +267,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
         origin: "review",
         originator: e.frontmatter.source.author,
         ...(e.frontmatter.source.url ? { url: e.frontmatter.source.url } : {}),
+        ...(e.suggestedTopic ? { suggestedTopic: e.suggestedTopic } : {}),
         decision: "review",
         reason: "",
       });
@@ -495,7 +508,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       const pr = await publish({
         root,
         branch: `homeostat/daily-${member}-${today}`,
-        changes,
+        changes: onFreshBase(changes),
         provider,
         kbRepo,
         base,
@@ -526,7 +539,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       const pr = await publish({
         root,
         branch: `homeostat/review-${member}-${today}`,
-        changes: review.map((l) => change(l, "review")),
+        changes: onFreshBase(review.map((l) => change(l, "review"))),
         provider,
         kbRepo,
         base,
@@ -545,7 +558,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       const pr = await publish({
         root,
         branch: `${DISPUTE_PREFIX}${l.id}-${today}`,
-        changes: [change(l, "review")],
+        changes: onFreshBase([change(l, "review")]),
         provider,
         kbRepo,
         base,
@@ -692,7 +705,8 @@ function decide(
     return;
   }
   const entry = parseEntry(l.text).entry as Entry | undefined;
-  const issues = validate({ ...files, [l.path]: l.text }).issues.filter(
+  // An update or flag to a rule in a topic file replaces its section, not adds a second copy.
+  const issues = validate(overlayPending(files, { [l.path]: l.text })).issues.filter(
     (i) => i.file === l.path && i.severity === "error",
   );
   if (!entry) {
@@ -735,7 +749,8 @@ function reconfirmChange(
   today: string,
 ): FileChange | undefined {
   const found = entries.find((e) => e.entry.frontmatter.id === id);
-  const text = found ? files[found.path] : undefined;
+  // In a topic file the rule has no file of its own; its section's one-rule text stands in.
+  const text = found ? findRule(files, found.path) : undefined;
   if (!found || !text) return undefined;
   return {
     path: found.path,
@@ -771,6 +786,22 @@ function reviewerLogins(config: Config, review: Lesson[], member: string): strin
   return [...handles].filter((h) => !self || loginKey(h) !== loginKey(self));
 }
 
+/** Lessons filed under general with a suggested topic: a note to add it to homeostat.yaml. */
+function topicSuggestions(list: Lesson[]): string[] {
+  const by = new Map<string, string[]>();
+  for (const l of list) {
+    if (l.suggestedTopic && l.decision !== "declined") {
+      by.set(l.suggestedTopic, [...(by.get(l.suggestedTopic) ?? []), l.id]);
+    }
+  }
+  if (by.size === 0) return [];
+  return [
+    "",
+    "No topic fitted these, so they went to `general`. Add the suggested topic to homeostat.yaml if it is worth one; the deep dive then moves them:",
+    ...[...by].map(([topic, ids]) => `- \`${topic}\`: ${ids.map((id) => `\`${id}\``).join(", ")}`),
+  ];
+}
+
 function prBody(member: string, today: string, list: Lesson[], kind: "daily" | "review"): string {
   const rows = list.map((l) => {
     const why = l.confidence ? `${l.reason}<br>${explainConfidence(l.confidence)}` : l.reason;
@@ -785,6 +816,7 @@ function prBody(member: string, today: string, list: Lesson[], kind: "daily" | "
     "| Decision | Lesson | Confidence | Source | Why |",
     "| --- | --- | --- | --- | --- |",
     ...rows,
+    ...topicSuggestions(list),
     "",
     "Decided by `homeostat daily`. Thresholds and weights are in `scoring.confidence` in homeostat.yaml; `homeostat flag <id>` sends any rule back for review.",
   ].join("\n");

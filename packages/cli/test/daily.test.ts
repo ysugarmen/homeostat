@@ -13,6 +13,7 @@ import type {
   RepoRef,
   ReviewThread,
 } from "@homeostat/core";
+import { formatTopicFile, parseEntry, ruleSection } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -751,5 +752,86 @@ describe("homeostat daily in a multi-repo KB", { timeout: 30_000 }, () => {
     const rule = show("knowledge/web/frontend/use-colour-tokens-instead-of-hex-values.md");
     expect(rule).toContain("area: frontend");
     expect(rule).toContain("apps/web/**");
+  });
+});
+
+describe("homeostat daily in a topic KB", { timeout: 30_000 }, () => {
+  /** The starter with topics, its retry rule moved into knowledge/integrations/http.md. */
+  async function topicTeam() {
+    const t = team();
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      `${readFileSync(config, "utf8")}\ntopics:\n  http: "Outbound HTTP calls to partners"\n  styling: "Colours, themes and component styles"\n`,
+    );
+    const path = "knowledge/integrations/outbound-http-retry-helper.md";
+    const entry = parseEntry(readFileSync(join(t.ci, path), "utf8")).entry;
+    if (!entry) throw new Error("starter rule");
+    writeFileSync(
+      join(t.ci, "knowledge/integrations/http.md"),
+      formatTopicFile({ topic: "http", title: "HTTP" }, [
+        { id: entry.frontmatter.id, raw: ruleSection(entry) },
+      ]),
+    );
+    t.g(t.ci, "rm", "-q", path);
+    t.g(t.ci, "add", "-A");
+    t.g(t.ci, "commit", "-qm", "topics");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    t.g(t.lee, "pull", "-q");
+    return t;
+  }
+
+  test("a drafted lesson lands as a section of its topic file, and a suggestion is listed", async () => {
+    const t = await topicTeam();
+    const provider = new FakeProvider();
+    const drafter = new FakeDrafter({ ...COLOUR_DRAFT, topic: "styling" });
+    await run(["daily", "--dir", t.ci, "--dry-run"], { provider, drafter });
+    const { code } = await run(["daily", "--dir", t.ci], { provider, drafter });
+    expect(code).toBe(0);
+    const branch = provider.opened[0]?.pr.sourceBranch ?? "";
+    const styling = t.g(t.origin, "show", `${branch}:knowledge/frontend/styling.md`);
+    expect(styling).toContain(
+      "## Use colour tokens instead of hex values {#use-colour-tokens-instead-of-hex-values}",
+    );
+    expect(() => t.g(t.origin, "show", `${branch}:${DRAFTED}`)).toThrow();
+
+    // A topic the drafter had to make up: the lesson goes to general, the PR says what it suggested.
+    const t2 = await topicTeam();
+    const p2 = new FakeProvider();
+    await run(["daily", "--dir", t2.ci], {
+      provider: p2,
+      drafter: new FakeDrafter({ ...COLOUR_DRAFT, topic: "design-tokens" }),
+    });
+    const b2 = p2.opened[0];
+    expect(
+      t2.g(t2.origin, "show", `${b2?.pr.sourceBranch}:knowledge/frontend/general.md`),
+    ).toContain("{#use-colour-tokens-instead-of-hex-values}");
+    expect(b2?.pr.body).toContain("- `design-tokens`: `use-colour-tokens-instead-of-hex-values`");
+  });
+
+  test("a developer's flag on a rule in a topic file disputes it there, in place", async () => {
+    const t = await topicTeam();
+    await run([
+      "flag",
+      "outbound-http-retry-helper",
+      "--dir",
+      t.lee,
+      "--reason",
+      "withRetry moved",
+      "--by",
+      "lee",
+    ]);
+    await run(["sync", "--dir", t.lee]);
+    const provider = new FakeProvider();
+    const { stdout } = await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
+    expect(stdout).toContain(
+      "merged   outbound-http-retry-helper: a flag disputes the rule at once",
+    );
+    const branch = provider.opened[0]?.pr.sourceBranch ?? "";
+    const http = t.g(t.origin, "show", `${branch}:knowledge/integrations/http.md`);
+    expect(http).toContain("status: disputed");
+    expect(() =>
+      t.g(t.origin, "show", `${branch}:knowledge/integrations/outbound-http-retry-helper.md`),
+    ).toThrow();
   });
 });

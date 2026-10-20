@@ -13,6 +13,7 @@ import { score } from "../score.ts";
 import { redactSecrets } from "../secrets.ts";
 import { slugify } from "../slug.ts";
 import { countTokens } from "../tokens.ts";
+import { GENERAL_TOPIC, topicsFor } from "../topics.ts";
 import { type KbFiles, validate } from "../validate.ts";
 import type { DocCandidate, DocPatcher } from "./doc-patcher.ts";
 import type { Draft, Drafter } from "./draft.ts";
@@ -42,6 +43,8 @@ export interface CuratedEntry {
    * until a member reads it and sets `riskReviewedBy`, so the PR shows it but cannot merge it.
    */
   risks: string[];
+  /** Filed under general: the drafter's suggestion for a topic to add, for the PR body. */
+  suggestedTopic?: string;
 }
 
 /** A document changed by this run: one or more section patches, each from a review thread. */
@@ -113,6 +116,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     // A multi-repo KB files each PR's lessons under its repo, with that repo's areas.
     const kbRepo = repoForSource(config, repoName);
     const areas = areaMap(config, kbRepo);
+    const topics = topicsFor(config, kbRepo);
     const scanned = { repo: repoName, pullRequests: 0, threads: 0 };
     result.scanned.push(scanned);
 
@@ -177,7 +181,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
 
         const { thread: safe, redacted } = redactThread(thread);
         result.redacted += redacted;
-        let draft = await input.drafter.draft(safe, { areas });
+        let draft = await input.drafter.draft(safe, { areas, ...(topics ? { topics } : {}) });
         if (input.patcher) {
           await docPatchStep(
             { files, config, result, today: input.today, repo: kbRepo },
@@ -213,6 +217,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
           const problems = blocking.map((i) => i.message);
           const second = await input.drafter.draft(safe, {
             areas,
+            ...(topics ? { topics } : {}),
             revise: { previous: draft, problems },
           });
           if (second) {
@@ -342,7 +347,14 @@ function uniqueId(base: string, taken: ReadonlySet<string>): string {
 function buildEntry(
   config: Config,
   args: {
-    draft: { title: string; rule: string; why: string; area: string };
+    draft: {
+      title: string;
+      rule: string;
+      why: string;
+      area: string;
+      topic?: string;
+      suggestedTopic?: string;
+    };
     /** The multi-repo KB's repo the PR is from; undefined in a one-repo KB. */
     repo?: string | undefined;
     id: string;
@@ -366,9 +378,22 @@ function buildEntry(
     lastConfirmed: args.today,
     tokens: countTokens(body),
   };
+  // A topic KB: the drafter's topic if it is listed, else general (with its suggestion kept).
+  const topics = topicsFor(config, args.repo);
+  const topic = topics
+    ? draft.topic && Object.hasOwn(topics, draft.topic)
+      ? draft.topic
+      : GENERAL_TOPIC
+    : undefined;
+  if (topic) frontmatter.topic = topic;
+  const suggested =
+    topic === GENERAL_TOPIC
+      ? (draft.suggestedTopic ?? (draft.topic !== GENERAL_TOPIC ? draft.topic : undefined))
+      : undefined;
   frontmatter.score = score(frontmatter, { config }).score;
   if (frontmatter.score >= config.scoring.autoMergeThreshold) frontmatter.status = "accepted";
   return {
+    ...(suggested ? { suggestedTopic: suggested } : {}),
     path: ruleFilePath(config, { repo: args.repo, area: draft.area, id: args.id }),
     text: formatEntry(frontmatter, body),
     frontmatter,

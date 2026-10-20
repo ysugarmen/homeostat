@@ -61,6 +61,11 @@ export const frontmatterSchema = z.strictObject({
   conflictsWith: z.array(id).optional(),
   supersedes: id.optional(),
   tags: z.array(z.string().min(1)).optional(),
+  /** The topic file the rule belongs in, when the KB groups rules by topic; set by its writer. */
+  topic: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .optional(),
   kind: z.enum(KINDS).optional(),
   /**
    * With kind decision: false records a proposal the team discussed and rejected. It is never

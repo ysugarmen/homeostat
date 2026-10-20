@@ -371,3 +371,32 @@ describe("homeostat learn in a multi-repo KB", () => {
     expect(sharedArea.stderr).toContain("a shared rule holds in every repo");
   });
 });
+
+describe("homeostat learn in a topic KB", () => {
+  const topicKb = () => {
+    const dir = kb();
+    const config = join(dir, "homeostat.yaml");
+    writeFileSync(
+      config,
+      `${readFileSync(config, "utf8")}\ntopics:\n  webhooks: "Incoming webhook payloads and signatures"\n  logging: "What we log and how"\n`,
+    );
+    return dir;
+  };
+  const id = "validate-webhook-signatures-before-parsing-the-body";
+
+  test("--topic names the topic; without it, the best word match; never an unknown one", async () => {
+    const dir = topicKb();
+    expect((await run(["learn", "--dir", dir, ...basic, "--topic", "logging"])).code).toBe(0);
+    expect(entryAt(dir, `knowledge/core/${id}.md`).frontmatter.topic).toBe("logging");
+
+    const matched = topicKb();
+    expect((await run(["learn", "--dir", matched, ...basic])).code).toBe(0);
+    expect(entryAt(matched, `knowledge/core/${id}.md`).frontmatter.topic).toBe("webhooks");
+
+    const unknown = await run(["learn", "--dir", topicKb(), ...basic, "--topic", "payments"]);
+    expect(unknown.code).toBe(1);
+    expect(unknown.stderr).toContain(
+      'unknown topic "payments"; use one of: general, webhooks, logging',
+    );
+  });
+});

@@ -153,7 +153,13 @@ export function parseTopicFile(path: string, text: string): ParsedTopicFile {
     }
     const fields = parseDocument(metaMatch[1] ?? "").toJS() as Record<string, unknown> | null;
     const parts = splitBody(rest.slice(metaMatch[0].length).trim());
-    const fm = { id, title, area: (fields?.area as string | undefined) ?? area, ...(fields ?? {}) };
+    const fm = {
+      id,
+      title,
+      area: (fields?.area as string | undefined) ?? area,
+      ...(fields ?? {}),
+      topic: fileTopic,
+    };
     sections.push({ id, raw, line, text: formatLoose(fm, entryBody(parts)) });
   });
   return { meta, sections, issues };
@@ -161,7 +167,7 @@ export function parseTopicFile(path: string, text: string): ParsedTopicFile {
 
 /** Writes one rule as a topic-file section. */
 export function ruleSection(entry: Entry): string {
-  const { id, title, area: _area, ...rest } = entry.frontmatter;
+  const { id, title, area: _area, topic: _topic, ...rest } = entry.frontmatter;
   const parts = [
     `## ${title} {#${id}}`,
     `<!-- homeostat\n${stringify(rest).trim()}\n-->`,
@@ -231,8 +237,9 @@ export function foldRules(
     });
     const repo = locate(change.path, repos)?.repo;
     const topics = topicsFor(config, repo);
-    const target = change.topic
-      ? topicFilePath(change.path, change.topic)
+    const named = change.topic ?? (change.text ? topicOfText(change.text) : undefined);
+    const target = named
+      ? topicFilePath(change.path, named)
       : (home ??
         (topics && current(change.path) === undefined
           ? topicFilePath(change.path, GENERAL_TOPIC)
@@ -304,6 +311,9 @@ export function mergeTopicFile(
   return { text: meta && merged.length ? formatTopicFile(meta, merged) : null, conflicts };
 }
 
+const topicOfText = (text: string) =>
+  /^topic:\s*([a-z0-9-]+)\s*$/m.exec(text.split(/\n---/)[0] ?? "")?.[1];
+
 const titleOf = (topic: string) => topic.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 /** Rule text, then `### Why` and `### Example`, outside code fences. */
@@ -340,4 +350,92 @@ const entryBody = (p: { rule: string; why?: string; example?: string }) =>
 /** Like formatEntry, without requiring a valid frontmatter: parseEntry reports what is wrong. */
 function formatLoose(fm: Record<string, unknown>, body: string): string {
   return formatEntry(fm as never, body);
+}
+
+/**
+ * A rule's one-rule text at its path `…/<area>/<id>.md`: the file itself, or its section in a
+ * topic file of the same folder. Undefined when the rule is in neither.
+ */
+export function findRule(
+  files: Readonly<Record<string, string>>,
+  path: string,
+): string | undefined {
+  if (files[path] !== undefined) return files[path];
+  const dir = path.slice(0, path.lastIndexOf("/") + 1);
+  const id = path.slice(dir.length, -3);
+  for (const [p, text] of Object.entries(files)) {
+    if (!p.startsWith(dir) || p.slice(dir.length).includes("/") || !isTopicFile(text)) continue;
+    const hit = parseTopicFile(p, text).sections.find((s) => s.id === id);
+    if (hit) return hit.text;
+  }
+  return undefined;
+}
+
+/**
+ * A developer's view: their pending one-rule files over the KB. A pending version of a rule
+ * that lives in a topic file replaces its section, so the rule is not seen twice.
+ */
+export function overlayPending(
+  files: Readonly<Record<string, string>>,
+  pending: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const view: Record<string, string> = { ...files, ...pending };
+  for (const path of Object.keys(pending)) {
+    if (files[path] !== undefined) continue;
+    const dir = path.slice(0, path.lastIndexOf("/") + 1);
+    const id = path.slice(dir.length, -3);
+    for (const [p, text] of Object.entries(view)) {
+      if (!p.startsWith(dir) || p.slice(dir.length).includes("/") || !isTopicFile(text)) continue;
+      const parsed = parseTopicFile(p, text);
+      if (!parsed.meta || !parsed.sections.some((s) => s.id === id)) continue;
+      const rest = parsed.sections.filter((s) => s.id !== id);
+      if (rest.length) view[p] = formatTopicFile(parsed.meta, rest);
+      else delete view[p];
+    }
+  }
+  return view;
+}
+
+const STOP = new Set([
+  "about",
+  "after",
+  "before",
+  "every",
+  "from",
+  "into",
+  "never",
+  "their",
+  "these",
+  "this",
+  "that",
+  "them",
+  "with",
+  "when",
+  "what",
+  "where",
+  "which",
+  "while",
+  "your",
+]);
+const words = (text: string) =>
+  new Set(
+    (text.toLowerCase().match(/[a-z][a-z0-9]+/g) ?? []).filter((w) => w.length > 3 && !STOP.has(w)),
+  );
+
+/**
+ * The topic a hand-written rule most likely belongs in, without a model: the topic whose name
+ * and description share the most words with the rule's title and text. general when none does.
+ */
+export function matchTopic(topics: Readonly<Record<string, string>>, text: string): string {
+  const have = words(text);
+  let best = GENERAL_TOPIC;
+  let score = 0;
+  for (const [name, about] of Object.entries(topics)) {
+    const nameWords = words(name.replace(/-/g, " "));
+    const n =
+      [...nameWords].filter((w) => have.has(w)).length * 2 +
+      [...words(about)].filter((w) => have.has(w) && !nameWords.has(w)).length;
+    if (n > score) [best, score] = [name, n];
+  }
+  return best;
 }

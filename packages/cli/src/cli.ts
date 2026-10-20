@@ -153,6 +153,7 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
       "multi-repo KB: the rule's repo (default: the PR's, else this checkout's)",
     )
     .option("--shared", "multi-repo KB: a rule for every repo, in knowledge/core/")
+    .option("--topic <name>", "topic KB: the rule's topic (default: the best match, else general)")
     .option("--scope <glob>", "path glob the rule applies to; repeatable", collect)
     .option("--author <id>", "member who originated it (default: comment author or git user)")
     .option("--owner <id>", "member who answers for it (default: author)")

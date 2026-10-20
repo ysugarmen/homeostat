@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { CONFIG_FILE } from "./config.ts";
+import { overlayPending } from "./topics.ts";
 import type { KbFiles } from "./validate.ts";
 
 /** Reads the parts of a KB that `validate()` looks at: the config and everything under knowledge/. */
@@ -58,7 +59,10 @@ export function readKbView(
       pending[path] = text.replace(/^status: candidate$/m, "status: accepted");
     }
   }
-  return { files: { ...readKbFiles(root), ...pending }, pending: new Set(Object.keys(pending)) };
+  return {
+    files: overlayPending(readKbFiles(root), pending),
+    pending: new Set(Object.keys(pending)),
+  };
 }
 
 export function writePendingFile(root: string, path: string, content: string) {

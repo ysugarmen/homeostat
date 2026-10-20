@@ -5,7 +5,8 @@ import { commitFile, git, pushBranch } from "./git.ts";
 
 export interface FileChange {
   path: string;
-  text: string;
+  /** The file's new text; null removes it (a rule that moved into a topic file). */
+  text: string | null;
   /** Commit message for this file. */
   message: string;
 }

@@ -14,6 +14,8 @@ import {
 import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
+import { git } from "./git.ts";
+import { foldChanges } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { publish } from "./publish.ts";
 
@@ -87,14 +89,31 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
       throw new CliError("homeostat.yaml has no sources section; it is needed to open the PR");
     }
     const [owner = "", name = ""] = sources.kbRepo.split("/");
+    const rules = changes.map((c) => ({
+      path: c.path,
+      text: c.text,
+      message: `homeostat: ${c.actions.map((a) => a.action).join(", ")} ${c.id}`,
+    }));
+    git(
+      root,
+      "fetch",
+      "--quiet",
+      "origin",
+      `+refs/heads/${sources.baseBranch}:refs/remotes/origin/${sources.baseBranch}`,
+    );
+    const ref = git(
+      root,
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/remotes/origin/${sources.baseBranch}`,
+    )
+      ? `refs/remotes/origin/${sources.baseBranch}`
+      : "HEAD";
     await publish({
       root,
       branch: `homeostat/deep-dive-${today}`,
-      changes: changes.map((c) => ({
-        path: c.path,
-        text: c.text,
-        message: `homeostat: ${c.actions.map((a) => a.action).join(", ")} ${c.id}`,
-      })),
+      changes: foldChanges(root, ref, rules, config),
       provider: providerFor(sources.host, io, "open the deep-dive PR"),
       kbRepo: { owner, name },
       base: sources.baseBranch,

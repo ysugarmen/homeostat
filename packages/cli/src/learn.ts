@@ -11,10 +11,12 @@ import {
   docFilePath,
   type Frontmatter,
   formatEntry,
+  GENERAL_TOPIC,
   ID_PATTERN,
   type KbFiles,
   type Kind,
   logEvent,
+  matchTopic,
   memberForLogin,
   PatchError,
   parseCommentUrl,
@@ -24,6 +26,7 @@ import {
   ruleFilePath,
   score,
   slugify,
+  topicsFor,
   validate,
   writePendingFile,
 } from "@homeostat/core";
@@ -31,6 +34,7 @@ import type { Io } from "./cli.ts";
 import { formatIssues } from "./format.ts";
 import { commitFile, existsOnRef, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
+import { branchRef, foldChanges } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { resolveRepo } from "./repo-option.ts";
 
@@ -44,6 +48,8 @@ export interface LearnOptions {
   repo?: string;
   /** A multi-repo KB: file the rule in knowledge/core/, shared by every repo. */
   shared?: boolean;
+  /** A topic KB: the topic file the rule goes in (default: the best word match, else general). */
+  topic?: string;
   scope?: string[];
   author?: string;
   owner?: string;
@@ -187,6 +193,17 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   const id = opts.id ?? slugify(fields.title) ?? "";
   if (!ID_PATTERN.test(id)) throw new LearnError(`cannot derive an id from the title; pass --id`);
   const path = ruleFilePath(config, { repo, area, id });
+  // A topic KB: --topic, else the topic whose words the rule shares most, else general.
+  const topics = topicsFor(config, repo);
+  if (opts.topic && !topics) throw new LearnError("--topic needs topics in homeostat.yaml");
+  if (opts.topic && topics && opts.topic !== GENERAL_TOPIC && !Object.hasOwn(topics, opts.topic)) {
+    throw new LearnError(
+      `unknown topic "${opts.topic}"; use one of: ${[GENERAL_TOPIC, ...Object.keys(topics)].join(", ")}`,
+    );
+  }
+  const topic = topics
+    ? (opts.topic ?? matchTopic(topics, `${fields.title} ${fields.rule}`))
+    : undefined;
   const taken = validate(files).entries.some((e) => e.entry.frontmatter.id === id);
   if (
     (opts.branch ? existsOnRef(root, opts.branch, path) : existsSync(join(root, path))) ||
@@ -217,6 +234,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     created: today,
     lastConfirmed: today,
     ...(opts.tag?.length ? { tags: opts.tag } : {}),
+    ...(topic ? { topic } : {}),
     ...(opts.kind ? { kind: opts.kind as Kind } : {}),
     ...(opts.kind === "decision" ? { adopted: !opts.notAdopted } : {}),
     tokens: countTokens(body),
@@ -244,7 +262,14 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
   });
   if (opts.branch) {
     try {
-      commitFile(root, opts.branch, path, text, `homeostat: candidate ${id}`);
+      for (const c of foldChanges(
+        root,
+        branchRef(root, opts.branch),
+        [{ path, text, message: `homeostat: candidate ${id}` }],
+        config,
+      )) {
+        commitFile(root, opts.branch, c.path, c.text, c.message);
+      }
       io.stdout(`committed ${path} to ${opts.branch} ${summary}\n`);
       if (opts.push) {
         pushBranch(root, opts.branch);

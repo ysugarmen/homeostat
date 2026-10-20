@@ -184,3 +184,33 @@ describe("mergeTopicFile", () => {
     expect(both.conflicts).toEqual(["outbound-http-retry-helper"]);
   });
 });
+
+describe("matchTopic, findRule and overlayPending", () => {
+  test("a hand-written rule goes to the topic it shares most words with, else general", async () => {
+    const { matchTopic } = await import("../src/topics.ts");
+    const topics = {
+      migrations: "Alembic schema changes, backfills and their deploy order",
+      testing: "What tests assert, fixtures and mocks",
+    };
+    expect(matchTopic(topics, "Keep backfills out of schema migrations")).toBe("migrations");
+    expect(matchTopic(topics, "Assert the error code in failure tests")).toBe("testing");
+    expect(matchTopic(topics, "Log through the shared logger")).toBe("general");
+  });
+
+  test("a rule in a topic file reads as its own one-rule text, and a pending change replaces it", async () => {
+    const { findRule, overlayPending } = await import("../src/topics.ts");
+    const files = readKb();
+    const topic = formatTopicFile({ topic: "http", title: "HTTP" }, [sectionOf(files, RETRY)]);
+    const kb: KbFiles = { ...withTopics(files), "knowledge/integrations/http.md": topic };
+    delete kb[RETRY];
+    expect(parseEntry(findRule(kb, RETRY) ?? "").entry?.frontmatter.id).toBe(
+      "outbound-http-retry-helper",
+    );
+    const flagged = (files[RETRY] ?? "").replace("status: accepted", "status: disputed");
+    const view = overlayPending(kb, { [RETRY]: flagged });
+    expect(view["knowledge/integrations/http.md"]).toBeUndefined();
+    const result = validate(view);
+    expect(result.issues.filter((i) => i.severity === "error")).toEqual([]);
+    expect(result.entries.find((e) => e.path === RETRY)?.entry.frontmatter.status).toBe("disputed");
+  });
+});

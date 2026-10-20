@@ -10,6 +10,7 @@ import {
 import type { Io } from "./cli.ts";
 import { commitFile, git, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
+import { branchRef, foldChanges } from "./kb-write.ts";
 import { sendPending } from "./learn.ts";
 import { CliError } from "./provider.ts";
 
@@ -54,7 +55,14 @@ export function runFlag(id: string, opts: FlagOptions, io: Io): number {
 
     if (opts.branch) {
       try {
-        commitFile(root, opts.branch, found.path, text, `homeostat: flag ${id}`);
+        for (const c of foldChanges(
+          root,
+          branchRef(root, opts.branch),
+          [{ path: found.path, text, message: `homeostat: flag ${id}` }],
+          kb.config,
+        )) {
+          commitFile(root, opts.branch, c.path, c.text, c.message);
+        }
         if (opts.push) pushBranch(root, opts.branch);
       } catch (e) {
         throw new CliError((e as Error).message);

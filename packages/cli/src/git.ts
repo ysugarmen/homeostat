@@ -59,7 +59,8 @@ export function commitFile(
   dir: string,
   branch: string,
   path: string,
-  content: string,
+  /** The file's new text; null removes it. */
+  content: string | null,
   message: string,
 ): string {
   const ref = `refs/heads/${branch}`;
@@ -81,8 +82,12 @@ export function commitFile(
       });
     }
     gitOrThrow(dir, ["read-tree", base], { env });
-    const blob = gitOrThrow(dir, ["hash-object", "-w", "--stdin"], { input: content });
-    gitOrThrow(dir, ["update-index", "--add", "--cacheinfo", `100644,${blob},${path}`], { env });
+    if (content === null) {
+      gitOrThrow(dir, ["update-index", "--force-remove", "--", path], { env });
+    } else {
+      const blob = gitOrThrow(dir, ["hash-object", "-w", "--stdin"], { input: content });
+      gitOrThrow(dir, ["update-index", "--add", "--cacheinfo", `100644,${blob},${path}`], { env });
+    }
     const tree = gitOrThrow(dir, ["write-tree"], { env });
     const commit = gitOrThrow(dir, ["commit-tree", tree, "-p", base, "-m", message], { env });
     gitOrThrow(dir, ["update-ref", ref, commit, old ?? ""]);
