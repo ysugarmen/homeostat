@@ -3,5 +3,3 @@ dist/
 *.tsbuildinfo
 coverage/
 .DS_Store
-packages/desktop/stage/
-packages/desktop/release/
