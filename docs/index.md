@@ -13,7 +13,9 @@ It turns accepted code-review feedback into short, scored rules and team documen
 ## Guide
 
 - [Quickstart](guide/quickstart.md): a working knowledge base in ten minutes
-- [Rules and documents](guide/entries.md): the file formats
+- [Rules and documents](guide/entries.md): the file formats and layouts
+- [A first base](guide/bootstrap.md): `homeostat bootstrap`, from your repos' docs, schemas and deploy files
+- [Moving to 0.2](guide/migrating.md): repo folders and topic files for an existing KB
 - [Configuration](guide/config.md): every key in `homeostat.yaml`
 - [The agents](guide/agents.md): the daily run, sync, deep dive, seeding, the digest, and model runtimes
 - [Using it from your tools](guide/clients.md): the Claude Code plugin, MCP, and exports

@@ -49,7 +49,7 @@ Its changes go in one PR. `--no-llm` skips the model.
 
 ## Seed (by hand only) {#seed}
 
-`homeostat seed <checkout> --area <area> --owner <member>` drafts a new team's first documents (`architecture`, `conventions`, `cross-repo`) from a scan of one local repository. It sends the file tree and a few key files (README, manifests, build files), with `sources.exclude.paths` applied and secrets redacted. This is the only command that sends code to a model, so nothing schedules it. `--dry-run` prints everything it would send. Each document arrives as its own PR, every section marked `source=seed` with the model's confidence.
+`homeostat seed <checkout> --area <area> --owner <member>` drafts first documents from a scan of one local repository: `architecture`, `conventions` and `cross-repo` from the file tree and key files (README, manifests, build files), `data` from schemas, ORM files and migrations, `infrastructure` from charts, Terraform, manifests and pipelines. Secrets files are never read, `sources.exclude.paths` applies and the rest is redacted. `seed` and [`bootstrap`](bootstrap.md), which runs it for every repo along with importing their existing docs, are the only commands that send code to a model, so nothing schedules them. `--dry-run` prints everything it would send. Each document arrives as its own PR, every section marked `source=seed` with the model's confidence.
 
 ## Digest (weekly) {#digest}
 

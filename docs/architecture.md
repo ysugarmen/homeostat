@@ -65,13 +65,16 @@ The daily run sends the model redacted review threads, never code. Sessions get 
 
 ## Knowledge model
 
-The KB is a git repo: `homeostat.yaml` at the root, rules at `knowledge/<area>/<id>.md`, documents at `knowledge/<area>/docs/<topic>.md`. Areas map names to path globs in the code repos; `core` applies everywhere.
+The KB is a git repo: `homeostat.yaml` at the root, rules under `knowledge/<area>/`, documents at `knowledge/<area>/docs/<topic>.md`. Areas map names to path globs in the code repos; `core` applies everywhere.
+
+- **Repo folders** (optional): a KB serving several code repos lists them under `repos`, each with its own areas, and keeps each repo's knowledge in `knowledge/<repo>/<area>/`. Shared rules stay in `knowledge/core/`. Sessions, MCP and exports see their own repo plus core, found from the checkout's `origin` remote (or its folder name), and duplicates are compared only within a repo or against core.
+- **Topic files** (optional): with a `topics` list, rules are grouped into `<area>/<topic>.md`, one `## Title {#id}` section per rule with its fields in a `<!-- homeostat … -->` YAML comment. Each section is read as a rule at a virtual path `<area>/<id>.md`, so validation, scoring and selection have one code path. Writers merge sections into the file sorted by id, and a conflicting PR is rebuilt from both sides. Without topics, each rule is its own file `<area>/<id>.md`.
 
 **Rules** are one instruction each. YAML frontmatter holds machine fields, the body holds what agents read:
 
 | Part | Contents |
 | --- | --- |
-| Identity | `id`, `title` (≤80 chars), `area`, `scope` (path globs) |
+| Identity | `id`, `title` (≤80 chars), `area`, `scope` (path globs), `topic` in a topic file |
 | Lifecycle | `status`: candidate → accepted → disputed → retired; `approvedBy`, `flags` |
 | Provenance | `source.type` (pr-feedback, manual, agent-handoff, deep-dive), `url`, `author`, `changedCode`, `created`, `lastConfirmed` |
 | Kind | optional `kind` (convention, anti-pattern, migration, legacy, tech-debt, practice, review-lesson, decision); `adopted: false` marks a rejected decision |

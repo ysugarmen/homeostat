@@ -57,7 +57,9 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |
 | `homeostat mcp` | Serve the KB to any agent over MCP (stdio) |
 | `homeostat docs convert <file...>` | Bring existing markdown documents into `knowledge/<area>/docs/`, with section ids and provenance |
-| `homeostat seed <checkout>` | Draft a team's first documents from a local repo (manual only: the one command that sends code to a model) |
+| `homeostat bootstrap` | A first base for each repo: its existing docs, plus code, data and infrastructure documents drafted from its checkout (manual only; one PR per repo) |
+| `homeostat seed <checkout>` | Draft first documents from one local repo (manual only: with `bootstrap`, the only commands that send code to a model) |
+| `homeostat migrate` | Move a 0.1 KB into repo folders, and with `--topics` into topic files |
 | `homeostat digest` | Post the weekly digest to Slack (CI) |
 | `homeostat doctor --security` | Check a setup: what is read, what leaves, who can change the rules, the blast radius |
 

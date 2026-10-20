@@ -9,7 +9,12 @@ claude plugin install homeostat@homeostat
 
 Set the plugin's `kb_dir` to your local clone of the KB repo. Then:
 
-- **At session start**, the hook adds the accepted rules for the files you are touching (grouped by kind, within `distribution.tokenBudget`), and an index of the team documents that cover them, with the sections that name your files.
+- **At session start**, the hook adds the accepted rules for the files you are touching, within `distribution.tokenBudget` and grouped by kind. In a multi-repo KB these are the session's own repo's rules plus the shared ones. The order is:
+  1. rules scoped to those files
+  2. general rules that name one of them
+  3. other general rules
+
+  Rules that do not fit are listed by topic with their counts, then by title, so the agent can fetch any of them with `explain`. Last comes an index of the team documents that cover those files (every document by title, then section ids while they fit), with the sections that name your files.
 - **At the end of a session with real edits**, the agent is asked once for a handoff note: what to do next time, and what was tried and rejected. The note is saved as a pending lesson: it applies to your sessions at once, and the next daily run decides it for the team.
 - **Skills:**
   - `/homeostat:learn` captures a rule or a document section from the session or a review comment.

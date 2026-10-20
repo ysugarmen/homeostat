@@ -2,10 +2,20 @@
 
 The knowledge base holds two kinds of knowledge, both as Markdown under `knowledge/`:
 
-- **Rules**: one short, scored instruction per file, matched to the files an agent touches.
+- **Rules**: short, scored instructions, matched to the files an agent touches. Each is its own file, or a section of a topic file.
 - **Documents**: the team's living reference (architecture, contracts, migrations), in sections agents read on demand.
 
 `homeostat validate` checks both; CI runs it on every pull request. The JSON Schema for rule frontmatter is [`packages/core/schema/entry.schema.json`](https://github.com/ysugarmen/homeostat/blob/main/packages/core/schema/entry.schema.json), for editor completion.
+
+## Where they live
+
+| Layout | Rules | Documents |
+| --- | --- | --- |
+| One code repo | `knowledge/<area>/<id>.md` | `knowledge/<area>/docs/<topic>.md` |
+| With `topics` | `knowledge/<area>/<topic>.md`, one section per rule | same |
+| Several repos (`repos`) | `knowledge/<repo>/<area>/…`, shared ones in `knowledge/core/` | `knowledge/<repo>/<area>/docs/<topic>.md` |
+
+Areas in a multi-repo KB are named `<repo>/<area>` everywhere else (member areas, `--area`). [Moving to 0.2](migrating.md) covers moving an existing KB.
 
 ## Rules: `knowledge/<area>/<id>.md`
 
@@ -58,6 +68,40 @@ Partner APIs time out often; the helper adds backoff and the request-id header o
 | `tokens` | Cached token count of the body, for budgeting; `validate --fix` updates it |
 
 The body has `## Rule` (at most 60 words), `## Why` (at most 100) and an optional `## Example`.
+
+### Rules in a topic file: `knowledge/<area>/<topic>.md`
+
+With a topic list in the config, rules that share a subject share a file:
+
+```markdown
+---
+topic: migrations
+title: Migrations
+description: Alembic schema changes, backfills and their deploy order
+---
+
+## Keep million-row backfills out of schema migrations {#keep-million-row-backfills}
+<!-- homeostat
+status: accepted
+score: 4
+owner: sam
+scope: ["services/db/**"]
+source: { type: pr-feedback, url: "https://github.com/acme/api/pull/901#discussion_r7", author: sam, changedCode: true }
+created: 2026-10-02
+lastConfirmed: 2026-10-02
+tokens: 37
+-->
+
+Run large backfills as a separate job after the schema migration deploys.
+
+### Why
+A backfill inside the migration held a lock for 40 minutes in production.
+```
+
+- The heading is the title and `{#id}` the id; the comment holds the other fields, without `id`, `title`, `area` or `topic`, which the file and heading give.
+- `### Why` and `### Example` replace the `##` sections of a one-rule file.
+- Sections are kept sorted by id; `validate` warns when they are not and fails on a duplicate id or a topic missing from the config.
+- `learn --topic <topic>` picks the file (else a word match on the topic names, else `general`, which is always allowed); the daily run's drafter picks it from the list.
 
 ### Scoring
 

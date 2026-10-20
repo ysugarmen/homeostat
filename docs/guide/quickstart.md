@@ -36,6 +36,25 @@ sources:
   repos: [your-org/api, your-org/web]
 ```
 
+When the team owns several repos and wants each repo's rules kept apart, list them under `repos` instead, each with its own areas; a session then gets only its own repo's rules plus the shared ones in `knowledge/core/`:
+
+```yaml
+repos:
+  api:
+    source: your-org/api
+    areas:
+      integrations: ["services/integrations/**"]
+  web:
+    source: your-org/web
+    areas:
+      frontend: ["apps/web/**"]
+sources:
+  host: github
+  kbRepo: your-org/team-kb
+```
+
+Member areas are then written `api/integrations`. To group rules into a few files by subject rather than one file each, add a `topics` list ([details](entries.md#where-they-live)).
+
 Then generate CODEOWNERS, so each area's owners review its changes (on Bitbucket it goes in `.bitbucket/CODEOWNERS`, where Bitbucket reads it):
 
 ```sh
@@ -43,7 +62,17 @@ npx --yes homeostat@0.1.11 codeowners
 npx --yes homeostat@0.1.11 validate
 ```
 
-## 3. Write a first rule
+## 3. Build a first base
+
+With your code repos checked out next to the KB:
+
+```sh
+npx --yes homeostat@0.1.11 bootstrap --dry-run
+```
+
+It lists every file it would read from each repo (existing docs, schemas and migrations, charts and pipelines) and what the model calls would cost. Run it without `--dry-run` to import the docs and draft the rest; you get one PR per repo to correct and merge ([details](bootstrap.md)).
+
+## 4. Write a first rule
 
 ```sh
 npx --yes homeostat@0.1.11 learn --area integrations \
@@ -54,7 +83,7 @@ npx --yes homeostat@0.1.11 learn --area integrations \
 
 Or capture it from a review comment: `homeostat learn <comment URL>`. Commit on a branch, open a PR, and once it is approved the rule is live.
 
-## 4. Get it to your agents
+## 5. Get it to your agents
 
 - **Claude Code**: install the plugin and point it at your KB checkout ([details](clients.md)):
 
@@ -66,7 +95,7 @@ Or capture it from a review comment: `homeostat learn <comment URL>`. Commit on 
 - **Cursor, Copilot, AGENTS.md**: from a code repo, run `homeostat export --kb ../team-kb`.
 - **Any MCP client**: run `homeostat mcp`.
 
-## 5. Turn on the daily run
+## 6. Turn on the daily run
 
 Add the secrets `init` printed: a git-host token and a Claude credential, or use your cloud account ([runtimes](../runtimes.md)). Run `homeostat curate --show-prompts` once to see exactly what would be sent, and `homeostat daily --dry-run` to see what it would decide. From then on, each morning, every developer's lessons and what their reviewers taught them arrive in one PR per developer. Confident lessons merge themselves; only the uncertain ones wait for a reviewer ([how it decides](agents.md#daily)). Developers need nothing beyond the plugin: their sessions sync in the background.
 
