@@ -33,3 +33,21 @@ describe("handles", () => {
     expect(parseConfig(yaml("no-at-sign")).config).toBeUndefined();
   });
 });
+
+describe("memberFromGit", () => {
+  const members = [
+    { id: "yonatan", handle: "@Yonatan Sugarmen" },
+    { id: "dana", handle: "@dana" },
+    { id: "dani-toro", handle: "@dani.toro" },
+  ];
+  test("a git name finds its member by id, by handle, or by a unique first name", async () => {
+    const { memberFromGit } = await import("../src/handles.ts");
+    // From a real setup: git user.name "Yonatan Sugarmen", member yonatan, Bitbucket nickname
+    // "Yonatan Sugarmen". It used to become yonatan-sugarmen, so sync kept every lesson local.
+    expect(memberFromGit(members, "Yonatan Sugarmen")).toBe("yonatan");
+    expect(memberFromGit(members, "Dana")).toBe("dana");
+    expect(memberFromGit(members, "Dana Ruiz")).toBe("dana");
+    expect(memberFromGit(members, "Someone Else")).toBe("someone-else");
+    expect(memberFromGit(members, undefined)).toBe("owner");
+  });
+});

@@ -9,6 +9,7 @@ import {
   type Heartbeat,
   lessonHash,
   locate,
+  memberFromGit,
   migratedPath,
   parseEntry,
   readKbFiles,
@@ -104,7 +105,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   }
   const base = config.sources?.baseBranch ?? "main";
   const now = (io.now?.() ?? new Date()).toISOString();
-  const member = memberIdFrom(git(root, "config", "user.name"));
+  const member = memberFromGit(config.team.members, git(root, "config", "user.name"));
   const isMember = config.team.members.some((m) => m.id === member);
   const state = readSyncState(root);
   const notices: Notice[] = [];

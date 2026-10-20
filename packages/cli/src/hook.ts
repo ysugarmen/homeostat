@@ -10,6 +10,7 @@ import {
   inRepo,
   isMultiRepo,
   logEvent,
+  memberFromGit,
   pruneEvents,
   readKbFiles,
   readKbView,
@@ -60,7 +61,7 @@ async function sessionStart(input: HookInput, io: Io) {
   pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
 
   const paths = touchedPaths(cwd);
-  const member = memberIdFrom(git(cwd, "config", "user.name"));
+  const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
   // A multi-repo KB: shared rules plus this checkout's repo; none of the other repos'.
   const repo = repoHere(cwd, config);
   const selection = selectEntries(
@@ -222,7 +223,7 @@ async function stop(input: HookInput, io: Io) {
   const edits = Math.max(countEdits(input.transcript_path), changed);
   if (edits < config.agents.handoff.minEdits && !state.compacted) return;
 
-  const member = memberIdFrom(git(cwd, "config", "user.name"));
+  const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
   if (!config.team.members.some((m) => m.id === member)) return;
 
   writeState(kbRoot, input.session_id, { ...state, asked: true });
@@ -264,7 +265,7 @@ async function prompt(input: HookInput, io: Io) {
 
   const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files);
   if (!config) return;
-  const member = memberIdFrom(git(cwd, "config", "user.name"));
+  const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
   const seen = new Set(state.injected ?? []);
   const repo = repoHere(cwd, config);
   const selection = selectEntries(

@@ -1,4 +1,11 @@
-import { logEvent, readEvents, readKbView } from "@homeostat/core";
+import {
+  logEvent,
+  memberFromGit,
+  readEvents,
+  readKbFiles,
+  readKbView,
+  validate,
+} from "@homeostat/core";
 import { type LearnInput, type McpDeps, serveStdio } from "@homeostat/mcp";
 import type { Io } from "./cli.ts";
 import { runFlag } from "./flag.ts";
@@ -28,7 +35,11 @@ async function captured(run: (io: Io) => number | Promise<number>, base: Io): Pr
  */
 export function mcpDeps(io: Io, cwd = process.cwd()): McpDeps {
   const kbRoot = findKb(io.env, cwd);
-  const member = () => memberIdFrom(git(cwd, "config", "user.name"));
+  const member = () =>
+    memberFromGit(
+      (kbRoot ? validate(readKbFiles(kbRoot)).config?.team.members : undefined) ?? [],
+      git(cwd, "config", "user.name"),
+    );
   const quiet: Io = { ...io, ask: undefined } as Io;
 
   return {
