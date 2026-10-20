@@ -5,6 +5,7 @@ import {
   CONFIG_FILE,
   CORE_AREA,
   type Config,
+  detectRepo,
   docContext,
   logEvent,
   pruneEvents,
@@ -71,6 +72,7 @@ async function sessionStart(input: HookInput, io: Io) {
     session: input.session_id,
     source: input.source,
     cwd,
+    ...(repoHere(cwd, config) ? { repo: repoHere(cwd, config) } : {}),
     paths: paths.length,
     entries: selection.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
     dropped: selection.dropped,
@@ -348,3 +350,6 @@ export async function runHook(event: string, io: Io): Promise<number> {
   }
   return 0;
 }
+
+/** The KB repo this session's checkout is, in a multi-repo KB. */
+const repoHere = (cwd: string, config: Config) => detectRepo(cwd, config);

@@ -65,6 +65,7 @@ export function mcpDeps(io: Io, cwd = process.cwd()): McpDeps {
         ? readEvents(kbRoot, { since: new Date(Date.now() - 366 * 86_400_000).toISOString() })
         : [],
     member,
+    checkout: () => io.env?.CLAUDE_PROJECT_DIR || cwd,
     now: () => io.now?.() ?? new Date(),
   };
 }

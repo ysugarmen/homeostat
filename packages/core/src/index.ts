@@ -213,6 +213,7 @@ export {
   repoOf,
 } from "./layout.ts";
 export * from "./providers/index.ts";
+export { detectRepo, remoteRepo, repoFor } from "./repo-detect.ts";
 export { RISK_ADVICE, type RiskFinding, scanRisk } from "./risk.ts";
 export {
   type Frontmatter,

@@ -59,7 +59,7 @@ The hooks, the MCP server, `learn` and `export` need the current repo. In order:
 2. The checkout folder's name, matched against the short names, for clones without a remote.
 3. Neither matches: shared `core` only. The session start says so once, and `doctor` lists checkouts it could not place.
 
-Risk to verify early: the plugin's MCP server must know the session's folder. The hooks get `cwd` in their input; the MCP server only has its process directory. Check whether Claude Code starts plugin MCP servers in the project directory, or passes `CLAUDE_PROJECT_DIR`. If neither, the MCP tools take an optional `repo` argument, and the hook's session context tells the agent which one to pass.
+Checked: Claude Code starts the plugin's MCP server in the session's project folder, and sets `CLAUDE_PROJECT_DIR`. So the MCP server reads the remote from its own working folder, as the hooks read it from their `cwd`, and the MCP tools need no `repo` argument.
 
 ## Command by command
 
@@ -171,7 +171,7 @@ For each repo in `repos`, from a local checkout (found by remote, or given with 
    - the topic list in the config
    - one read/write layer that every command uses, so that later steps write sections, not files
    - sorted writes, and rebuilding a topic file when a PR conflicts
-3. **Repo detection:** for the hooks and CLI, from git remotes. Then verify MCP's working folder, and settle the fallback.
+3. **Repo detection:** for the hooks, the CLI and the MCP server (which runs in the session's folder), from git remotes, with the folder name as fallback.
 4. **Selection:** injection, MCP `context` and `search`, and `export`, scoped to repo plus shared core.
 5. **Writing:**
    - `learn` (`--topic` and the word-match fallback), `curate` and `daily`, with the drafter choosing the topic

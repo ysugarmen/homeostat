@@ -316,3 +316,38 @@ describe("documents (K6)", () => {
     expect((await call("docs")).text).toContain("No team documents match");
   });
 });
+
+describe("a multi-repo KB", () => {
+  test("context records which repo the session's folder is", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const checkout = mkdtempSync(join(tmpdir(), "homeostat-mcp-checkout-"));
+    execFileSync("git", ["init", "-q", checkout]);
+    execFileSync("git", [
+      "-C",
+      checkout,
+      "remote",
+      "add",
+      "origin",
+      "https://github.com/acme/api.git",
+    ]);
+    const events: Record<string, unknown>[] = [];
+    const server = createServer({
+      readKb: () => ({
+        "homeostat.yaml":
+          'version: 1\nteam:\n  members:\n    - { id: dana, handle: "@dana", role: senior, areas: [core] }\nrepos:\n  api:\n    source: acme/api\n',
+      }),
+      learn: async () => "",
+      flag: async () => "",
+      log: (e) => events.push(e),
+      checkout: () => checkout,
+      now: () => new Date("2026-10-14T09:00:00Z"),
+    });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
+    await client.callTool({ name: "context", arguments: { paths: ["services/app.py"] } });
+    expect(events.find((e) => e.type === "injection")?.repo).toBe("api");
+  });
+});

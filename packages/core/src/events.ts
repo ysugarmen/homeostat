@@ -110,7 +110,7 @@ export function describeEvent(e: Event): string {
       case "injection": {
         const entries = (rest.entries as { id: string }[] | undefined) ?? [];
         const via = rest.source === "mcp" ? "MCP" : `hook${rest.source ? ` (${rest.source})` : ""}`;
-        return `${entries.length} rule${entries.length === 1 ? "" : "s"} (${rest.tokens ?? "?"} tokens) via ${via}${entries.length ? `: ${entries.map((x) => x.id).join(", ")}` : ""}`;
+        return `${entries.length} rule${entries.length === 1 ? "" : "s"} (${rest.tokens ?? "?"} tokens) via ${via}${rest.repo ? ` in ${rest.repo}` : ""}${entries.length ? `: ${entries.map((x) => x.id).join(", ")}` : ""}`;
       }
       case "mcp-call":
         return `tool ${rest.tool}`;

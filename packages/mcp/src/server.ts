@@ -1,4 +1,5 @@
 import {
+  detectRepo,
   docCovers,
   docRef,
   type Entry,
@@ -42,6 +43,8 @@ export interface McpDeps {
   events?(): Record<string, unknown>[];
   /** The member this session belongs to, for team-only areas; unknown hides them. */
   member?(): string | undefined;
+  /** The session's folder: Claude Code starts the server there, and sets CLAUDE_PROJECT_DIR. */
+  checkout?(): string;
   now(): Date;
 }
 
@@ -338,6 +341,7 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
           );
         }
         case "context": {
+          const repo = deps.checkout ? detectRepo(deps.checkout(), config) : undefined;
           const a = args as z.infer<typeof schemas.context>;
           const selection = selectEntries(entries, {
             paths: a.paths,
@@ -348,6 +352,7 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
             ts,
             type: "injection",
             source: "mcp",
+            ...(repo ? { repo } : {}),
             entries: selection.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
             tokens: selection.tokens,
           });

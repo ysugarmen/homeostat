@@ -197,3 +197,33 @@ describe("findKb", () => {
     );
   });
 });
+
+describe("SessionStart in a multi-repo KB", () => {
+  test("the injection event records which repo the session's checkout is", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "homeostat-multi-kb-"));
+    writeFileSync(
+      join(dir, "homeostat.yaml"),
+      `version: 1
+team:
+  members:
+    - { id: dana, handle: "@dana", role: senior, areas: [core] }
+repos:
+  api:
+    source: acme/api
+  worker:
+    source: acme/worker
+`,
+    );
+    mkdirSync(join(dir, "knowledge", "core"), { recursive: true });
+    const code = codeRepo(["services/app.py"]);
+    execFileSync("git", ["-C", code, "remote", "add", "origin", "git@github.com:acme/worker.git"]);
+    const { code: exit } = await hook(
+      "session-start",
+      { session_id: "s1", source: "startup", cwd: code },
+      { HOMEOSTAT_DIR: dir },
+    );
+    expect(exit).toBe(0);
+    const injection = readEvents(dir, { since: "2026-01-01" }).find((e) => e.type === "injection");
+    expect(injection?.repo).toBe("worker");
+  });
+});
