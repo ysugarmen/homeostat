@@ -1,5 +1,12 @@
-import { type Config, findRule, foldRules, type KbFiles } from "@homeostat/core";
-import { git, showFile } from "./git.ts";
+import {
+  type Config,
+  findRule,
+  foldRules,
+  isTopicFile,
+  type KbFiles,
+  mergeTopicFile,
+} from "@homeostat/core";
+import { commitFile, git, showFile } from "./git.ts";
 import type { FileChange } from "./publish.ts";
 
 /** The KB's files at a git ref: everything under knowledge/, plus homeostat.yaml. */
@@ -62,3 +69,59 @@ export const branchRef = (root: string, branch: string): string =>
   git(root, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`)
     ? `refs/heads/${branch}`
     : "HEAD";
+
+/**
+ * Puts a Homeostat PR branch back on top of the base when they conflict: each file the PR
+ * changed is taken from the PR if the base left it alone, kept if the PR did, and merged
+ * section by section if both changed a topic file. The result is committed onto the base
+ * and force-pushed to the PR's branch (Homeostat's own, never a person's). Fails, changing
+ * nothing, when the same rule changed on both sides or a non-topic file conflicts.
+ */
+export function rebuildOnBase(
+  root: string,
+  base: string,
+  branch: string,
+): { rebuilt: true } | { rebuilt: false; reason: string } {
+  const B = `refs/remotes/origin/${base}`;
+  const S = `refs/remotes/origin/${branch}`;
+  git(root, "fetch", "--quiet", "origin", `+refs/heads/${base}:${B}`, `+refs/heads/${branch}:${S}`);
+  const mb = git(root, "merge-base", B, S);
+  if (!mb) return { rebuilt: false, reason: `${branch} shares no history with ${base}` };
+  const changed = (git(root, "diff", "--name-only", mb, S) ?? "").split("\n").filter(Boolean);
+  const out: Record<string, string | null> = {};
+  const both: string[] = [];
+  for (const path of changed) {
+    const was = showFile(root, mb, path);
+    const ours = showFile(root, B, path);
+    const theirs = showFile(root, S, path);
+    if (ours === was) out[path] = theirs ?? null;
+    else if (theirs === was || ours === theirs) continue;
+    else if (isTopicFile(ours ?? "") || isTopicFile(theirs ?? "")) {
+      const merged = mergeTopicFile(path, was, ours ?? "", theirs ?? "");
+      if (merged.conflicts.length) both.push(...merged.conflicts.map((id) => `${path}#${id}`));
+      else out[path] = merged.text;
+    } else {
+      return { rebuilt: false, reason: `${path} changed on both sides and is not a topic file` };
+    }
+  }
+  if (both.length) {
+    return { rebuilt: false, reason: `the same rules changed on both sides: ${both.join(", ")}` };
+  }
+  const tmp = `homeostat-rebuild-${process.pid}`;
+  git(root, "branch", "--force", tmp, B);
+  for (const [path, text] of Object.entries(out)) {
+    commitFile(root, tmp, path, text, `homeostat: rebuild ${path} on ${base}`);
+  }
+  const pushed = git(
+    root,
+    "push",
+    "--quiet",
+    "--force",
+    "origin",
+    `refs/heads/${tmp}:refs/heads/${branch}`,
+  );
+  git(root, "branch", "-D", tmp);
+  return pushed === undefined
+    ? { rebuilt: false, reason: `could not push the rebuilt ${branch}` }
+    : { rebuilt: true };
+}

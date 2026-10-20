@@ -1,15 +1,18 @@
 import { resolve } from "node:path";
 import {
+  type Config,
   type Provider,
   ProviderError,
   type PullRequestDetails,
   type RepoRef,
   readKbFiles,
+  usesTopics,
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { painter } from "./format.ts";
 import { findKb } from "./hook.ts";
+import { rebuildOnBase } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 
 /**
@@ -49,6 +52,9 @@ interface Context {
   provider: Provider;
   kbRepo: RepoRef;
   base: string;
+  /** The KB checkout, for rebuilding a conflicting topic file. */
+  root: string;
+  config: Config;
 }
 
 function context(opts: ReviewOptions, io: Io): Context {
@@ -68,6 +74,8 @@ function context(opts: ReviewOptions, io: Io): Context {
     provider: providerFor(sources.host, io, "review homeostat's pull requests"),
     kbRepo: { owner, name },
     base: sources.baseBranch,
+    root,
+    config,
   };
 }
 
@@ -233,12 +241,35 @@ async function show(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Pro
 
 async function merge(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Promise<number> {
   const pr = await homeostatPr(ctx, ref, "merge");
+  let rebuilt = false;
   if (pr.conflicts) {
-    io.stderr(conflictHelp(pr));
-    return 1;
+    // Grouped rules conflict when the base gained rules in the same topic file since the PR was
+    // opened; those merge section by section, so the PR is rebuilt on the base and merged.
+    const r = usesTopics(ctx.config)
+      ? rebuildOnBase(ctx.root, ctx.base, pr.sourceBranch)
+      : { rebuilt: false as const, reason: "" };
+    if (!r.rebuilt) {
+      if (r.reason) io.stderr(`could not rebuild #${pr.id} on ${pr.targetBranch}: ${r.reason}\n`);
+      io.stderr(conflictHelp(pr));
+      return 1;
+    }
+    rebuilt = true;
+    if (!opts.json)
+      io.stdout(
+        `rebuilt #${pr.id} on ${pr.targetBranch}: its topic files now include both sides\n`,
+      );
   }
   try {
-    await ctx.provider.mergePullRequest(ctx.kbRepo, pr.id);
+    // A host recomputes whether a rebuilt PR merges a moment after the push.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await ctx.provider.mergePullRequest(ctx.kbRepo, pr.id);
+        break;
+      } catch (e) {
+        if (!rebuilt || attempt >= 4 || !(e instanceof ProviderError)) throw e;
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    }
   } catch (e) {
     if (!(e instanceof ProviderError)) throw e;
     io.stderr(
