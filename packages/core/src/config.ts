@@ -131,6 +131,11 @@ export const configSchema = z.strictObject({
    * each repo lists its own under repos.<name>.topics. `general` is always allowed.
    */
   topics: z.record(name, z.string().min(1)).optional(),
+  /**
+   * Written by homeostat migrate: each old area → the repo it moved to, or "shared" for
+   * knowledge/core/. A developer's sync uses it to move their pending lessons.
+   */
+  migrated: z.record(z.string(), z.string()).optional(),
   repos: z
     .record(
       name,

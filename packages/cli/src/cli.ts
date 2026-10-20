@@ -8,6 +8,7 @@ import type {
   Provider,
   RuleFixer,
   Seeder,
+  TopicProposer,
 } from "@homeostat/core";
 import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
@@ -25,6 +26,7 @@ import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
 import { runMcp } from "./mcp.ts";
+import { runMigrate } from "./migrate.ts";
 import { runExplain, runList, runSearch, runStatus } from "./query.ts";
 import { type ReviewOptions, runReview } from "./review.ts";
 import { runSeed, type SeedOptions } from "./seed.ts";
@@ -58,6 +60,7 @@ export interface Io {
   merger?: Merger;
   judge?: ConflictJudge;
   fixer?: RuleFixer;
+  topicProposer?: TopicProposer;
 }
 
 async function readStdin(): Promise<string> {
@@ -406,6 +409,26 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--push", "push --branch to origin after committing")
     .action((id: string, opts: FlagOptions) => {
       exitCode = runFlag(id, opts, io);
+    });
+
+  program
+    .command("migrate")
+    .description(
+      "Move a one-repo KB to the multi-repo layout (knowledge/<repo>/<area>/), optionally grouping rules by topic.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--repo <name>", "one source repo: its short name (default: the repo's own name)")
+    .option(
+      "--map <area=repo>",
+      "several repos: which repo each area moves to; repeatable",
+      collect,
+    )
+    .option("--shared", "keep the core rules shared by every repo, in knowledge/core/")
+    .option("--topics", "also group the rules into topic files, with topics the model proposes")
+    .option("--dry-run", "print the plan; write nothing")
+    .option("--skip-pr-check", "do not ask the host whether a review PR is open")
+    .action(async (opts) => {
+      exitCode = await runMigrate(opts, io);
     });
 
   program

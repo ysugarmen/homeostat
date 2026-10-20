@@ -217,6 +217,15 @@ export {
   repoOf,
   ruleFilePath,
 } from "./layout.ts";
+export {
+  ClaudeTopicProposer,
+  type MigrationPlan,
+  type MigrationResult,
+  migratedPath,
+  migrateKb,
+  TOPICS_SYSTEM,
+  type TopicProposer,
+} from "./migrate.ts";
 export * from "./providers/index.ts";
 export { detectRepo, remoteRepo, repoFor } from "./repo-detect.ts";
 export { RISK_ADVICE, type RiskFinding, scanRisk } from "./risk.ts";

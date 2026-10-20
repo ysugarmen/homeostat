@@ -8,12 +8,16 @@ import {
   HEARTBEAT_PATH,
   type Heartbeat,
   lessonHash,
+  locate,
+  migratedPath,
   readKbFiles,
   readPendingFiles,
   removePendingFile,
+  repoNames,
   STATE_BRANCH,
   VERSION,
   validate,
+  writePendingFile,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { commitTree, forcePush, git } from "./git.ts";
@@ -167,6 +171,20 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
           text: `your KB clone is ${ahead} commit${ahead === 1 ? "" : "s"} behind: ${onBase ? "tracked files have local changes" : `it is not on ${base}`}; run homeostat sync to see`,
         });
       }
+    }
+  }
+
+  // 3b. The KB moved to the multi-repo layout (homeostat migrate): pending lessons follow.
+  const now3 = validate(readKbFiles(root)).config;
+  if (now3?.migrated) {
+    for (const [path, text] of Object.entries(readPendingFiles(root))) {
+      // Only paths the new layout cannot place: knowledge/core/ is valid (shared) as it is.
+      if (locate(path, repoNames(now3))) continue;
+      const to = migratedPath(path, now3);
+      if (!to || to === path) continue;
+      writePendingFile(root, to, text);
+      removePendingFile(root, path);
+      say(`moved your pending ${path.slice(path.lastIndexOf("/") + 1, -3)} to ${to}\n`);
     }
   }
 

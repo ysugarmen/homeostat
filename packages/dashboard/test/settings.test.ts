@@ -50,7 +50,8 @@ describe("every config key is editable (4.2)", () => {
         ? [{ team: "team.members", areas: "areas", teams: "teams", repos: "repos" }[s.rows]]
         : [],
     );
-    const later: string[] = [];
+    // Written by homeostat migrate for developers' syncs, never edited by hand.
+    const later = ["migrated"];
     const missing = leafKeys(configSchema).filter(
       (k) =>
         k !== "version" &&
