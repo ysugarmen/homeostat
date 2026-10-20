@@ -48,8 +48,8 @@ describe("every config key is editable (4.2)", () => {
     const rows = SECTIONS.flatMap((s) =>
       s.rows ? [{ team: "team.members", areas: "areas", teams: "teams" }[s.rows]] : [],
     );
-    // repos (multi-repo KBs) is edited in homeostat.yaml until its row editor lands (0.2.0 step 5).
-    const later = ["repos"];
+    // repos and topics are edited in homeostat.yaml until their editors land (0.2.0 step 6).
+    const later = ["repos", "topics"];
     const missing = leafKeys(configSchema).filter(
       (k) =>
         k !== "version" &&

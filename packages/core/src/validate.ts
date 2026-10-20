@@ -8,13 +8,18 @@ import { areasOf, locate, repoNames } from "./layout.ts";
 import { RISK_ADVICE, scanRisk } from "./risk.ts";
 import { score } from "./score.ts";
 import { findEmails, scanSecrets } from "./secrets.ts";
+import { GENERAL_TOPIC, isTopicFile, parseTopicFile, rulePath, topicsFor } from "./topics.ts";
 
 /** A knowledge base as file contents keyed by path relative to its root, `/`-separated. */
 export type KbFiles = Record<string, string>;
 
 export interface ValidatedEntry {
+  /** The rule's path as a one-rule file, `…/<area>/<id>.md`, real or (in a topic file) virtual. */
   path: string;
   entry: Entry;
+  /** The topic file it lives in, when it is grouped; `path` is then virtual. */
+  file?: string;
+  topic?: string;
 }
 
 export interface ValidatedDoc {
@@ -55,6 +60,10 @@ export function validate(files: KbFiles): ValidateResult {
 
   const entries: ValidatedEntry[] = [];
   for (const path of Object.keys(files).filter(isEntryPath).sort()) {
+    if (isTopicFile(files[path] ?? "")) {
+      issues.push(...topicFileIssues(path, files[path] ?? "", config, entries));
+      continue;
+    }
     const parsed = parseEntry(files[path] ?? "");
     issues.push(...parsed.issues.map((i) => ({ ...i, file: path })));
     issues.push(...contentIssues(path, files[path] ?? ""));
@@ -75,8 +84,8 @@ export function validate(files: KbFiles): ValidateResult {
   }
 
   const pathOf = new Map<string, string[]>();
-  for (const { path, entry } of entries) {
-    pathOf.set(entry.frontmatter.id, [...(pathOf.get(entry.frontmatter.id) ?? []), path]);
+  for (const { path, file, entry } of entries) {
+    pathOf.set(entry.frontmatter.id, [...(pathOf.get(entry.frontmatter.id) ?? []), file ?? path]);
   }
   for (const c of detectConflicts(entries.map((e) => e.entry.frontmatter))) {
     const [first] = c.ids;
@@ -92,6 +101,76 @@ export function validate(files: KbFiles): ValidateResult {
   }
 
   return { ok: !hasErrors(issues), issues, entries, docs, ...(config ? { config } : {}) };
+}
+
+/**
+ * A topic file: its own structure, then each rule as if it were a one-rule file at its virtual
+ * path. Issues point at the topic file, prefixed with the rule's #id.
+ */
+function topicFileIssues(
+  path: string,
+  text: string,
+  config: Config | undefined,
+  entries: ValidatedEntry[],
+): Issue[] {
+  const parsed = parseTopicFile(path, text);
+  const issues: Issue[] = [...parsed.issues, ...contentIssues(path, text)];
+  const repo = config?.repos ? locate(path, repoNames(config))?.repo : undefined;
+  if (config && parsed.meta) {
+    const topics = topicsFor(config, repo);
+    const topic = parsed.meta.topic;
+    if (!topics) {
+      issues.push(
+        error(
+          "topic.unconfigured",
+          `rules are grouped in topic files only when ${repo ? `repos.${repo}.topics` : "topics"} is set in homeostat.yaml`,
+          { file: path },
+        ),
+      );
+    } else if (topic !== GENERAL_TOPIC && !Object.hasOwn(topics, topic)) {
+      issues.push(
+        error(
+          "topic.unknown",
+          `topic "${topic}" is not in ${repo ? `repos.${repo}.topics` : "topics"} (${[GENERAL_TOPIC, ...Object.keys(topics)].join(", ")})`,
+          { file: path, path: "topic" },
+        ),
+      );
+    }
+  }
+  const ids = parsed.sections.map((s) => s.id);
+  if (ids.some((id, i) => i > 0 && id.localeCompare(ids[i - 1] ?? "") < 0)) {
+    issues.push({
+      code: "topic.unsorted",
+      severity: "warning",
+      message:
+        "rules are not sorted by id; keeping them sorted lets separate PRs change separate lines",
+      file: path,
+    });
+  }
+  const seen = new Set<string>();
+  for (const section of parsed.sections) {
+    const at = (i: Issue): Issue => ({ ...i, file: path, message: `#${section.id}: ${i.message}` });
+    if (seen.has(section.id)) {
+      issues.push(
+        error("topic.duplicate", `#${section.id}: listed twice in this file`, { file: path }),
+      );
+      continue;
+    }
+    seen.add(section.id);
+    if (section.text === undefined) continue;
+    const virtual = rulePath(path, section.id);
+    const entry = parseEntry(section.text);
+    issues.push(...entry.issues.map(at));
+    if (!entry.entry) continue;
+    entries.push({
+      path: virtual,
+      entry: entry.entry,
+      file: path,
+      topic: parsed.meta?.topic ?? "",
+    });
+    if (config) issues.push(...checkWithConfig(virtual, entry.entry, config).map(at));
+  }
+  return issues;
 }
 
 function checkWithConfig(path: string, entry: Entry, config: Config): Issue[] {

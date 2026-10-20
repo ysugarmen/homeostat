@@ -256,6 +256,21 @@ export {
 export { slugify } from "./slug.ts";
 export { countTokens } from "./tokens.ts";
 export {
+  foldRules,
+  formatTopicFile,
+  GENERAL_TOPIC,
+  isTopicFile,
+  mergeTopicFile,
+  parseTopicFile,
+  rulePath,
+  ruleSection,
+  type TopicMeta,
+  type TopicSection,
+  topicFilePath,
+  topicsFor,
+  usesTopics,
+} from "./topics.ts";
+export {
   type KbFiles,
   type ValidatedDoc,
   type ValidatedEntry,

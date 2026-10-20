@@ -125,6 +125,12 @@ export const configSchema = z.strictObject({
    * multi-repo: knowledge/core/ is shared, knowledge/<repo>/<area>/ is one repo's, and a session
    * only gets its own repo's rules. Without it, every rule applies to every repo.
    */
+  /**
+   * Topic name → one-line description. With topics, rules are grouped into one file per topic,
+   * `knowledge/<area>/<topic>.md`; in a multi-repo KB these are the shared rules' topics, and
+   * each repo lists its own under repos.<name>.topics. `general` is always allowed.
+   */
+  topics: z.record(name, z.string().min(1)).optional(),
   repos: z
     .record(
       name,
@@ -133,6 +139,8 @@ export const configSchema = z.strictObject({
         source: repoRef,
         /** Area name → path globs relative to this repo's root. */
         areas: z.record(name, z.array(z.string().min(1)).min(1)).default({}),
+        /** Topic name → one-line description: this repo's rules are grouped in topic files. */
+        topics: z.record(name, z.string().min(1)).optional(),
       }),
     )
     .optional(),
