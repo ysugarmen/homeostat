@@ -9,6 +9,7 @@ export interface RiskFinding {
   kind:
     | "pipe-to-shell"
     | "unlisted-url"
+    | "unlisted-host"
     | "credential-handling"
     | "disable-security"
     | "injection"
@@ -22,6 +23,8 @@ export interface RiskFinding {
 export const RISK_ADVICE: Record<RiskFinding["kind"], string> = {
   "pipe-to-shell": "runs downloaded code",
   "unlisted-url": "points agents at a domain not in security.allowedDomains",
+  "unlisted-host":
+    "names a host not in security.allowedDomains; internal hostnames should not reach agents",
   "credential-handling": "tells agents to move or reveal credentials",
   "disable-security": "tells agents to turn a security check off (fine if it says never to)",
   injection: "reads like a prompt injection",
@@ -71,12 +74,29 @@ const RULES: [RiskFinding["kind"], RegExp][] = [
 
 const URL = /https?:\/\/([^\s/)>\]`'"]+)[^\s)>\]`'"]*/gi;
 
+/** Hosts that point nowhere real: reserved for documentation and tests, loopback, or one label (an in-cluster or compose service name). */
+const HARMLESS_HOST =
+  /^(?:localhost|[^.]+|(?:[^.]+\.)*(?:example|test|invalid|localhost)|(?:[^.]+\.)*example\.(?:com|org|net)|127(?:\.\d+){3}|\[?::1\]?|0\.0\.0\.0)$/;
+
+const hostOf = (host: string) => host.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
+
 const allowed = (host: string, domains: readonly string[]) => {
-  const h = host.toLowerCase().replace(/:\d+$/, "");
+  const h = hostOf(host);
+  if (!/[a-z0-9]/.test(h) || HARMLESS_HOST.test(h)) return true;
   return domains.some((d) => h === d.toLowerCase() || h.endsWith(`.${d.toLowerCase()}`));
 };
 
-export function scanRisk(text: string, opts: { allowedDomains: readonly string[] }): RiskFinding[] {
+/**
+ * Hostnames written without a scheme (`api.prod.acme.io`, `*.dev.acme.io`), on the TLDs internal
+ * hosts usually use. Only drafted text is scanned for them: written text names hosts on purpose.
+ */
+const BARE_HOST =
+  /(?<![\w@/.-])(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|io|ai|net|org|dev|app|cloud|co|internal|corp|lan|local)\b(?![\w-]|\.[a-z])/gi;
+
+export function scanRisk(
+  text: string,
+  opts: { allowedDomains: readonly string[]; bareHosts?: boolean },
+): RiskFinding[] {
   const found: RiskFinding[] = [];
   for (const [kind, re] of RULES) {
     const m = re.exec(text);
@@ -84,9 +104,23 @@ export function scanRisk(text: string, opts: { allowedDomains: readonly string[]
       found.push({ kind, excerpt: m[0].trim().slice(0, 80) });
     }
   }
+  // One finding per host: a document listing ten URLs on one site needs one sign-off line.
+  const seen = new Set<string>();
   for (const m of text.matchAll(URL)) {
-    if (!allowed(m[1] ?? "", opts.allowedDomains))
-      found.push({ kind: "unlisted-url", excerpt: m[0].replace(/[.,;:!?]+$/, "").slice(0, 80) });
+    const host = hostOf(m[1] ?? "");
+    if (seen.has(host) || allowed(host, opts.allowedDomains)) continue;
+    seen.add(host);
+    found.push({ kind: "unlisted-url", excerpt: m[0].replace(/[.,;:!?]+$/, "").slice(0, 80) });
+  }
+  if (opts.bareHosts) {
+    // Template placeholders (`<slot>.dev.acme.io`, `{env}.acme.io`) stand in for a label.
+    const plain = text.replace(URL, " ").replace(/<[^<>\s]{1,30}>|\{[^{}\s]{1,30}\}/g, "x");
+    for (const m of plain.matchAll(BARE_HOST)) {
+      const host = hostOf(m[0].replace(/^\*\./, ""));
+      if (seen.has(host) || allowed(host, opts.allowedDomains)) continue;
+      seen.add(host);
+      found.push({ kind: "unlisted-host", excerpt: m[0] });
+    }
   }
   return found;
 }

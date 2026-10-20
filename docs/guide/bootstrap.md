@@ -55,6 +55,6 @@ The model calls use `agents.curator` (its runtime and model). The cost estimate 
 
 ## What you get
 
-One pull request per repo on the KB repo. It lists the documents imported as they are, the drafted ones, and every file that was sent. Drafted sections are marked `source=bootstrap` with the model's confidence. Documents never merge on their own: read them, correct what is wrong, and merge. Other agents will treat them as fact. A document that mentions an internal hostname or credentials is held until a member signs it off with `riskReviewedBy`, as for any document.
+One pull request per repo on the KB repo. It lists the documents imported as they are, the drafted ones, and every file that was sent. Drafted sections are marked `source=bootstrap` with the model's confidence. Documents never merge on their own: read them, correct what is wrong, and merge. Other agents will treat them as fact. A document that links outside `security.allowedDomains` or talks about moving credentials is held until a member signs it off with `riskReviewedBy`, as for any document. Drafted sections are also checked for hostnames written without a link (`api.prod.acme.io`, `<slot>.dev.acme.io`), since a model copies them from manifests: add your own domains to `security.allowedDomains` if they may stay.
 
 Rules from past reviews are not part of a bootstrap: the daily run's backfill (`SINCE`) drafts and scores those.

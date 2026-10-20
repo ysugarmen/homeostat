@@ -120,7 +120,7 @@ The score orders rules in a session when the token budget is tight. It does not 
 - **Secrets:** cloud and git-host tokens, API keys, private keys, JWTs, passwords and credentialed URLs fail validation, so they cannot be merged. Emails are a warning; refer to people by member id.
 - **Risky instructions:** a rule fails until a member sets `riskReviewedBy` if it tells agents to:
   - pipe a download into a shell
-  - link to a domain outside `security.allowedDomains`
+  - link to a domain outside `security.allowedDomains` (placeholder domains such as `*.example`, `localhost` and one-word service names are fine; each domain is reported once)
   - move or reveal credentials
   - turn off TLS, auth or signature checks
   - read like a prompt injection

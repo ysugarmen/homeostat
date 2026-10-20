@@ -78,6 +78,8 @@ export interface FilePicker {
   newestFirst?: boolean;
   /** The most of `maxTotalBytes` one rank may fill, so models leave room for migrations. */
   rankShare?: number;
+  /** A larger limit for some files (CI pipelines hold the whole deploy flow). */
+  fileBytes?: (path: string) => number | undefined;
   /** A last test on a picked file's text; false leaves it out. */
   accept?: (path: string, text: string) => boolean;
   maxFileBytes: number;
@@ -146,6 +148,9 @@ const INFRA =
 const K8S_DIR =
   /(^|\/)(k8s|kubernetes|manifests|deploy|deployment|helm|charts|infra|ops)\/.+\.ya?ml$/;
 
+const PIPELINE =
+  /(^|\/)(bitbucket-pipelines\.yml|\.gitlab-ci\.yml|Jenkinsfile|cloudbuild\.ya?ml|\.github\/workflows\/[^/]+\.ya?ml)$/;
+
 /** Deploy manifests: chart and pipeline files first, then Terraform and raw manifests. */
 export const INFRA_FILES: FilePicker = {
   match: (p) => INFRA.test(p) || K8S_DIR.test(p),
@@ -156,6 +161,7 @@ export const INFRA_FILES: FilePicker = {
         ? 1
         : 2,
   rankShare: 0.5,
+  fileBytes: (p) => (PIPELINE.test(p) ? 30_000 : undefined),
   maxFileBytes: 6_000,
   maxTotalBytes: 80_000,
 };
@@ -207,7 +213,8 @@ export function snapshotRepo(
       skipped++;
       continue;
     }
-    const cut = raw.length > pick.maxFileBytes ? `${raw.slice(0, pick.maxFileBytes)}\n[cut]` : raw;
+    const limit = pick.fileBytes?.(path) ?? pick.maxFileBytes;
+    const cut = raw.length > limit ? `${raw.slice(0, limit)}\n[cut]` : raw;
     const r = redactSecrets(cut);
     if (r.findings.length >= SECRETS_FILE_FINDINGS) {
       skipped++;

@@ -253,9 +253,19 @@ function docConfigIssues(path: string, doc: Doc, config: Config): Issue[] {
   if (fm.riskReviewedBy === undefined) {
     const host = config.sources ? [HOST_DOMAINS[config.sources.host]] : [];
     const text = [doc.intro, ...doc.sections.map((s) => `${s.heading}\n${s.body}`)].join("\n");
-    for (const f of scanRisk(text, {
-      allowedDomains: [...host, ...config.security.allowedDomains],
-    })) {
+    // Drafted sections are also checked for bare hostnames: a model copies them from manifests.
+    const drafted = doc.sections
+      .filter((s) => s.provenance?.source === "seed" || s.provenance?.source === "bootstrap")
+      .map((s) => `${s.heading}\n${s.body}`)
+      .join("\n");
+    const allowedDomains = [...host, ...config.security.allowedDomains];
+    const findings = [
+      ...scanRisk(text, { allowedDomains }),
+      ...scanRisk(drafted, { allowedDomains, bareHosts: true }).filter(
+        (f) => f.kind === "unlisted-host",
+      ),
+    ];
+    for (const f of findings) {
       issues.push(
         error(
           `risk.${f.kind}`,

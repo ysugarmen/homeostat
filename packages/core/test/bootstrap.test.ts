@@ -79,6 +79,23 @@ describe("data and infrastructure pickers", () => {
     expect(isSecretManifest("kind: Deployment")).toBe(false);
   });
 
+  test("CI pipelines get a larger limit than other manifests", () => {
+    const big = {
+      "bitbucket-pipelines.yml": `steps:\n${"  - step: x\n".repeat(2_000)}`,
+      "charts/a/values.yaml": "x: 1\n".repeat(3_000),
+    };
+    const s = snapshotRepo(
+      "app",
+      Object.keys(big),
+      (p) => big[p as keyof typeof big],
+      [],
+      INFRA_FILES,
+    );
+    const len = (p: string) => s.files.find((f) => f.path === p)?.text.length ?? 0;
+    expect(len("bitbucket-pipelines.yml")).toBeGreaterThan(20_000);
+    expect(len("charts/a/values.yaml")).toBeLessThan(7_000);
+  });
+
   test("estimates tokens and cost by model family", () => {
     const snapshot = snapshotRepo("app", tracked, read, [], DATA_FILES);
     const e = estimate([{ snapshot, topic: "data" }], "claude-sonnet-5-5");

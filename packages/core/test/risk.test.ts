@@ -31,11 +31,37 @@ describe("scanRisk", () => {
   });
 
   test("URLs outside the allowlist are flagged; listed domains and their subdomains are not", () => {
-    const text = "See https://docs.example.com/retry and https://evil.example/x.";
-    expect(scanRisk(text, { allowedDomains: ["example.com"] }).map((f) => f.excerpt)).toEqual([
-      "https://evil.example/x",
+    const text = "See https://docs.acme.dev/retry and https://evil.biz/x.";
+    expect(scanRisk(text, { allowedDomains: ["acme.dev"] }).map((f) => f.excerpt)).toEqual([
+      "https://evil.biz/x",
     ]);
-    expect(kinds("See https://docs.example.com/retry", ["example.com"])).toEqual([]);
+    expect(kinds("See https://docs.acme.dev/retry", ["acme.dev"])).toEqual([]);
+  });
+
+  test("placeholder, loopback and in-cluster hosts are never flagged, and each host once", () => {
+    const text = [
+      "https://book.mirai.example/?a=1 https://www.example.com/x http://localhost:5000",
+      "http://platform-api:5000 http://127.0.0.1:8080 https://.../notifications",
+      "https://api.partner.biz/v1 https://api.partner.biz/v2",
+    ].join("\n");
+    expect(scanRisk(text, { allowedDomains: [] }).map((f) => f.excerpt)).toEqual([
+      "https://api.partner.biz/v1",
+    ]);
+  });
+
+  test("bare hostnames are found only when asked", () => {
+    const text =
+      "Ingresses use *.prod.aws.acme.ai, <app>.<slot>.dev.acme.dev and api.acme.io; see settings.py, package.json, socket.example and https://docs.acme.io/x.";
+    expect(kinds(text)).toEqual(["unlisted-url"]);
+    const hosts = scanRisk(text, { allowedDomains: [], bareHosts: true })
+      .filter((f) => f.kind === "unlisted-host")
+      .map((f) => f.excerpt);
+    expect(hosts).toEqual(["*.prod.aws.acme.ai", "x.x.dev.acme.dev", "api.acme.io"]);
+    expect(
+      scanRisk(text, { allowedDomains: ["acme.io", "acme.ai", "acme.dev"], bareHosts: true }).map(
+        (f) => f.kind,
+      ),
+    ).toEqual([]);
   });
 
   test.each([
