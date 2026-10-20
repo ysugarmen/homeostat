@@ -27,6 +27,8 @@ export interface Selection {
   items: SelectedEntry[];
   /** Ids that applied but did not fit the budget even as a bare Rule. */
   dropped: string[];
+  /** Those entries, best first: renderIndex lists them, so the agent knows they exist. */
+  rest: Entry[];
   /** Tokens of the rendered context. */
   tokens: number;
 }
@@ -36,6 +38,43 @@ const isGlobal = (scope: readonly string[]) => scope.some(isGlobalGlob);
 
 const matches = (path: string, scope: readonly string[]) =>
   scope.some((glob) => minimatch(path, glob, { dot: true }));
+
+const CODE_FILE =
+  /\b[\w-]+\.(?:py|pyi|ts|tsx|js|jsx|mjs|go|rb|java|kt|rs|sql|ya?ml|tpl|toml|json|sh|proto)\b/g;
+
+/**
+ * The files and folders a rule names, lowercased: paths like `models/bm_bookings.py` or
+ * `charts/platform-jobs/`, and file names like `env.py`. URLs are left out.
+ */
+export function fileRefs(text: string): string[] {
+  const plain = text.replace(/https?:\/\/\S+/g, " ");
+  const found = new Set<string>();
+  for (const m of plain.matchAll(/(?:[\w.-]+\/)+[\w.-]*/g)) {
+    // A path that ends a sentence keeps its full stop in the match: drop it.
+    const ref = m[0]
+      .replace(/^\.\//, "")
+      .replace(/[.,;:]+$/, "")
+      .toLowerCase();
+    if (ref.replace(/\//g, "").length >= 3 && !/^\d+\//.test(ref)) found.add(ref);
+  }
+  for (const m of plain.matchAll(CODE_FILE)) found.add(m[0].toLowerCase());
+  return [...found];
+}
+
+/**
+ * Whether a repo-relative path is what a rule names: the file itself, a file next to it (a
+ * rule about charts/x/templates/_helpers.tpl is about that folder), or anything under a named
+ * folder. Paths in rules are often partial, so they match at any depth.
+ */
+function namesPath(ref: string, path: string): boolean {
+  const p = path.toLowerCase();
+  if (!ref.includes("/")) return p === ref || p.endsWith(`/${ref}`);
+  const r = ref.replace(/\/$/, "");
+  const under = (dir: string) => p.startsWith(`${dir}/`) || p.includes(`/${dir}/`);
+  if (p === r || p.endsWith(`/${r}`) || under(r)) return true;
+  const folder = r.includes("/") && /\.\w+$/.test(r) ? r.slice(0, r.lastIndexOf("/")) : undefined;
+  return folder !== undefined && folder.includes("/") && under(folder);
+}
 
 function block({ entry, form }: SelectedEntry): string {
   const { frontmatter: fm, sections } = entry;
@@ -83,8 +122,12 @@ export function renderContext(selection: Pick<Selection, "items">): string {
 
 /**
  * Picks the accepted entries relevant to `paths`, best first, within the token budget. Ranking
- * is score, then path matches before global entries, then most recently confirmed. Each entry is
- * taken whole if it fits, else as its Rule alone, else dropped.
+ * is by tier, then score, then most recently confirmed:
+ *   1. a scope glob matches a path the session touches;
+ *   2. a global rule whose text names a touched file or folder;
+ *   3. a global rule naming no file at all (a convention for everything);
+ *   4. a global rule naming only other files (most likely about other code).
+ * Each entry is taken whole if it fits, else as its Rule alone, else left for the index.
  */
 export function selectEntries(entries: readonly Entry[], opts: SelectOptions): Selection {
   const relevant = entries
@@ -94,19 +137,25 @@ export function selectEntries(entries: readonly Entry[], opts: SelectOptions): S
       // A global glob matches every path, so only narrower globs count as a path match.
       const narrow = e.frontmatter.scope.filter((g) => !isGlobalGlob(g));
       const specific = opts.paths.some((p) => matches(p, narrow));
-      return { e, specific, applies: specific || isGlobal(e.frontmatter.scope) };
+      const refs = specific
+        ? []
+        : fileRefs(`${e.frontmatter.title} ${e.sections.rule ?? ""} ${e.sections.why ?? ""}`);
+      const named = refs.some((r) => opts.paths.some((p) => namesPath(r, p)));
+      const tier = specific ? 0 : named ? 1 : refs.length === 0 ? 2 : 3;
+      return { e, specific, tier, applies: specific || isGlobal(e.frontmatter.scope) };
     })
     .filter((r) => r.applies)
     .sort(
       (a, b) =>
+        a.tier - b.tier ||
         b.e.frontmatter.score - a.e.frontmatter.score ||
-        Number(b.specific) - Number(a.specific) ||
         b.e.frontmatter.lastConfirmed.localeCompare(a.e.frontmatter.lastConfirmed) ||
         a.e.frontmatter.id.localeCompare(b.e.frontmatter.id),
     );
 
   const items: SelectedEntry[] = [];
   const dropped: string[] = [];
+  const rest: Entry[] = [];
   let tokens = 0;
   for (const { e } of relevant) {
     const remaining = opts.tokenBudget - tokens;
@@ -125,7 +174,41 @@ export function selectEntries(entries: readonly Entry[], opts: SelectOptions): S
       tokens = fit.total;
     } else {
       dropped.push(e.frontmatter.id);
+      rest.push(e);
     }
   }
-  return { items, dropped, tokens };
+  return { items, dropped, rest, tokens };
+}
+
+/**
+ * The rules that did not fit, as one compact list by topic (or area): titles and ids, so the
+ * agent knows they exist and fetches any with `explain`. Cut to `maxChars`.
+ */
+export function renderIndex(rest: readonly Entry[], maxChars: number): string {
+  if (rest.length === 0 || maxChars < 200) return "";
+  const head =
+    "## More team rules\nThese apply here too but are not shown in full: call the homeostat `explain` tool with an id for the rule and why, or `context` with the files you are changing.";
+  const groups = new Map<string, Entry[]>();
+  for (const e of rest) {
+    const key = e.frontmatter.topic ?? e.frontmatter.area;
+    groups.set(key, [...(groups.get(key) ?? []), e]);
+  }
+  // Every topic and its count first, so none goes unseen; then titles while they fit.
+  const summary = `- By topic: ${[...groups]
+    .map(([g, es]) => `**${g}** (${es.length})`)
+    .join(", ")}. Find them with \`search\` or \`context\`.`;
+  let out = `${head}\n${summary}`;
+  if (out.length > maxChars) return "";
+  for (const [group, entries] of groups) {
+    const parts: string[] = [];
+    for (const e of entries) {
+      const item = `${e.frontmatter.title} (\`${e.frontmatter.id}\`)`;
+      if (`${out}\n- **${group}**: ${[...parts, item].join("; ")}`.length > maxChars) break;
+      parts.push(item);
+    }
+    if (parts.length === 0) break;
+    out += `\n- **${group}**: ${parts.join("; ")}`;
+    if (parts.length < entries.length) break;
+  }
+  return out;
 }

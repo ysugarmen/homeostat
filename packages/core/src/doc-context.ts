@@ -58,23 +58,35 @@ export function docContext(
   });
   if (relevant.length === 0) return { text: "", listed: [], sections: [] };
 
-  const index = [
-    "# Team documents (homeostat)",
-    `Reference documents for the code in this session. ${opts.readHint}`,
-    ...relevant.map(
-      ({ path, doc }) =>
-        `- ${doc.frontmatter.title} (${docRef(path)}): ${doc.sections
-          .filter((s) => s.id)
-          .map((s) => `${s.id}`)
-          .join(", ")}`,
-    ),
-  ].join("\n");
   const fits = (text: string) =>
     text.length <= opts.maxChars && countTokens(text) <= opts.tokenBudget;
-  if (!fits(index)) return { text: "", listed: [], sections: [] };
+  // Every document by title first (as many as fit), then section ids for each while they fit:
+  // one long document must not push the others out of the index.
+  const head = [
+    "# Team documents (homeostat)",
+    `Reference documents for the code in this session. ${opts.readHint}`,
+  ].join("\n");
+  const line = (d: ContextDoc, ids: boolean) => {
+    const base = `- ${d.doc.frontmatter.title} (${docRef(d.path)})`;
+    const list = d.doc.sections.filter((s) => s.id).map((s) => s.id);
+    return ids && list.length > 0 ? `${base}: ${list.join(", ")}` : base;
+  };
+  const listed: ContextDoc[] = [];
+  const lines: string[] = [];
+  for (const d of relevant) {
+    if (!fits([head, ...lines, line(d, false)].join("\n"))) break;
+    listed.push(d);
+    lines.push(line(d, false));
+  }
+  for (const [i, d] of listed.entries()) {
+    const full = line(d, true);
+    if (fits([head, ...lines.with(i, full)].join("\n"))) lines[i] = full;
+  }
+  const index = [head, ...lines].join("\n");
+  if (listed.length === 0) return { text: "", listed: [], sections: [] };
 
   const wanted = paths.flatMap(needles);
-  const scored = relevant
+  const scored = listed
     .flatMap(({ path, doc }) =>
       doc.sections.map((s) => ({
         doc: docRef(path),
@@ -93,5 +105,5 @@ export function docContext(
     text = next;
     sections.push({ doc, id: s.id });
   }
-  return { text, listed: relevant.map((d) => docRef(d.path)), sections };
+  return { text, listed: listed.map((d) => docRef(d.path)), sections };
 }

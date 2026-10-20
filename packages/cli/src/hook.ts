@@ -5,6 +5,7 @@ import {
   CONFIG_FILE,
   CORE_AREA,
   type Config,
+  countTokens,
   detectRepo,
   docContext,
   inRepo,
@@ -15,6 +16,7 @@ import {
   readKbFiles,
   readKbView,
   renderContext,
+  renderIndex,
   repoNames,
   selectEntries,
   validate,
@@ -28,6 +30,9 @@ import { touchedPaths, uncommitted } from "./touched.ts";
 
 /** Claude Code's limit on SessionStart `additionalContext`. */
 const MAX_CONTEXT_CHARS = 10_000;
+/** Room kept for team documents when the KB has any, and for the index of the other rules. */
+const DOC_RESERVE = 2_500;
+const INDEX_RESERVE = 1_500;
 
 export interface HookInput {
   session_id?: string;
@@ -64,13 +69,25 @@ async function sessionStart(input: HookInput, io: Io) {
   const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
   // A multi-repo KB: shared rules plus this checkout's repo; none of the other repos'.
   const repo = repoHere(cwd, config);
+  const visibleDocs = visibleTo(
+    inRepo(docs, config, repo).map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+    config,
+    member,
+  );
+  // Rules first, but never all of the room: the documents and the index of the rest keep theirs.
+  const docRoom = visibleDocs.length ? DOC_RESERVE : 0;
   const selection = selectEntries(
     visibleTo(
       inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
       config,
       member,
     ),
-    { paths, tokenBudget: config.distribution.tokenBudget, maxChars: MAX_CONTEXT_CHARS },
+    {
+      paths,
+      // A fifth of the budget is left for the index of rules that do not fit in full.
+      tokenBudget: Math.floor(config.distribution.tokenBudget * 0.8),
+      maxChars: MAX_CONTEXT_CHARS - INDEX_RESERVE - docRoom,
+    },
   );
   logEvent(kbRoot, {
     ts: (io.now?.() ?? new Date()).toISOString(),
@@ -86,20 +103,19 @@ async function sessionStart(input: HookInput, io: Io) {
   });
 
   const rules = renderContext(selection);
-  const documents = docContext(
-    visibleTo(
-      inRepo(docs, config, repo).map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
-      config,
-      member,
-    ),
-    paths,
-    {
-      tokenBudget: config.distribution.docTokenBudget,
-      maxChars: MAX_CONTEXT_CHARS - rules.length - 2,
-      readHint:
-        'Read a section with the homeostat MCP tool `read` ({"doc": "<area>/<topic>", "section": "<id>"}) before changing code it describes.',
-    },
-  );
+  // The index fits in what the rules left of the token budget, and of the character limit.
+  let indexChars = MAX_CONTEXT_CHARS - rules.length - 2 - docRoom;
+  let index = renderIndex(selection.rest, indexChars);
+  while (index && countTokens(`${rules}\n\n${index}`) > config.distribution.tokenBudget) {
+    indexChars = Math.floor(indexChars * 0.8);
+    index = renderIndex(selection.rest, indexChars);
+  }
+  const documents = docContext(visibleDocs, paths, {
+    tokenBudget: config.distribution.docTokenBudget,
+    maxChars: MAX_CONTEXT_CHARS - rules.length - index.length - 4,
+    readHint:
+      'Read a section with the homeostat MCP tool `read` ({"doc": "<area>/<topic>", "section": "<id>"}) before changing code it describes.',
+  });
   if (documents.listed.length) {
     logEvent(kbRoot, {
       ts: (io.now?.() ?? new Date()).toISOString(),
@@ -130,7 +146,7 @@ async function sessionStart(input: HookInput, io: Io) {
     isMultiRepo(config) && !repo
       ? `# Homeostat\n\nThis checkout is not one of the knowledge base's repos (${repoNames(config).join(", ")}), so only the team's shared rules apply here.`
       : "";
-  const context = [rules, documents.text, header, unplaced].filter(Boolean).join("\n\n");
+  const context = [rules, index, documents.text, header, unplaced].filter(Boolean).join("\n\n");
   if (!context) return;
   io.stdout(
     `${JSON.stringify({

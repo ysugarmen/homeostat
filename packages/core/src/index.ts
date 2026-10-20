@@ -261,8 +261,10 @@ export {
 } from "./seed.ts";
 export {
   CONTEXT_HEADER,
+  fileRefs,
   KIND_GUIDANCE,
   renderContext,
+  renderIndex,
   type SelectedEntry,
   type Selection,
   type SelectOptions,

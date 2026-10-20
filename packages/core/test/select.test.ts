@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { type Entry, formatEntry, parseEntry } from "../src/entry.ts";
 import type { Frontmatter } from "../src/schema.ts";
-import { CONTEXT_HEADER, renderContext, selectEntries } from "../src/select.ts";
+import { CONTEXT_HEADER, renderContext, renderIndex, selectEntries } from "../src/select.ts";
 import { countTokens } from "../src/tokens.ts";
 import { validFrontmatter, words } from "./helpers.ts";
 
@@ -37,21 +37,21 @@ const ids = (paths: string[], tokenBudget = 10_000) =>
   selectEntries(kb, { paths, tokenBudget }).items.map((i) => i.entry.frontmatter.id);
 
 describe("selectEntries", () => {
-  test("only accepted entries whose scope matches, plus global ones, by score", () => {
+  test("only accepted entries whose scope matches, then global ones, each by score", () => {
     expect(ids(["services/api/handler.ts"])).toEqual([
-      "global-secrets",
       "api-retry",
-      "global-logging",
       "api-timeouts",
+      "global-secrets",
+      "global-logging",
     ]);
   });
 
   test("globs match at any depth and by extension", () => {
     expect(ids(["apps/web/src/Button.tsx"])).toEqual([
-      "global-secrets",
       "web-tokens",
-      "global-logging",
       "web-a11y",
+      "global-secrets",
+      "global-logging",
     ]);
     expect(ids(["apps/web/src/theme.css"])).not.toContain("web-a11y");
   });
@@ -60,8 +60,45 @@ describe("selectEntries", () => {
     expect(ids([])).toEqual(["global-secrets", "global-logging"]);
   });
 
-  test("on equal score a path match outranks a global entry", () => {
-    expect(ids(["apps/web/x.ts"]).slice(1, 3)).toEqual(["web-tokens", "global-logging"]);
+  test("a path match outranks a global entry, whatever their scores", () => {
+    expect(ids(["apps/web/x.ts"])).toEqual(["web-tokens", "global-secrets", "global-logging"]);
+  });
+
+  test("a global rule naming a touched file outranks one naming other files, and conventions sit between", () => {
+    const g = (id: string, rule: string, score = 4) =>
+      ({
+        frontmatter: { ...entry(id, { scope: ["**"], score }).frontmatter },
+        body: "",
+        sections: { rule, why: "Because." },
+      }) as never;
+    const rules = [
+      g("charts-rule", "Use the helper in charts/platform-jobs/templates/_helpers.tpl.", 6),
+      g("alembic-rule", "Never run backfills in env.py migrations."),
+      g("plain-rule", "Write the PR description to match HEAD."),
+    ];
+    const order = (paths: string[]) =>
+      selectEntries(rules, { paths, tokenBudget: 10_000 }).items.map((i) => i.entry.frontmatter.id);
+    // Touching a migration: the env.py rule first, the convention next, the Helm rule last.
+    expect(order(["packages/shared-services/alembic/env.py"])).toEqual([
+      "alembic-rule",
+      "plain-rule",
+      "charts-rule",
+    ]);
+    // A file next to the one the rule names is the same folder's business.
+    expect(order(["charts/platform-jobs/templates/cronjob.yaml"])).toEqual([
+      "charts-rule",
+      "plain-rule",
+      "alembic-rule",
+    ]);
+  });
+
+  test("rules that do not fit are left for the index, which lists them by topic", () => {
+    const sel = selectEntries(kb, { paths: ["services/api/handler.ts"], tokenBudget: 60 });
+    expect(sel.rest.map((e) => e.frontmatter.id)).toEqual(sel.dropped);
+    const index = renderIndex(sel.rest, 2000);
+    expect(index).toContain("## More team rules");
+    for (const id of sel.dropped) expect(index).toContain(`(\`${id}\`)`);
+    expect(renderIndex(sel.rest, 100)).toBe("");
   });
 
   test("dotfiles match", () => {
@@ -136,5 +173,23 @@ describe("character cap", () => {
       expect(renderContext(sel).length).toBeLessThanOrEqual(maxChars);
       expect(sel.items.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("renderIndex", () => {
+  const many = Array.from({ length: 40 }, (_, i) =>
+    entry(`rule-${i}`, { topic: `topic-${i % 8}`, title: `A fairly long rule title number ${i}` }),
+  );
+
+  test("names every topic with its count even when titles do not fit", () => {
+    const index = renderIndex(many, 900);
+    expect(index.length).toBeLessThanOrEqual(900);
+    for (let t = 0; t < 8; t++) expect(index).toContain(`**topic-${t}** (5)`);
+    expect(index).not.toContain("number 39");
+  });
+
+  test("adds titles when there is room", () => {
+    const index = renderIndex(many, 20_000);
+    for (const e of many) expect(index).toContain(`(\`${e.frontmatter.id}\`)`);
   });
 });
