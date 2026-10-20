@@ -419,6 +419,7 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     )
     .option("--check", "exit 1 if the exported files are out of date, without writing")
     .option("--allow-public", "export even when the code repo is public")
+    .option("--repo <name>", "multi-repo KB: which repo --out is, if its remote does not say")
     .action(async (opts: ExportOptions) => {
       exitCode = await runExport(opts, io);
     });

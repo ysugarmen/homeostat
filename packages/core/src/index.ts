@@ -279,4 +279,4 @@ export {
   validate,
 } from "./validate.ts";
 export { VERSION } from "./version.ts";
-export { exportable, isTeamOnly, visibleTo } from "./visibility.ts";
+export { exportable, inRepo, isTeamOnly, visibleTo } from "./visibility.ts";

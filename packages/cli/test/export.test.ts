@@ -110,3 +110,61 @@ describe("homeostat export", () => {
     expect(stderr).toContain("homeostat.yaml is missing or invalid");
   });
 });
+
+describe("homeostat export, multi-repo KB", () => {
+  /** One shared rule and one rule in each of two repos, copied from the starter's core rule. */
+  function multiKb() {
+    const kb = mkdtempSync(join(tmpdir(), "homeostat-export-multi-"));
+    write(
+      kb,
+      "homeostat.yaml",
+      `version: 1
+team:
+  members:
+    - { id: dana, handle: "@dana", role: senior, areas: [core] }
+    - { id: lee, handle: "@lee", role: member, areas: [] }
+    - { id: sam, handle: "@sam", role: senior, areas: [] }
+repos:
+  api:
+    source: acme/api
+  worker:
+    source: acme/worker
+distribution:
+  exports: [agents-md]
+`,
+    );
+    const base = read(starter, "knowledge/core/redact-before-logging.md");
+    const copy = (path: string, id: string) =>
+      write(
+        kb,
+        path,
+        base
+          .replace("id: redact-before-logging", `id: ${id}`)
+          .replace(/^title: .*$/m, `title: Rule ${id}`),
+      );
+    copy("knowledge/core/shared-rule.md", "shared-rule");
+    copy("knowledge/api/core/api-rule.md", "api-rule");
+    copy("knowledge/worker/core/worker-rule.md", "worker-rule");
+    return kb;
+  }
+
+  test("exports the shared rules and the target repo's, never another repo's", async () => {
+    const out = codeRepo();
+    const { code, stderr } = await run("--kb", multiKb(), "--out", out, "--repo", "worker");
+    expect(stderr).toBe("");
+    expect(code).toBe(0);
+    const agents = read(out, "AGENTS.md");
+    expect(agents).toContain("Rule shared-rule");
+    expect(agents).toContain("Rule worker-rule");
+    expect(agents).not.toContain("Rule api-rule");
+  });
+
+  test("a target it cannot place, or an unknown --repo, is an error", async () => {
+    const kb = multiKb();
+    const unplaced = await run("--kb", kb, "--out", codeRepo());
+    expect(unplaced.code).toBe(1);
+    expect(unplaced.stderr).toContain("pass --repo <name>");
+    const unknown = await run("--kb", kb, "--out", codeRepo(), "--repo", "web");
+    expect(unknown.stderr).toContain("--repo web is not one of repos (api, worker)");
+  });
+});

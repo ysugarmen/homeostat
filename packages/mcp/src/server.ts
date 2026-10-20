@@ -5,6 +5,7 @@ import {
   type Entry,
   explainEntry,
   hitLine,
+  inRepo,
   type KbFiles,
   kbReport,
   renderContext,
@@ -301,13 +302,15 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
         "No usable knowledge base: homeostat.yaml is missing or invalid. Point Homeostat at your KB checkout with the plugin's kb_dir setting or HOMEOSTAT_DIR.",
       );
     }
+    // A multi-repo KB: the shared rules plus the session's repo; none of the other repos'.
+    const repo = deps.checkout ? detectRepo(deps.checkout(), config) : undefined;
     const entries = visibleTo(
-      kb.entries.map((e) => e.entry),
+      inRepo(kb.entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
       config,
       deps.member?.(),
     );
     const docs = visibleTo(
-      kb.docs.map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+      inRepo(kb.docs, config, repo).map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
       config,
       deps.member?.(),
     );
@@ -341,7 +344,6 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
           );
         }
         case "context": {
-          const repo = deps.checkout ? detectRepo(deps.checkout(), config) : undefined;
           const a = args as z.infer<typeof schemas.context>;
           const selection = selectEntries(entries, {
             paths: a.paths,

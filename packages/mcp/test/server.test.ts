@@ -318,7 +318,7 @@ describe("documents (K6)", () => {
 });
 
 describe("a multi-repo KB", () => {
-  test("context records which repo the session's folder is", async () => {
+  test("context gives the shared rules and the session's repo, and records which", async () => {
     const { execFileSync } = await import("node:child_process");
     const { mkdtempSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
@@ -334,10 +334,32 @@ describe("a multi-repo KB", () => {
     ]);
     const events: Record<string, unknown>[] = [];
     const server = createServer({
-      readKb: () => ({
-        "homeostat.yaml":
-          'version: 1\nteam:\n  members:\n    - { id: dana, handle: "@dana", role: senior, areas: [core] }\nrepos:\n  api:\n    source: acme/api\n',
-      }),
+      readKb: () => {
+        const base = readFileSync(join(starter, "knowledge/core/redact-before-logging.md"), "utf8");
+        const copy = (id: string) =>
+          base
+            .replace("id: redact-before-logging", `id: ${id}`)
+            .replace(/^title: .*$/m, `title: Rule ${id}`);
+        return {
+          "homeostat.yaml": [
+            "version: 1",
+            "team:",
+            "  members:",
+            '    - { id: dana, handle: "@dana", role: senior, areas: [core] }',
+            '    - { id: lee, handle: "@lee", role: member, areas: [] }',
+            '    - { id: sam, handle: "@sam", role: senior, areas: [] }',
+            "repos:",
+            "  api:",
+            "    source: acme/api",
+            "  worker:",
+            "    source: acme/worker",
+            "",
+          ].join("\n"),
+          "knowledge/core/shared-rule.md": copy("shared-rule"),
+          "knowledge/api/core/api-rule.md": copy("api-rule"),
+          "knowledge/worker/core/worker-rule.md": copy("worker-rule"),
+        };
+      },
       learn: async () => "",
       flag: async () => "",
       log: (e) => events.push(e),
@@ -347,7 +369,14 @@ describe("a multi-repo KB", () => {
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "test", version: "1.0.0" });
     await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
-    await client.callTool({ name: "context", arguments: { paths: ["services/app.py"] } });
+    const r = (await client.callTool({
+      name: "context",
+      arguments: { paths: ["services/app.py"] },
+    })) as { content: { text: string }[] };
+    const text = r.content.map((c) => c.text).join("\n");
+    expect(text).toContain("Rule shared-rule");
+    expect(text).toContain("Rule api-rule");
+    expect(text).not.toContain("Rule worker-rule");
     expect(events.find((e) => e.type === "injection")?.repo).toBe("api");
   });
 });

@@ -1,13 +1,17 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import {
+  detectRepo,
   EXPORT_TARGETS,
   type ExportTarget,
   exportable,
   exportRules,
+  inRepo,
+  isMultiRepo,
   readKbFiles,
   removeBlock,
   replaceBlock,
+  repoNames,
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
@@ -22,6 +26,8 @@ export interface ExportOptions {
   check?: boolean;
   /** Export even when the target repo is public. */
   allowPublic?: boolean;
+  /** A multi-repo KB: which repo --out is, when its remote and folder name do not tell. */
+  repo?: string;
 }
 
 /**
@@ -95,15 +101,29 @@ export async function runExport(opts: ExportOptions, io: Io): Promise<number> {
         io.stderr(`could not check whether ${visibility.repo} is public; exporting anyway\n`);
       }
     }
+    // A multi-repo KB exports the shared rules plus the target's repo, never another repo's.
+    const repo = opts.repo ?? detectRepo(out, config);
+    if (isMultiRepo(config)) {
+      if (opts.repo && !repoNames(config).includes(opts.repo)) {
+        throw new CliError(
+          `--repo ${opts.repo} is not one of repos (${repoNames(config).join(", ")})`,
+        );
+      }
+      if (!repo) {
+        throw new CliError(
+          `cannot tell which of the KB's repos ${out} is (${repoNames(config).join(", ")}); pass --repo <name>`,
+        );
+      }
+    }
     // Team-only areas never leave the KB repo.
     const plan = exportRules(
       exportable(
-        entries.map((e) => e.entry),
+        inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
         config,
       ),
       targets,
       exportable(
-        docs.map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+        inRepo(docs, config, repo).map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
         config,
       ),
     );

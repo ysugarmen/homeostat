@@ -198,12 +198,12 @@ describe("findKb", () => {
   });
 });
 
-describe("SessionStart in a multi-repo KB", () => {
-  test("the injection event records which repo the session's checkout is", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "homeostat-multi-kb-"));
-    writeFileSync(
-      join(dir, "homeostat.yaml"),
-      `version: 1
+/** A multi-repo KB: one shared rule, one rule in repo api, one in repo worker. */
+function multiKb() {
+  const dir = mkdtempSync(join(tmpdir(), "homeostat-multi-kb-"));
+  writeFileSync(
+    join(dir, "homeostat.yaml"),
+    `version: 1
 team:
   members:
     - { id: dana, handle: "@dana", role: senior, areas: [core] }
@@ -213,17 +213,60 @@ repos:
   worker:
     source: acme/worker
 `,
-    );
-    mkdirSync(join(dir, "knowledge", "core"), { recursive: true });
+  );
+  const rule = (path: string, id: string) => {
+    const body = `## Rule\nRule ${id}.\n\n## Why\nBecause ${id}.`;
+    const fm: Frontmatter = {
+      id,
+      title: `Title ${id}`,
+      area: "core",
+      scope: ["**"],
+      status: "accepted",
+      score: 4,
+      owner: "dana",
+      approvedBy: "dana",
+      source: { type: "manual", author: "dana" },
+      created: "2026-10-01",
+      lastConfirmed: "2026-10-01",
+      tokens: countTokens(body),
+    };
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
+    writeFileSync(join(dir, path), formatEntry(fm, body));
+  };
+  rule("knowledge/core/shared-rule.md", "shared-rule");
+  rule("knowledge/api/core/api-rule.md", "api-rule");
+  rule("knowledge/worker/core/worker-rule.md", "worker-rule");
+  return dir;
+}
+
+describe("SessionStart in a multi-repo KB", () => {
+  test("a session gets the shared rules and its own repo's, never another repo's", async () => {
+    const dir = multiKb();
     const code = codeRepo(["services/app.py"]);
     execFileSync("git", ["-C", code, "remote", "add", "origin", "git@github.com:acme/worker.git"]);
-    const { code: exit } = await hook(
+    const { stdout } = await hook(
       "session-start",
       { session_id: "s1", source: "startup", cwd: code },
       { HOMEOSTAT_DIR: dir },
     );
-    expect(exit).toBe(0);
+    expect(stdout).toContain("Title shared-rule");
+    expect(stdout).toContain("Title worker-rule");
+    expect(stdout).not.toContain("Title api-rule");
     const injection = readEvents(dir, { since: "2026-01-01" }).find((e) => e.type === "injection");
     expect(injection?.repo).toBe("worker");
+  });
+
+  test("a checkout that is none of the repos gets shared rules only, and is told why", async () => {
+    const dir = multiKb();
+    const code = codeRepo(["services/app.py"]);
+    execFileSync("git", ["-C", code, "remote", "add", "origin", "git@github.com:acme/other.git"]);
+    const { stdout } = await hook(
+      "session-start",
+      { session_id: "s1", source: "startup", cwd: code },
+      { HOMEOSTAT_DIR: dir },
+    );
+    expect(stdout).toContain("Title shared-rule");
+    expect(stdout).not.toContain("Title worker-rule");
+    expect(stdout).toContain("not one of the knowledge base's repos (api, worker)");
   });
 });

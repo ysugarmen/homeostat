@@ -7,11 +7,14 @@ import {
   type Config,
   detectRepo,
   docContext,
+  inRepo,
+  isMultiRepo,
   logEvent,
   pruneEvents,
   readKbFiles,
   readKbView,
   renderContext,
+  repoNames,
   selectEntries,
   validate,
   visibleTo,
@@ -58,9 +61,11 @@ async function sessionStart(input: HookInput, io: Io) {
 
   const paths = touchedPaths(cwd);
   const member = memberIdFrom(git(cwd, "config", "user.name"));
+  // A multi-repo KB: shared rules plus this checkout's repo; none of the other repos'.
+  const repo = repoHere(cwd, config);
   const selection = selectEntries(
     visibleTo(
-      entries.map((e) => e.entry),
+      inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
       config,
       member,
     ),
@@ -72,7 +77,7 @@ async function sessionStart(input: HookInput, io: Io) {
     session: input.session_id,
     source: input.source,
     cwd,
-    ...(repoHere(cwd, config) ? { repo: repoHere(cwd, config) } : {}),
+    ...(repo ? { repo } : {}),
     paths: paths.length,
     entries: selection.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
     dropped: selection.dropped,
@@ -82,7 +87,7 @@ async function sessionStart(input: HookInput, io: Io) {
   const rules = renderContext(selection);
   const documents = docContext(
     visibleTo(
-      docs.map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+      inRepo(docs, config, repo).map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
       config,
       member,
     ),
@@ -120,7 +125,11 @@ async function sessionStart(input: HookInput, io: Io) {
   const header = news.length
     ? `# Homeostat updates\n\n${news.map((n) => `- ${n.text}`).join("\n")}`
     : "";
-  const context = [rules, documents.text, header].filter(Boolean).join("\n\n");
+  const unplaced =
+    isMultiRepo(config) && !repo
+      ? `# Homeostat\n\nThis checkout is not one of the knowledge base's repos (${repoNames(config).join(", ")}), so only the team's shared rules apply here.`
+      : "";
+  const context = [rules, documents.text, header, unplaced].filter(Boolean).join("\n\n");
   if (!context) return;
   io.stdout(
     `${JSON.stringify({
@@ -257,9 +266,10 @@ async function prompt(input: HookInput, io: Io) {
   if (!config) return;
   const member = memberIdFrom(git(cwd, "config", "user.name"));
   const seen = new Set(state.injected ?? []);
+  const repo = repoHere(cwd, config);
   const selection = selectEntries(
     visibleTo(
-      entries.map((e) => e.entry),
+      inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
       config,
       member,
     ),
@@ -283,6 +293,7 @@ async function prompt(input: HookInput, io: Io) {
       session: input.session_id,
       source: "update",
       cwd,
+      ...(repo ? { repo } : {}),
       entries: fresh.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
     });
   }
