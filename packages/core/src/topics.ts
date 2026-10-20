@@ -183,11 +183,14 @@ export function formatTopicFile(
   meta: TopicMeta,
   sections: readonly Pick<TopicSection, "id" | "raw">[],
 ): string {
-  const head = stringify({
-    topic: meta.topic,
-    title: meta.title,
-    ...(meta.description ? { description: meta.description } : {}),
-  });
+  const head = stringify(
+    {
+      topic: meta.topic,
+      title: meta.title,
+      ...(meta.description ? { description: meta.description } : {}),
+    },
+    { lineWidth: 0 },
+  );
   const body = [...sections]
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((s) => s.raw.trim())

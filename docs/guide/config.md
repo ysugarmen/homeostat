@@ -16,7 +16,8 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `team.reviewers` | (unset) | Member ids who decide the lessons the daily run is unsure about. When set, only they are asked to review its PRs and listed in CODEOWNERS; other members' roles only weigh their lessons. Unset, area owners decide, then seniors and leads. Give them a `slack` member ID to be mentioned in the morning notice |
-| `migrated` | (unset) | Written by `homeostat migrate`: each old area and the repo it moved to (`shared` for `knowledge/core/`). A developer's sync uses it to move their pending lessons; leave it as written |
+| `migrated.on` | (unset) | Written by `homeostat migrate`: the day it ran. A developer's sync moves their pending lessons created by then to the new layout; leave it as written |
+| `migrated.areas` | (unset) | Written by `homeostat migrate`: each old area and the repo it moved to (`shared` for `knowledge/core/`) |
 | `repos` | (unset) | A multi-repo KB: each code repo by short name (its folder under `knowledge/`), with `source` (owner/name on the git host) and its own `areas`. Shared rules live in `knowledge/core/`, each repo's in `knowledge/<repo>/<area>/`, and a session gets only its own repo's rules. Then leave top-level `areas` and `sources.repos` out, and name areas elsewhere as `<repo>/<area>`. Unset, every rule applies to every repo |
 | `topics` | (unset) | Topic name → one-line description. With topics, rules are grouped into one file per topic, `knowledge/<area>/<topic>.md`, each rule a `##` section; without them, each rule is its own file. In a multi-repo KB these are the shared rules' topics, and each repo lists its own as `repos.<name>.topics`. `general` is always allowed |
 | `scoring.weights.prFeedbackChangedCode` | `3` | Review feedback followed by a code change |

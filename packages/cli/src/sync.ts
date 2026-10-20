@@ -10,6 +10,7 @@ import {
   lessonHash,
   locate,
   migratedPath,
+  parseEntry,
   readKbFiles,
   readPendingFiles,
   removePendingFile,
@@ -178,9 +179,10 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   const now3 = validate(readKbFiles(root)).config;
   if (now3?.migrated) {
     for (const [path, text] of Object.entries(readPendingFiles(root))) {
-      // Only paths the new layout cannot place: knowledge/core/ is valid (shared) as it is.
-      if (locate(path, repoNames(now3))) continue;
-      const to = migratedPath(path, now3);
+      const created = parseEntry(text).entry?.frontmatter.created;
+      // A lesson written after the migration is already in the new layout (core = shared).
+      if (created && created > now3.migrated.on && locate(path, repoNames(now3))) continue;
+      const to = migratedPath(path, now3, created);
       if (!to || to === path) continue;
       writePendingFile(root, to, text);
       removePendingFile(root, path);

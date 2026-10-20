@@ -52,7 +52,7 @@ describe("migrateKb", () => {
       ["web/frontend"],
       ["web/frontend", "core"],
     ]);
-    expect(migrated.config?.migrated).toEqual({
+    expect(migrated.config?.migrated?.areas).toEqual({
       integrations: "api",
       frontend: "web",
       core: "shared",
@@ -85,11 +85,19 @@ describe("migrateKb", () => {
     expect(after["knowledge/core/redact-before-logging.md"]).toBeUndefined();
   });
 
-  test("a developer's pending lesson at an old path finds its new one", () => {
+  test("a developer's pending lesson at an old path finds its new one; a newer one stays", () => {
+    const into = { ...plan, areas: { ...plan.areas, core: "api" } };
     const after = parseConfig(
-      apply(readKb(), migrateKb(readKb(), config, plan).files)["homeostat.yaml"] ?? "",
+      apply(readKb(), migrateKb(readKb(), config, into, "2026-10-20").files)["homeostat.yaml"] ??
+        "",
     ).config as Config;
-    expect(migratedPath("knowledge/frontend/x.md", after)).toBe("knowledge/web/frontend/x.md");
-    expect(migratedPath("knowledge/core/x.md", after)).toBe("knowledge/core/x.md");
+    expect(migratedPath("knowledge/frontend/x.md", after, "2026-10-19")).toBe(
+      "knowledge/web/frontend/x.md",
+    );
+    // core moved into api: an old core lesson follows it; one written after is a shared lesson.
+    expect(migratedPath("knowledge/core/x.md", after, "2026-10-19")).toBe(
+      "knowledge/api/core/x.md",
+    );
+    expect(migratedPath("knowledge/core/x.md", after, "2026-10-21")).toBeUndefined();
   });
 });

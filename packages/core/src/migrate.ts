@@ -41,7 +41,12 @@ export interface MigrationResult {
  * and `migrated:` recorded for developers' syncs. A rule learned from a repo's PR goes to that
  * repo. With topics, rules are folded into topic files. Pure; the CLI writes the result.
  */
-export function migrateKb(files: KbFiles, config: Config, plan: MigrationPlan): MigrationResult {
+export function migrateKb(
+  files: KbFiles,
+  config: Config,
+  plan: MigrationPlan,
+  today = new Date().toISOString().slice(0, 10),
+): MigrationResult {
   const notes: string[] = [];
   const out: Record<string, string | null> = {};
   const moved: [string, string][] = [];
@@ -75,7 +80,7 @@ export function migrateKb(files: KbFiles, config: Config, plan: MigrationPlan): 
     moved.push([path, target]);
   }
 
-  const configText = rewriteConfig(files[CONFIG_FILE] ?? "", config, plan);
+  const configText = rewriteConfig(files[CONFIG_FILE] ?? "", config, plan, today);
   out[CONFIG_FILE] = configText;
 
   // Topics: each rule gets its topic, then foldRules writes the topic files.
@@ -115,7 +120,7 @@ export function migrateKb(files: KbFiles, config: Config, plan: MigrationPlan): 
 }
 
 /** The config, rewritten in place so comments and order survive. */
-function rewriteConfig(text: string, config: Config, plan: MigrationPlan): string {
+function rewriteConfig(text: string, config: Config, plan: MigrationPlan, today: string): string {
   const doc = parseDocument(text);
   const qualify = (area: string) => {
     const repo = plan.areas[area];
@@ -154,22 +159,30 @@ function rewriteConfig(text: string, config: Config, plan: MigrationPlan): strin
   }
   doc.setIn(
     ["migrated"],
-    doc.createNode(
-      Object.fromEntries(Object.keys(plan.areas).map((a) => [a, plan.areas[a] ?? "shared"])),
-    ),
+    doc.createNode({
+      on: today,
+      areas: Object.fromEntries(Object.keys(plan.areas).map((a) => [a, plan.areas[a] ?? "shared"])),
+    }),
   );
   return doc.toString();
 }
 
-/** A one-repo KB path's new place, by the recorded `migrated:` map; undefined if unknown. */
+/**
+ * Where a pending lesson written before the migration now goes, by the recorded `migrated:`
+ * map; undefined when it stays (written after, or already in the new layout). `created` is
+ * the lesson's date: knowledge/core/ is a valid shared path afterwards, so only the date tells
+ * an old core lesson from a new shared one.
+ */
 export function migratedPath(
   path: string,
   config: Pick<Config, "migrated" | "repos">,
+  created?: string,
 ): string | undefined {
   if (!config.migrated) return undefined;
+  if (created && created > config.migrated.on) return undefined;
   const where = locate(path);
   if (!where) return undefined;
-  const to = config.migrated[where.area];
+  const to = config.migrated.areas[where.area];
   if (!to) return undefined;
   const rest = path.slice(`knowledge/${where.area}/`.length);
   return to === "shared"

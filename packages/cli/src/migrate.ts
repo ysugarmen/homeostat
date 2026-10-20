@@ -117,7 +117,12 @@ async function migrate(opts: MigrateOptions, io: Io): Promise<number> {
     }
   }
 
-  const result = migrateKb(files, config, plan);
+  const result = migrateKb(
+    files,
+    config,
+    plan,
+    (io.now?.() ?? new Date()).toISOString().slice(0, 10),
+  );
   for (const n of result.notes) io.stdout(`note: ${n}\n`);
   if (result.issues.length) {
     io.stdout(
@@ -127,7 +132,7 @@ async function migrate(opts: MigrateOptions, io: Io): Promise<number> {
   }
   const writes = Object.entries(result.files);
   io.stdout(
-    `${result.moved.length} files move, ${writes.filter(([, t]) => t !== null).length} written, ${writes.filter(([, t]) => t === null).length} removed\n`,
+    `${result.moved.length} files move, ${writes.filter(([, t]) => t !== null).length} written, ${writes.filter(([p, t]) => t === null && files[p] !== undefined).length} removed\n`,
   );
   if (opts.dryRun) {
     for (const [from, to] of result.moved) io.stdout(`  ${from} → ${to}\n`);

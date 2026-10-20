@@ -135,7 +135,14 @@ export const configSchema = z.strictObject({
    * Written by homeostat migrate: each old area → the repo it moved to, or "shared" for
    * knowledge/core/. A developer's sync uses it to move their pending lessons.
    */
-  migrated: z.record(z.string(), z.string()).optional(),
+  migrated: z
+    .strictObject({
+      /** The day of the migration: pending lessons created by then still have old paths. */
+      on: z.iso.date(),
+      /** Each old area → the repo it moved to, or "shared". */
+      areas: z.record(z.string(), z.string()),
+    })
+    .optional(),
   repos: z
     .record(
       name,
