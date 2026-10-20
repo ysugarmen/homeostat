@@ -1,6 +1,6 @@
 {
   "name": "@homeostat/core",
-  "version": "0.1.11",
+  "version": "0.2.0",
   "description": "Schemas, validation, scoring and agents behind homeostat, the team knowledge base for coding agents.",
   "keywords": [
     "homeostat",
