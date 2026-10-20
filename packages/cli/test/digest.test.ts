@@ -102,3 +102,15 @@ describe("homeostat digest (K8)", () => {
     expect(stdout).toContain("A quiet week");
   });
 });
+
+describe("homeostat digest, multi-repo KB", () => {
+  test("names each rule's repo, and groups the lists by it", async () => {
+    const multi = new URL("../../../examples/starter-multi-kb", import.meta.url).pathname;
+    const { stdout } = await digest(["--dir", multi, "--dry-run", "--days", "30"]);
+    const lines = stdout.split("\n");
+    const start = lines.findIndex((l) => l.startsWith("*New rules"));
+    const rules = lines.slice(start + 1, lines.indexOf("", start));
+    expect(rules.map((l) => /, ([^)]+)\)$/.exec(l)?.[1])).toEqual(["api/integrations", "shared"]);
+    expect(stdout).toContain("(`use-design-tokens-for-colors`, web/frontend) — candidate");
+  });
+});

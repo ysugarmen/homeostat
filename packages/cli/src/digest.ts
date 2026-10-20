@@ -20,7 +20,7 @@ export async function runDigest(opts: DigestOptions, io: Io): Promise<number> {
   const days = opts.days ? Number(opts.days) : 7;
   const text = buildDigest({
     config: kb.config,
-    entries: kb.entries.map((e) => e.entry),
+    entries: kb.entries.map((e) => ({ ...e.entry, path: e.path })),
     docs: kb.docs,
     events: readEvents(root, { since: new Date(now.getTime() - days * 86_400_000).toISOString() }),
     now,

@@ -15,10 +15,13 @@ export interface DocContext {
   sections: { doc: string; id: string }[];
 }
 
-/** `integrations/partner-calls` for knowledge/integrations/docs/partner-calls.md. */
+/**
+ * `integrations/partner-calls` for knowledge/integrations/docs/partner-calls.md, and
+ * `api/integrations/partner-calls` for a repo's knowledge/api/integrations/docs/partner-calls.md.
+ */
 export const docRef = (path: string) => {
-  const [, area = "", , ...rest] = path.split("/");
-  return `${area}/${rest.join("/").replace(/\.md$/, "")}`;
+  const m = /^knowledge\/(.+?)\/docs\/(.+)\.md$/.exec(path);
+  return m ? `${m[1]}/${m[2]}` : path;
 };
 
 const GLOBAL = new Set(["**", "**/*"]);

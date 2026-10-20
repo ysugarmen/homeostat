@@ -320,3 +320,35 @@ describe("deepDive: a multi-repo KB", () => {
     expect(result.changes.some((c) => c.actions.some((a) => a.action === "merged"))).toBe(true);
   });
 });
+
+describe("deepDive: topics", () => {
+  test("a rule filed under general moves to a topic added since, when its words match", async () => {
+    const { formatTopicFile, ruleSection, foldRules, parseTopicFile } = await import(
+      "../src/topics.ts"
+    );
+    const files = kb();
+    const path = "knowledge/core/redact-before-logging.md";
+    const entry = parseEntry(files[path] ?? "").entry;
+    if (!entry) throw new Error("starter rule");
+    delete files[path];
+    files["knowledge/core/general.md"] = formatTopicFile({ topic: "general", title: "General" }, [
+      { id: entry.frontmatter.id, raw: ruleSection(entry) },
+    ]);
+    files["homeostat.yaml"] =
+      `${files["homeostat.yaml"]}\ntopics:\n  logging: "What we log and how"\n`;
+    const result = await deepDive({ files, today: TODAY });
+    const moved = change(result, path);
+    expect(moved?.actions).toEqual([{ action: "moved-topic", note: "from general to logging" }]);
+    // Folded, the rule leaves general.md (now empty, so removed) for logging.md.
+    const config = validate(files).config;
+    if (!config || !moved) throw new Error("setup");
+    const out = foldRules(files, [{ path, text: moved.text }], config);
+    expect(out["knowledge/core/general.md"]).toBeNull();
+    expect(
+      parseTopicFile(
+        "knowledge/core/logging.md",
+        out["knowledge/core/logging.md"] ?? "",
+      ).sections.map((s) => s.id),
+    ).toEqual(["redact-before-logging"]);
+  });
+});

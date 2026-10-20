@@ -27,6 +27,7 @@ export function runCodeowners(dir: string, opts: { check?: boolean }, io: Io): n
   const { text, issues } = generateCodeowners(
     result.config,
     result.entries.map((e) => e.entry.frontmatter),
+    new Map(result.entries.map((e) => [e.entry.frontmatter.id, { path: e.path, file: e.file }])),
   );
   if (issues.length > 0) {
     io.stdout(formatIssues(issues, io).text);

@@ -150,3 +150,30 @@ describe("team.reviewers", () => {
     expect(issues.map((i) => i.code)).toContain("config.team.reviewer");
   });
 });
+
+describe("generateCodeowners: a multi-repo KB", () => {
+  test("shared core, then each repo's folders, owned by the members who list <repo>/<area>", async () => {
+    const { readFileSync } = await import("node:fs");
+    const yaml = readFileSync(
+      new URL("../../../examples/starter-multi-kb/homeostat.yaml", import.meta.url),
+      "utf8",
+    );
+    const { config } = parseConfig(yaml);
+    if (!config) throw new Error("example config");
+    const { text, issues } = generateCodeowners(config, []);
+    expect(issues).toEqual([]);
+    const owners = Object.fromEntries(
+      text
+        .split("\n")
+        .filter((l) => l.startsWith("/knowledge/"))
+        .map((l) => [l.split(/\s+/)[0], l.split(/\s+/).slice(1).join(" ")]),
+    );
+    expect(owners).toEqual({
+      "/knowledge/api/core/": "@dana @sam",
+      "/knowledge/api/integrations/": "@dana",
+      "/knowledge/core/": "@dana @sam",
+      "/knowledge/web/core/": "@dana @sam",
+      "/knowledge/web/frontend/": "@lee @sam",
+    });
+  });
+});

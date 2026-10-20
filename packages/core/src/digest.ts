@@ -2,11 +2,13 @@ import type { Config } from "./config.ts";
 import { type ContextDoc, docRef } from "./doc-context.ts";
 import type { Entry } from "./entry.ts";
 import type { Event } from "./events.ts";
+import { isMultiRepo, repoOf } from "./layout.ts";
 import { isRejectedDecision } from "./schema.ts";
 
 export interface DigestInput {
   config: Config;
-  entries: readonly Entry[];
+  /** With their KB paths, the digest names and groups each rule's repo in a multi-repo KB. */
+  entries: readonly (Entry & { path?: string })[];
   docs: readonly ContextDoc[];
   /** Local events, when this runs where sessions log them; CI usually has none. */
   events?: readonly Event[];
@@ -56,11 +58,19 @@ export function buildDigest(input: DigestInput): string {
       : [];
   const section = (title: string, lines: string[]) =>
     lines.length ? [`*${title}*`, ...lines, ""] : [];
-  const rule = (e: Entry) => `${fm(e).title} (\`${fm(e).id}\`, ${fm(e).area})`;
+  // A multi-repo KB: `api/payments`, or `shared` for knowledge/core/; lists sort by it.
+  const where = (e: Entry & { path?: string }) => {
+    if (!isMultiRepo(input.config)) return fm(e).area;
+    const repo = e.path ? repoOf(e.path, input.config) : undefined;
+    return repo ? `${repo}/${fm(e).area}` : "shared";
+  };
+  const byWhere = <T extends Entry & { path?: string }>(items: readonly T[]) =>
+    [...items].sort((a, b) => where(a).localeCompare(where(b)));
+  const rule = (e: Entry & { path?: string }) => `${fm(e).title} (\`${fm(e).id}\`, ${where(e)})`;
 
   const body = [
-    ...section(`New rules (${added.length})`, list(added, rule)),
-    ...section(`Reconfirmed (${confirmed.length})`, list(confirmed, rule)),
+    ...section(`New rules (${added.length})`, list(byWhere(added), rule)),
+    ...section(`Reconfirmed (${confirmed.length})`, list(byWhere(confirmed), rule)),
     ...section(`Decided against (${rejected.length})`, list(rejected, rule)),
     ...section(
       `Document sections updated (${sections.length})`,

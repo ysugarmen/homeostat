@@ -8,7 +8,7 @@ import { comparable, repoOf } from "./layout.ts";
 import type { Frontmatter } from "./schema.ts";
 import { score } from "./score.ts";
 import { countTokens } from "./tokens.ts";
-import { overlayPending } from "./topics.ts";
+import { GENERAL_TOPIC, matchTopic, overlayPending, topicsFor } from "./topics.ts";
 import { type KbFiles, validate } from "./validate.ts";
 
 export interface RuleText {
@@ -27,7 +27,12 @@ export interface ConflictJudge {
   conflicts(entry: Entry, candidates: Entry[]): Promise<{ id: string; reason: string }[]>;
 }
 
-export type DeepDiveAction = "merged" | "retired-duplicate" | "disputed" | "retired-stale";
+export type DeepDiveAction =
+  | "merged"
+  | "retired-duplicate"
+  | "disputed"
+  | "retired-stale"
+  | "moved-topic";
 
 export interface DeepDiveChange {
   path: string;
@@ -96,6 +101,17 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
         note: `not confirmed for ${age} days (limit ${settings.staleAfterDays})`,
       });
     }
+  }
+
+  // Rules filed under general move to a topic added since, when their words match it.
+  for (const w of work.values()) {
+    if (w.fm.topic !== GENERAL_TOPIC || w.fm.status === "retired") continue;
+    const topics = topicsFor(config, repoOf(w.path, config));
+    if (!topics) continue;
+    const topic = matchTopic(topics, `${w.fm.title} ${w.entry.sections.rule ?? ""}`);
+    if (topic === GENERAL_TOPIC) continue;
+    w.fm.topic = topic;
+    w.actions.push({ action: "moved-topic", note: `from general to ${topic}` });
   }
 
   // The same test the daily run uses, so a duplicate it let through is caught here.

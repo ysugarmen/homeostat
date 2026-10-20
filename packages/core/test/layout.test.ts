@@ -67,3 +67,15 @@ describe("comparable", () => {
     expect(comparable("knowledge/core/a.md", "knowledge/frontend/b.md", {})).toBe(true);
   });
 });
+
+describe("docRef", () => {
+  test("names a document by its folder and topic, a repo's with the repo", async () => {
+    const { docRef } = await import("../src/doc-context.ts");
+    expect(docRef("knowledge/integrations/docs/partner-calls.md")).toBe(
+      "integrations/partner-calls",
+    );
+    expect(docRef("knowledge/api/integrations/docs/partner-calls.md")).toBe(
+      "api/integrations/partner-calls",
+    );
+  });
+});
