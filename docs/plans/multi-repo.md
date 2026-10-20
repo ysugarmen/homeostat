@@ -1,4 +1,4 @@
-# 0.2.0: one knowledge base for several repos, and a first base for each
+# 0.2.0: one knowledge base for several repos, rules grouped by topic, and a first base for each
 
 Status: proposal, for review before any code.
 
@@ -93,6 +93,43 @@ homeostat migrate --map payments=api --map jobs=worker --shared core   # several
 - **State branch:** decision records keep their ids, but their paths are rewritten, so the daily run still settles and dedupes correctly.
 - **Developers' pending lessons:** the next `sync` moves `.homeostat/pending/knowledge/<area>/…` to the matching repo folder, using the same mapping, which `migrate` records in `homeostat.yaml` under `migrated:`.
 
+## Rules grouped by topic
+
+Today every rule is its own file, so a KB of 70 rules is 70 files, and one review PR of 64 lessons is 64 files to click through. In 0.2.0, rules are grouped into one file per topic, inside their area:
+
+```text
+knowledge/api/core/migrations.md      # every migrations rule of repo api
+knowledge/api/core/testing.md
+knowledge/api/payments/ledger.md
+```
+
+```markdown
+## Keep million-row backfills out of schema migrations {#keep-million-row-backfills}
+<!-- homeostat: status=accepted owner=sam score=4 source=pr-feedback url=https://github.com/acme/api/pull/4504#discussion_r33 created=2026-10-19 confirmed=2026-10-19 scope=migrations/** -->
+A rule, at most 60 words, naming the function, path or package.
+
+**Why:** the reason, from the review.
+```
+
+- **One section per rule.** It carries what the frontmatter carries today: id, status, owner, score, source, dates, scope and flags, in one comment line. The file's own frontmatter holds only the topic's title and description. The section format follows documents, so parsing and validation share code.
+- **The topics are a fixed list.** Each repo lists its topics in the config, a name and a one-line description each:
+  ```yaml
+  repos:
+    api:
+      source: acme/api
+      topics:
+        migrations: "Alembic schema changes, backfills and their deploy order"
+        testing: "What tests assert, fixtures, mocks"
+  ```
+  `migrate` and `bootstrap` propose a first list from the existing rules and code; a person approves it in that PR.
+- **Classifying a lesson needs no extra model call.** The drafter already picks each lesson's area, so it now picks the topic from the same list in the same call. If none fits, it proposes a new topic, and that lesson goes to review, so new topics never appear on their own. A hand-written `learn` takes `--topic`. Without it, the topic is picked by matching words against the topic names and descriptions, with no model. If nothing matches, the rule goes to `general`.
+- **Conflicts.** Sections stay sorted by id, so two PRs adding rules to one topic usually touch separate lines. When git still reports a conflict, the daily run and `homeostat review merge` rebuild the topic file from both sides, since every section is self-contained, so nobody resolves a rule-file conflict by hand.
+- **What carries over:**
+  - Ids, scopes, scores, flags, disputes and decisions all stay per rule; only the storage changes.
+  - The state branch still records decisions per rule id.
+  - `explain`, `search`, injection and the dashboard read sections exactly as they read files today.
+- **Migration:** `migrate` folds today's files into topic files. One-repo KBs get this too, with the topics proposed from their rules, and old one-file rules keep validating until migrated.
+
 ## A first base for each repo: `homeostat bootstrap`
 
 A new KB starts empty, and the first useful rules wait for review comments to accumulate. `bootstrap` gives each repo a base on day one. `init` ends by offering it ("Build a first base from your repos now?"), and it can also be run later. It sends code to the model, so like `seed` it only ever runs by hand, never on a schedule.
@@ -128,19 +165,31 @@ For each repo in `repos`, from a local checkout (found by remote, or given with 
 
 ## Order of work
 
-1. **Model:** config `repos:`, path rules, a `repoOf(path)` helper, and legacy-layout detection. Covered by `validate` tests in both layouts.
-2. **Repo detection:** for the hooks and CLI, from git remotes. Then verify MCP's working folder, and settle the fallback.
-3. **Selection:** injection, MCP `context` and `search`, and `export`, scoped to repo plus shared core.
-4. **Writing:** `learn`, `curate`, `daily` and `docs convert`/`seed` place files by repo, and duplicates are compared per repo.
-5. **Deep dive, CODEOWNERS, digest and dashboard.**
-6. **`migrate`,** state-branch path rewriting, and pending-lesson moves in `sync`.
-7. **`bootstrap`:**
+1. **Model:** config `repos:`, path rules, a `repoOf(path)` helper, and legacy-layout detection. Covered by `validate` tests in both layouts. *Done.*
+2. **Topic storage:**
+   - the section format, parsed and validated
+   - the topic list in the config
+   - one read/write layer that every command uses, so that later steps write sections, not files
+   - sorted writes, and rebuilding a topic file when a PR conflicts
+3. **Repo detection:** for the hooks and CLI, from git remotes. Then verify MCP's working folder, and settle the fallback.
+4. **Selection:** injection, MCP `context` and `search`, and `export`, scoped to repo plus shared core.
+5. **Writing:**
+   - `learn` (`--topic` and the word-match fallback), `curate` and `daily`, with the drafter choosing the topic
+   - flags and disputes
+   - `docs convert` and `seed`, placed by repo
+   - duplicates compared per repo
+6. **Deep dive, CODEOWNERS, digest and dashboard.**
+7. **`migrate`:**
+   - moving rules to repo folders and folding them into topic files, with a proposed topic list
+   - rewriting paths on the state branch
+   - moving pending lessons in `sync`
+8. **`bootstrap`:**
    - the existing-docs part first, since it needs no model
    - the `data` and `infrastructure` seed topics, with their file pickers and exclusions
    - the dry-run preview with its cost estimate
    - `init`'s offer at the end
-8. **Docs:** quickstart, config, entries, architecture, a migration guide, and a bootstrap guide.
-9. **Release 0.2.0.** The acceptance test has two parts:
+9. **Docs:** quickstart, config, entries, architecture, a migration guide, and a bootstrap guide.
+10. **Release 0.2.0.** The acceptance test has two parts:
    - Migrate one real single-repo KB. New rules land under `knowledge/<repo>/`, sessions get the same rules as before, and the review PRs settle.
    - Run `bootstrap` on a real repo with migrations and Helm charts. Its PR holds the four parts, and the preview lists exactly what was sent.
 
