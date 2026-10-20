@@ -19,6 +19,16 @@ export {
   splitAutoMerge,
 } from "./automerge.ts";
 export { type BodySections, parseBody, RULE_MAX_WORDS, WHY_MAX_WORDS } from "./body.ts";
+export {
+  BOOTSTRAP_PARTS,
+  type BootstrapPart,
+  docTopic,
+  type Estimate,
+  estimate,
+  existingDocs,
+  PART_TOPICS,
+  SEED_OUTPUT_TOKENS,
+} from "./bootstrap.ts";
 export { type CheckContext, CORE_AREA, checkEntry } from "./check.ts";
 export {
   type ApiAskerOptions,
@@ -248,7 +258,14 @@ export { findEmails, redactSecrets, type SecretFinding, scanSecrets } from "./se
 export { type SectionUsage, sectionUsage } from "./section-usage.ts";
 export {
   ClaudeSeeder,
+  DATA_FILES,
+  type FilePicker,
+  INFRA_FILES,
+  isSecretManifest,
+  KEY_FILES,
+  NEVER_READ,
   type RepoSnapshot,
+  SEED_PICKERS,
   SEED_SYSTEM,
   SEED_TOPICS,
   type SeedDraft,

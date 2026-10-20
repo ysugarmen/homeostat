@@ -390,6 +390,8 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
   2. Give each member a handle, then run homeostat codeowners
   3. Write your first entry under knowledge/core/ and run homeostat validate
   4. Commit and push
+  5. Build a first base from your repos' docs, schemas and deploy files:
+     homeostat bootstrap --dry-run shows what it would read and cost, then homeostat bootstrap
 `,
   );
   return 0;

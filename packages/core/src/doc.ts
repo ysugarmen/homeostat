@@ -38,6 +38,7 @@ export const PROVENANCE_SOURCES = [
   "deep-dive",
   "curator",
   "seed",
+  "bootstrap",
   "imported",
 ] as const;
 

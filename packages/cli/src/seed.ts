@@ -5,9 +5,12 @@ import {
   ClaudeSeeder,
   CORE_AREA,
   docFilePath,
+  type FilePicker,
   logEvent,
   type RepoRef,
+  type RepoSnapshot,
   readKbFiles,
+  SEED_PICKERS,
   SEED_SYSTEM,
   SEED_TOPICS,
   type SeedTopic,
@@ -77,27 +80,17 @@ async function seed(repoDir: string, opts: SeedOptions, io: Io): Promise<number>
   const listed = git(repo, "ls-files");
   if (listed === undefined) throw new CliError(`${repo} is not a git checkout`);
 
-  const name = basename(git(repo, "remote", "get-url", "origin")?.replace(/\.git$/, "") ?? repo);
-  const snapshot = snapshotRepo(
-    name,
-    listed.split("\n").filter(Boolean),
-    (p) => {
-      try {
-        return readFileSync(join(repo, p), "utf8");
-      } catch {
-        return undefined;
-      }
-    },
-    config.sources?.exclude.paths ?? [],
-  );
-  const bytes = snapshot.files.reduce((n, f) => n + f.text.length, 0);
-  io.stdout(
-    `snapshot of ${name}: ${snapshot.paths.length} paths, ${snapshot.files.length} key files (${bytes} characters)${snapshot.redacted ? `, ${snapshot.redacted} secret(s) redacted` : ""}\n`,
-  );
+  const name = checkoutName(repo);
+  const snapshots = snapshotsFor(repo, name, listed, topics, config.sources?.exclude.paths ?? []);
+  for (const snapshot of new Set(snapshots.values())) io.stdout(`${describeSnapshot(snapshot)}\n`);
+  const bytes = [...new Set(snapshots.values())]
+    .flatMap((s) => s.files)
+    .reduce((n, f) => n + f.text.length, 0);
 
   if (opts.dryRun) {
     io.stdout(`\n--- system prompt ---\n${SEED_SYSTEM}\n`);
-    for (const t of topics) io.stdout(`\n--- prompt for ${t} ---\n${seedPrompt(snapshot, t)}\n`);
+    for (const t of topics)
+      io.stdout(`\n--- prompt for ${t} ---\n${seedPrompt(snapshotOf(snapshots, t), t)}\n`);
     io.stdout("\ndry run: nothing sent, nothing written\n");
     return 0;
   }
@@ -109,7 +102,7 @@ async function seed(repoDir: string, opts: SeedOptions, io: Io): Promise<number>
     type: "seed-run",
     repo: name,
     topics,
-    paths: snapshot.paths.length,
+    paths: snapshotOf(snapshots, topics[0] ?? "architecture").paths.length,
     chars: bytes,
   });
 
@@ -120,6 +113,7 @@ async function seed(repoDir: string, opts: SeedOptions, io: Io): Promise<number>
       io.stdout(`skip ${path}: it already exists (seed writes first versions; --force replaces)\n`);
       continue;
     }
+    const snapshot = snapshotOf(snapshots, topic);
     const draft = await seeder.draft(snapshot, topic);
     if (!draft) {
       io.stdout(`skip ${topic}: the model declined\n`);
@@ -146,7 +140,7 @@ async function seed(repoDir: string, opts: SeedOptions, io: Io): Promise<number>
         base: config.sources.baseBranch,
         title: `homeostat: first ${topic} document for ${opts.area}, from ${name}`,
         body: [
-          `Drafted by \`homeostat seed\` from a scan of ${name}: ${snapshot.paths.length} paths and ${snapshot.files.length} key files (${snapshot.files.map((f) => f.path).join(", ")}).`,
+          `Drafted by \`homeostat seed\` from a scan of ${name}: ${snapshot.paths.length} paths and ${snapshot.files.length} files (${snapshot.files.map((f) => f.path).join(", ")}).`,
           "",
           "Every section is marked `source=seed` with the model's confidence. Correct anything wrong before merging: other agents will treat it as fact.",
           ...(risky.length
@@ -164,4 +158,54 @@ async function seed(repoDir: string, opts: SeedOptions, io: Io): Promise<number>
     if (risky.length) io.stdout(`${formatIssues(risky, io).text}`);
   }
   return failed ? 1 : 0;
+}
+
+/** The repo name a checkout's origin remote gives, else its folder name. */
+export function checkoutName(repo: string): string {
+  return basename(git(repo, "remote", "get-url", "origin")?.replace(/\.git$/, "") ?? repo);
+}
+
+/** One snapshot per file picker the topics use, so topics sharing a picker share a snapshot. */
+export function snapshotsFor(
+  repo: string,
+  name: string,
+  listed: string,
+  topics: readonly SeedTopic[],
+  exclude: readonly string[],
+): Map<SeedTopic, RepoSnapshot> {
+  const tracked = listed.split("\n").filter(Boolean);
+  const read = (p: string) => {
+    try {
+      return readFileSync(join(repo, p), "utf8");
+    } catch {
+      return undefined;
+    }
+  };
+  const byPicker = new Map<FilePicker, RepoSnapshot>();
+  const out = new Map<SeedTopic, RepoSnapshot>();
+  for (const t of topics) {
+    const pick = SEED_PICKERS[t];
+    const snap = byPicker.get(pick) ?? snapshotRepo(name, tracked, read, exclude, pick);
+    byPicker.set(pick, snap);
+    out.set(t, snap);
+  }
+  return out;
+}
+
+export function snapshotOf(
+  snapshots: Map<SeedTopic, RepoSnapshot>,
+  topic: SeedTopic,
+): RepoSnapshot {
+  const s = snapshots.get(topic);
+  if (!s) throw new Error(`no snapshot for ${topic}`);
+  return s;
+}
+
+export function describeSnapshot(s: RepoSnapshot): string {
+  const bytes = s.files.reduce((n, f) => n + f.text.length, 0);
+  const extra = [
+    ...(s.redacted ? [`${s.redacted} secret(s) redacted`] : []),
+    ...(s.skipped ? [`${s.skipped} file(s) holding secrets left out`] : []),
+  ];
+  return `snapshot of ${s.name}: ${s.paths.length} paths, ${s.files.length} files (${bytes} characters)${extra.length ? `, ${extra.join(", ")}` : ""}`;
 }

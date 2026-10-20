@@ -12,6 +12,7 @@ import type {
 } from "@homeostat/core";
 import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
+import { type BootstrapOptions, runBootstrap } from "./bootstrap.ts";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DailyOptions, runDaily } from "./daily.ts";
@@ -251,7 +252,11 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .argument("<repo>", "path to a local checkout of the code repo")
     .requiredOption("--area <area>", "area the documents describe (core for org-wide)")
     .requiredOption("--owner <member>", "member who will own them")
-    .option("--topic <topic>", "architecture, conventions or cross-repo; repeatable", collect)
+    .option(
+      "--topic <topic>",
+      "architecture, conventions, cross-repo, data or infrastructure; repeatable",
+      collect,
+    )
     .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
     .option("--dry-run", "print exactly what would be sent; send nothing, write nothing")
     .option("--force", "replace documents that already exist")
@@ -259,6 +264,28 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--shared", "multi-repo KB: shared documents, in knowledge/core/docs/")
     .action(async (repo: string, opts: SeedOptions) => {
       exitCode = await runSeed(repo, opts, io);
+    });
+
+  program
+    .command("bootstrap")
+    .description(
+      "Build a first base for each repo from its local checkout: existing docs, plus code, data and infrastructure documents drafted by the model. Manual only; one PR per repo.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--repo <name>", "only this repo; repeatable", collect)
+    .option("--checkout <repo=path>", "where a repo is checked out; repeatable", collect)
+    .option(
+      "--parts <parts>",
+      "docs, code, data, infrastructure (comma-separated; default all)",
+      collect,
+    )
+    .option("--owner <member>", "member who owns the documents (default: the first reviewer)")
+    .option("--dry-run", "list every file each part would read, and the cost; send nothing")
+    .option("--prompts", "with --dry-run, print the full prompts")
+    .option("--yes", "send without asking")
+    .option("--force", "replace documents that already exist")
+    .action(async (opts: BootstrapOptions) => {
+      exitCode = await runBootstrap(opts, io);
     });
 
   program

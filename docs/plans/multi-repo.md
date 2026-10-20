@@ -188,6 +188,8 @@ For each repo in `repos`, from a local checkout (found by remote, or given with 
    - the `data` and `infrastructure` seed topics, with their file pickers and exclusions
    - the dry-run preview with its cost estimate
    - `init`'s offer at the end
+
+   *Done.* The dry run lists each file and prints prompts with `--prompts`. Beyond the plan, test folders, `secrets/` folders and files with three or more secret findings are never read, ORM files are recognised by their text, and migration histories share the budget.
 9. **Docs:** quickstart, config, entries, architecture, a migration guide, and a bootstrap guide.
 10. **Release 0.2.0.** The acceptance test has two parts:
    - Migrate one real single-repo KB. New rules land under `knowledge/<repo>/`, sessions get the same rules as before, and the review PRs settle.
