@@ -6,7 +6,7 @@ You need Node 22.18 or later and a git repo for the knowledge base (KB). It can 
 
 ```sh
 git clone git@github.com:your-org/team-kb.git && cd team-kb   # or git@bitbucket.org:your-workspace/team-kb.git
-npx --yes homeostat@0.1.11 init --member your-id --handle @your-user
+npx --yes homeostat@0.1.12 init --member your-id --handle @your-user
 ```
 
 A handle is your GitHub login or, on Bitbucket, your Bitbucket nickname (Personal settings > Account). Bitbucket nicknames often hold spaces and accents; write them as they are, quoted in YAML: `handle: "@Ana Ruiz"`. Case does not matter.
@@ -39,14 +39,14 @@ sources:
 Then generate CODEOWNERS, so each area's owners review its changes (on Bitbucket it goes in `.bitbucket/CODEOWNERS`, where Bitbucket reads it):
 
 ```sh
-npx --yes homeostat@0.1.11 codeowners
-npx --yes homeostat@0.1.11 validate
+npx --yes homeostat@0.1.12 codeowners
+npx --yes homeostat@0.1.12 validate
 ```
 
 ## 3. Write a first rule
 
 ```sh
-npx --yes homeostat@0.1.11 learn --area integrations \
+npx --yes homeostat@0.1.12 learn --area integrations \
   --title "Use the shared retry helper for partner calls" \
   --rule "Wrap every outbound partner call in withRetry() from @acme/http-client." \
   --why "Hand-rolled retries skipped the request-id header partners ask for."
