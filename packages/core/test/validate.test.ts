@@ -95,3 +95,99 @@ describe("applyFixes", () => {
     expect(applyFixes("no frontmatter", [{ field: "score", value: 1 }])).toBe("no frontmatter");
   });
 });
+
+describe("validate: a multi-repo KB", () => {
+  // The starter's retry rule, filed under repo api; one shared rule; one document per layout.
+  const starter = readKb("starter-kb");
+  const rule = (starter[ENTRY] ?? "").replace(
+    "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33",
+    "https://github.com/acme/api/pull/812#discussion_r33",
+  );
+  const yaml = (extra = "") => `version: 1
+team:
+  members:
+    - { id: dana, handle: "@dana", role: senior, areas: [api/integrations] }
+    - { id: lee, handle: "@lee", role: member, areas: [] }
+    - { id: sam, handle: "@sam", role: senior, areas: [core] }
+repos:
+  api:
+    source: acme/api
+    areas:
+      integrations: ["services/integrations/**"]
+  worker:
+    source: acme/worker
+sources:
+  host: github
+  kbRepo: acme/team-kb
+${extra}`;
+  const kb = (files: KbFiles = {}, extra = ""): KbFiles => ({
+    "homeostat.yaml": yaml(extra),
+    "knowledge/api/integrations/outbound-http-retry-helper.md": rule,
+    ...files,
+  });
+
+  test("a repo's rules live under knowledge/<repo>/<area>/, and the KB is green", () => {
+    const result = validate(kb());
+    expect(result.issues.filter((i) => i.severity === "error")).toEqual([]);
+    expect(result.config?.sources?.repos).toEqual(["acme/api", "acme/worker"]);
+  });
+
+  test("the one-repo path, an unlisted repo, or an area of another repo is an error", () => {
+    const moved = (path: string) => {
+      const files = kb();
+      delete files["knowledge/api/integrations/outbound-http-retry-helper.md"];
+      return codes({ ...files, [path]: rule });
+    };
+    expect(moved(ENTRY)).toContain("path.root");
+    expect(moved("knowledge/web/integrations/outbound-http-retry-helper.md")).toContain(
+      "path.root",
+    );
+    expect(moved("knowledge/worker/integrations/outbound-http-retry-helper.md")).toContain(
+      "area.unknown",
+    );
+  });
+
+  test("a rule learned from one repo's PR, filed under another, is misfiled", () => {
+    const files = kb();
+    delete files["knowledge/api/integrations/outbound-http-retry-helper.md"];
+    const worker = yaml().replace(
+      "  worker:\n    source: acme/worker",
+      '  worker:\n    source: acme/worker\n    areas:\n      integrations: ["x/**"]',
+    );
+    expect(
+      codes({
+        ...files,
+        "homeostat.yaml": worker,
+        "knowledge/worker/integrations/outbound-http-retry-helper.md": rule,
+      }),
+    ).toContain("source.url.repo-folder");
+  });
+
+  test("documents follow the same layout", () => {
+    const doc = (area: string) =>
+      `---\ntitle: Notes\narea: ${area}\nowner: dana\nscope: ["**"]\nupdated: 2026-10-01\n---\n\n## One {#one}\n<!-- homeostat: source=imported updated=2026-10-01 -->\nText.\n`;
+    expect(
+      validate(
+        kb({ "knowledge/api/integrations/docs/partners.md": doc("integrations") }),
+      ).issues.filter((i) => i.code.startsWith("doc.path") || i.code.startsWith("doc.area")),
+    ).toEqual([]);
+    expect(codes(kb({ "knowledge/core/docs/architecture.md": doc("core") }))).not.toContain(
+      "doc.path",
+    );
+    expect(codes(kb({ "knowledge/integrations/docs/partners.md": doc("integrations") }))).toContain(
+      "doc.path",
+    );
+  });
+
+  test("top-level areas, a second repo list, or a reserved short name are config errors", () => {
+    const bad = (text: string) => codes({ ...kb(), "homeostat.yaml": text });
+    expect(bad(yaml("areas:\n  integrations: [x/**]\n"))).toContain("config.areas.with-repos");
+    expect(
+      bad(yaml().replace("kbRepo: acme/team-kb", "kbRepo: acme/team-kb\n  repos: [acme/api]")),
+    ).toContain("config.sources.repos.with-repos");
+    expect(bad(yaml().replace("  worker:", "  docs:"))).toContain("config.repos.reserved");
+    expect(bad(yaml().replace("areas: [api/integrations]", "areas: [integrations]"))).toContain(
+      "config.member.area",
+    );
+  });
+});

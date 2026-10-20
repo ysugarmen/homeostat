@@ -1,5 +1,6 @@
 import type { Entry } from "./entry.ts";
 import { error, type Issue } from "./issues.ts";
+import { locate } from "./layout.ts";
 import { countTokens } from "./tokens.ts";
 
 /** The `core` area always exists and holds team-wide entries. */
@@ -8,8 +9,10 @@ export const CORE_AREA = "core";
 export interface CheckContext {
   /** Path of the entry file relative to the KB root, e.g. `knowledge/core/my-rule.md`. */
   path: string;
-  /** Area names from the config's `areas` key. */
+  /** Area names from the config's `areas` key (a one-repo KB). */
   areas: readonly string[];
+  /** A multi-repo KB: each repo's short name → its area names. Omitted for a one-repo KB. */
+  repos?: Readonly<Record<string, readonly string[]>>;
   autoMergeThreshold: number;
   /** Member ids from the config's `team`. When omitted, member references are not checked. */
   members?: readonly string[];
@@ -30,22 +33,32 @@ export function checkEntry(entry: Entry, ctx: CheckContext): Issue[] {
       error("path.filename", `filename must be "${fm.id}.md" to match id`, { path: "id", file }),
     );
   }
-  if (parts.length !== 3 || parts[0] !== "knowledge") {
-    issues.push(error("path.root", `entry must live at knowledge/<area>/${fm.id}.md`, { file }));
-  } else if (parts[1] !== fm.area) {
+  const where = locate(ctx.path, ctx.repos ? Object.keys(ctx.repos) : undefined);
+  const known = ctx.repos && where?.repo ? (ctx.repos[where.repo] ?? []) : ctx.areas;
+  if (!where || where.kind !== "rule") {
     issues.push(
-      error("path.folder", `folder "${parts[1]}" does not match area "${fm.area}"`, {
+      error(
+        "path.root",
+        ctx.repos
+          ? `entry must live at knowledge/core/${fm.id}.md or knowledge/<repo>/<area>/${fm.id}.md, with <repo> one of repos (${Object.keys(ctx.repos).join(", ")})`
+          : `entry must live at knowledge/<area>/${fm.id}.md`,
+        { file },
+      ),
+    );
+  } else if (where.area !== fm.area) {
+    issues.push(
+      error("path.folder", `folder "${where.area}" does not match area "${fm.area}"`, {
         path: "area",
         file,
       }),
     );
   }
 
-  if (fm.area !== CORE_AREA && !ctx.areas.includes(fm.area)) {
+  if (fm.area !== CORE_AREA && !known.includes(fm.area)) {
     issues.push(
       error(
         "area.unknown",
-        `area "${fm.area}" is not in the config's areas (${[CORE_AREA, ...ctx.areas].join(", ")})`,
+        `area "${fm.area}" is not in the ${where?.repo ? `areas of repo ${where.repo}` : "config's areas"} (${[CORE_AREA, ...known].join(", ")})`,
         { path: "area", file },
       ),
     );

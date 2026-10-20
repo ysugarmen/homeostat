@@ -16,6 +16,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `team.reviewers` | (unset) | Member ids who decide the lessons the daily run is unsure about. When set, only they are asked to review its PRs and listed in CODEOWNERS; other members' roles only weigh their lessons. Unset, area owners decide, then seniors and leads. Give them a `slack` member ID to be mentioned in the morning notice |
+| `repos` | (unset) | A multi-repo KB: each code repo by short name (its folder under `knowledge/`), with `source` (owner/name on the git host) and its own `areas`. Shared rules live in `knowledge/core/`, each repo's in `knowledge/<repo>/<area>/`, and a session gets only its own repo's rules. Then leave top-level `areas` and `sources.repos` out, and name areas elsewhere as `<repo>/<area>`. Unset, every rule applies to every repo |
 | `scoring.weights.prFeedbackChangedCode` | `3` | Review feedback followed by a code change |
 | `scoring.weights.prFeedback` | `0` | Review feedback with no code change after it |
 | `scoring.weights.manual` | `2` | Written by a member by hand |

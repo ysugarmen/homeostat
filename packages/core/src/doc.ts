@@ -288,4 +288,6 @@ export function formatDoc(doc: Doc): string {
 }
 
 /** Whether a KB-relative path is a document rather than an atomic entry. */
-export const isDocPath = (path: string) => /^knowledge\/[^/]+\/docs\/.+\.md$/.test(path);
+/** `knowledge/<area>/docs/…`, or `knowledge/<repo>/<area>/docs/…` in a multi-repo KB. */
+export const isDocPath = (path: string) =>
+  /^knowledge\/(?:[^/]+\/)?[^/]+\/docs\/[^/]+\.md$/.test(path);

@@ -4,6 +4,7 @@ import { detectConflicts } from "./conflicts.ts";
 import { type Doc, isDocPath, parseDoc } from "./doc.ts";
 import { type Entry, parseEntry } from "./entry.ts";
 import { error, hasErrors, type Issue } from "./issues.ts";
+import { areasOf, locate, repoNames } from "./layout.ts";
 import { RISK_ADVICE, scanRisk } from "./risk.ts";
 import { score } from "./score.ts";
 import { findEmails, scanSecrets } from "./secrets.ts";
@@ -99,6 +100,7 @@ function checkWithConfig(path: string, entry: Entry, config: Config): Issue[] {
   const issues = checkEntry(entry, {
     path,
     areas: Object.keys(config.areas),
+    ...(config.repos ? { repos: repoAreas(config) } : {}),
     autoMergeThreshold: config.scoring.autoMergeThreshold,
     members: config.team.members.map((m) => m.id),
     score: computed,
@@ -121,22 +123,40 @@ function checkWithConfig(path: string, entry: Entry, config: Config): Issue[] {
 function docConfigIssues(path: string, doc: Doc, config: Config): Issue[] {
   const fm = doc.frontmatter;
   const issues: Issue[] = [];
-  const folder = path.split("/")[1];
-  if (fm.area !== CORE_AREA && !Object.hasOwn(config.areas, fm.area)) {
+  const where = locate(path, config.repos ? repoNames(config) : undefined);
+  if (!where) {
     issues.push(
-      error("doc.area.unknown", `area "${fm.area}" is not in homeostat.yaml`, {
-        file: path,
-        path: "area",
-      }),
+      error(
+        "doc.path",
+        config.repos
+          ? "a document lives at knowledge/core/docs/ or knowledge/<repo>/<area>/docs/, with <repo> one of repos"
+          : "a document lives at knowledge/<area>/docs/",
+        { file: path },
+      ),
     );
-  }
-  if (folder !== fm.area) {
-    issues.push(
-      error("doc.area.folder", `area is "${fm.area}" but the file is under knowledge/${folder}/`, {
-        file: path,
-        path: "area",
-      }),
-    );
+  } else {
+    if (!areasOf(config, where.repo).includes(fm.area)) {
+      issues.push(
+        error(
+          "doc.area.unknown",
+          `area "${fm.area}" is not in ${where.repo ? `repos.${where.repo}.areas` : "homeostat.yaml"}`,
+          { file: path, path: "area" },
+        ),
+      );
+    }
+    if (where.area !== fm.area) {
+      const folder = where.repo ? `${where.repo}/${where.area}` : where.area;
+      issues.push(
+        error(
+          "doc.area.folder",
+          `area is "${fm.area}" but the file is under knowledge/${folder}/`,
+          {
+            file: path,
+            path: "area",
+          },
+        ),
+      );
+    }
   }
   for (const [field, id] of [
     ["owner", fm.owner],
@@ -212,7 +232,21 @@ function provenanceIssues(path: string, entry: Entry, config: Config): Issue[] {
   const known =
     url.hostname === HOST_DOMAINS[sources.host] &&
     sources.repos.some((r) => r.toLowerCase() === repo);
-  if (known) return [];
+  if (known) {
+    // In a multi-repo KB, a rule learned from a repo's PR is that repo's (or shared).
+    const folder = config.repos ? locate(path, repoNames(config))?.repo : undefined;
+    const from = Object.entries(config.repos ?? {}).find(
+      ([, r]) => r.source.toLowerCase() === repo,
+    )?.[0];
+    if (!folder || folder === from) return [];
+    return [
+      error(
+        "source.url.repo-folder",
+        `source.url is a PR in ${from ? `repo ${from}` : repo}, but the rule is under knowledge/${folder}/; move it to knowledge/${from ?? "core"}/ or to knowledge/core/ if it holds in every repo`,
+        { file: path, path: "source.url" },
+      ),
+    ];
+  }
   return [
     error(
       "source.url.unknown-repo",
@@ -243,3 +277,9 @@ function contentIssues(path: string, text: string): Issue[] {
   }
   return issues;
 }
+
+/** Each repo's area names, for the path checks of a multi-repo KB. */
+const repoAreas = (config: Config): Record<string, string[]> =>
+  Object.fromEntries(
+    Object.entries(config.repos ?? {}).map(([repo, r]) => [repo, Object.keys(r.areas)]),
+  );

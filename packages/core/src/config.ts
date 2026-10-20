@@ -2,6 +2,7 @@ import { parseDocument } from "yaml";
 import { z } from "zod";
 import { CORE_AREA } from "./check.ts";
 import { error, type Issue } from "./issues.ts";
+import { isKnownArea, RESERVED_REPO_NAMES } from "./layout.ts";
 import { ID_PATTERN } from "./schema.ts";
 import { fromZod } from "./zod-issues.ts";
 
@@ -117,8 +118,24 @@ export const configSchema = z.strictObject({
       }),
     )
     .default({}),
-  /** Area name → path globs. `core` is implicit and global. */
-  areas: z.record(name, z.array(z.string().min(1)).min(1)),
+  /** Area name → path globs. `core` is implicit and global. A multi-repo KB uses repos.*.areas. */
+  areas: z.record(name, z.array(z.string().min(1)).min(1)).default({}),
+  /**
+   * The team's code repos, by short name (the folder under knowledge/). With this key the KB is
+   * multi-repo: knowledge/core/ is shared, knowledge/<repo>/<area>/ is one repo's, and a session
+   * only gets its own repo's rules. Without it, every rule applies to every repo.
+   */
+  repos: z
+    .record(
+      name,
+      z.strictObject({
+        /** The repo on the git host, owner/name: the daily run reads its merged PRs. */
+        source: repoRef,
+        /** Area name → path globs relative to this repo's root. */
+        areas: z.record(name, z.array(z.string().min(1)).min(1)).default({}),
+      }),
+    )
+    .optional(),
   scoring: z
     .strictObject({
       weights: weightsSchema.prefault({}),
@@ -310,6 +327,7 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
       }),
     );
   }
+  issues.push(...repoIssues(config, file));
   const ids = new Set(config.team.members.map((m) => m.id));
   for (const id of config.team.reviewers ?? []) {
     if (!ids.has(id)) {
@@ -333,7 +351,7 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
     }
     seen.add(m.id);
     for (const area of m.areas) {
-      if (area !== CORE_AREA && !Object.hasOwn(config.areas, area)) {
+      if (!isKnownArea(config, area)) {
         issues.push(
           error("config.member.area", `team.members.${i}.areas: "${area}" is not in areas`, {
             path: `team.members.${i}.areas`,
@@ -356,7 +374,7 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
         );
     }
     for (const area of t.areas) {
-      if (area !== CORE_AREA && !Object.hasOwn(config.areas, area)) {
+      if (!isKnownArea(config, area)) {
         issues.push(
           error("config.team.area", `${at}.areas: "${area}" is not in areas`, {
             path: `${at}.areas`,
@@ -393,7 +411,7 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
     }
   }
   for (const area of config.security.teamOnlyAreas) {
-    if (!Object.hasOwn(config.areas, area)) {
+    if (area === CORE_AREA || !isKnownArea(config, area)) {
       issues.push(
         error(
           "config.security.teamOnlyArea",
@@ -404,5 +422,56 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
     }
   }
 
-  return issues.length ? { issues } : { config, issues };
+  // A multi-repo KB lists its code repos once, under repos; the daily run reads sources.repos.
+  if (config.repos && config.sources && config.sources.repos.length === 0) {
+    config.sources.repos = Object.values(config.repos).map((r) => r.source);
+  }
+  return issues.some((i) => i.severity === "error") ? { issues } : { config, issues };
+}
+
+/** A multi-repo KB's repos: short names, where its areas live, and no second list of sources. */
+function repoIssues(config: Config, file: string): Issue[] {
+  const issues: Issue[] = [];
+  if (!config.repos) return issues;
+  for (const [repo, r] of Object.entries(config.repos)) {
+    if ((RESERVED_REPO_NAMES as readonly string[]).includes(repo)) {
+      issues.push(
+        error("config.repos.reserved", `repos.${repo}: reserved; pick another short name`, {
+          path: `repos.${repo}`,
+          file,
+        }),
+      );
+    }
+    if (Object.hasOwn(r.areas, CORE_AREA)) {
+      issues.push(
+        error(
+          "config.area.reserved",
+          `repos.${repo}.areas.${CORE_AREA}: reserved; core is implicit`,
+          {
+            path: `repos.${repo}.areas.${CORE_AREA}`,
+            file,
+          },
+        ),
+      );
+    }
+  }
+  if (Object.keys(config.areas).length) {
+    issues.push(
+      error(
+        "config.areas.with-repos",
+        "with repos, areas belong to each repo: move them to repos.<name>.areas",
+        { path: "areas", file },
+      ),
+    );
+  }
+  if (config.sources?.repos.length) {
+    issues.push(
+      error(
+        "config.sources.repos.with-repos",
+        "with repos, list each repo once, as repos.<name>.source",
+        { path: "sources.repos", file },
+      ),
+    );
+  }
+  return issues;
 }
