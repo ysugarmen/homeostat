@@ -4,7 +4,10 @@ import {
   type Entry,
   type Event,
   type Issue,
+  isMultiRepo,
   isRejectedDecision,
+  repoNames,
+  repoOf,
   type SectionUsage,
   STATUSES,
   score,
@@ -601,40 +604,67 @@ export function overviewPage(
 }
 
 export function entriesPage(
-  entries: readonly Entry[],
+  entries: readonly (Entry & { path?: string })[],
   status: string | null,
   query: string | null = null,
+  config?: Config,
+  repo: string | null = null,
 ): string {
+  // A multi-repo KB: each rule's place is api/payments, or shared; ?repo= narrows to one repo.
+  const multi = config ? isMultiRepo(config) : false;
+  const repoOfEntry = (e: { path?: string }) =>
+    config && e.path ? repoOf(e.path, config) : undefined;
+  const where = (e: Entry & { path?: string }) =>
+    multi
+      ? repoOfEntry(e)
+        ? `${repoOfEntry(e)}/${e.frontmatter.area}`
+        : "shared"
+      : e.frontmatter.area;
   const words = (query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
   const matches = (e: Entry) => {
     const hay = `${e.frontmatter.id} ${e.frontmatter.title} ${e.sections.rule ?? ""}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   };
   const shown = entries
-    .filter((e) => (!status || e.frontmatter.status === status) && matches(e))
-    .sort(
-      (a, b) =>
-        a.frontmatter.area.localeCompare(b.frontmatter.area) ||
-        b.frontmatter.score - a.frontmatter.score,
-    );
+    .filter(
+      (e) =>
+        (!status || e.frontmatter.status === status) &&
+        matches(e) &&
+        (!multi || !repo || (repo === "shared" ? !repoOfEntry(e) : repoOfEntry(e) === repo)),
+    )
+    .sort((a, b) => where(a).localeCompare(where(b)) || b.frontmatter.score - a.frontmatter.score);
+  const keep = (k: string, v: string | null) => (v ? `${k}=${encodeURIComponent(v)}` : "");
+  const href = (s: string | null, r: string | null) => {
+    const q = [keep("status", s), keep("repo", r)].filter(Boolean).join("&");
+    return `/entries${q ? `?${q}` : ""}`;
+  };
+  const repoFilter =
+    multi && config
+      ? `<nav class="filters" aria-label="Repo">${[null, "shared", ...repoNames(config)]
+          .map(
+            (r) =>
+              `<a href="${href(status, r)}"${r === repo ? ' aria-current="page"' : ""}>${esc(r ?? "all repos")}</a>`,
+          )
+          .join("")}</nav>`
+      : "";
   const filters = ["all", ...STATUSES]
     .map((s) => {
       const active = (s === "all" && !status) || s === status;
-      return `<a href="/entries${s === "all" ? "" : `?status=${s}`}"${active ? ' aria-current="page"' : ""}>${s}</a>`;
+      return `<a href="${href(s === "all" ? null : s, repo)}"${active ? ' aria-current="page"' : ""}>${s}</a>`;
     })
     .join("");
-  return `<section class="panel"><h2>Entries</h2><nav class="filters" aria-label="Status">${filters}</nav>
+  return `<section class="panel"><h2>Entries</h2><nav class="filters" aria-label="Status">${filters}</nav>${repoFilter}
 <div class="table-wrap"><table><thead><tr><th>Status</th><th class="num">Score</th><th>Entry</th><th>Area</th><th>Owner</th><th>Confirmed</th></tr></thead><tbody>
 ${shown
   .map(
     (e) =>
-      `<tr><td><span class="chip ${e.frontmatter.status}">${e.frontmatter.status}</span></td><td class="num">${e.frontmatter.score}</td><td><a href="/entries/${esc(e.frontmatter.id)}">${esc(e.frontmatter.title)}</a><div class="mono muted">${esc(e.frontmatter.id)}${e.frontmatter.flags?.length ? `, ${e.frontmatter.flags.length} open ${e.frontmatter.flags.length === 1 ? "flag" : "flags"}` : ""}</div></td><td>${esc(e.frontmatter.area)}</td><td>${esc(e.frontmatter.owner)}</td><td class="mono">${esc(e.frontmatter.lastConfirmed)}</td></tr>`,
+      `<tr><td><span class="chip ${e.frontmatter.status}">${e.frontmatter.status}</span></td><td class="num">${e.frontmatter.score}</td><td><a href="/entries/${esc(e.frontmatter.id)}">${esc(e.frontmatter.title)}</a><div class="mono muted">${esc(e.frontmatter.id)}${e.frontmatter.flags?.length ? `, ${e.frontmatter.flags.length} open ${e.frontmatter.flags.length === 1 ? "flag" : "flags"}` : ""}</div></td><td>${esc(where(e))}</td><td>${esc(e.frontmatter.owner)}</td><td class="mono">${esc(e.frontmatter.lastConfirmed)}</td></tr>`,
   )
   .join("")}
 </tbody></table></div>${shown.length ? "" : '<p class="empty">No entries with this status.</p>'}</section>`;
 }
 
-export function entryPage(entry: Entry, config: Config): string {
+export function entryPage(entry: Entry & { path?: string; file?: string }, config: Config): string {
   const fm = entry.frontmatter;
   const rejected = isRejectedDecision(fm);
   const reasons = score(fm, { config }).reasons;
@@ -652,6 +682,7 @@ ${entry.sections.example ? `<div class="statement"><span class="label">Example</
 ${(fm.flags ?? []).map((f) => `<p class="flag">Flagged by <span class="mono">${esc(f.by)}</span> on <span class="mono">${esc(f.date)}</span>: ${esc(f.reason)}</p>`).join("")}
 <dl class="facts">
 ${fact("Applies to", fm.scope.map((s) => `<code>${esc(s)}</code>`).join(", "))}
+${entry.file || entry.path ? fact("File", `<code>${esc(entry.file ? `${entry.file}#${fm.id}` : (entry.path ?? ""))}</code>`) : ""}
 ${fact("Owner", `<span class="mono">${esc(fm.owner)}</span>`)}
 ${fact("Source", `${esc(fm.source.type)} by <span class="mono">${esc(fm.source.author)}</span>${fm.source.changedCode ? ", and the code changed after the comment" : ""}${link(fm.source.url)}`)}
 ${fact("Score", `<span class="mono">${fm.score}</span>${reasons.length ? `<ul class="reasons">${reasons.map((r) => `<li><span class="d ${r.delta > 0 ? "pos" : "neg"}">${r.delta > 0 ? "+" : ""}${r.delta}</span>${esc(r.note)}</li>`).join("")}</ul>` : ""}`)}
@@ -807,6 +838,13 @@ function input(field: Field, value: unknown): string {
     case "lines":
       control = `<textarea id="${id}" name="${name}">${esc(((value as string[] | undefined) ?? []).join("\n"))}</textarea>`;
       break;
+    case "pairs":
+      control = `<textarea id="${id}" name="${name}">${esc(
+        Object.entries((value as Record<string, string> | undefined) ?? {})
+          .map(([k, v]) => `${k}: ${v}`)
+          .join("\n"),
+      )}</textarea>`;
+      break;
     case "number":
       control = `<input type="number" id="${id}" name="${name}" value="${esc(value ?? "")}">`;
       break;
@@ -847,6 +885,27 @@ function rowEditor(section: Section, config: Config): string {
       .join(
         "",
       )}</tbody></table></div><p class="muted">Adding rows${info("Blank rows add teams. Lists are comma-separated; the handle is an @org/team.")}</p>`;
+  }
+  if (section.rows === "repos") {
+    const repos = [...Object.entries(config.repos ?? {}), ...Array(2).fill(undefined)];
+    const pairsText = (m: Record<string, string | readonly string[]> | undefined) =>
+      Object.entries(m ?? {})
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+        .join("\n");
+    return `<div class="table-wrap"><table class="rows"><thead><tr><th>Short name</th><th>Source</th><th>Areas</th><th>Topics</th><th>Remove</th></tr></thead><tbody>${repos
+      .map(([name, r] = ["", undefined], i) =>
+        [
+          "<tr>",
+          `<td><input type="text" name="repo.${i}.name" value="${esc(name)}" aria-label="Short name"></td>`,
+          `<td><input type="text" name="repo.${i}.source" value="${esc(r?.source ?? "")}" aria-label="Source, owner/name"></td>`,
+          `<td><textarea name="repo.${i}.areas" aria-label="Areas">${esc(pairsText(r?.areas))}</textarea></td>`,
+          `<td><textarea name="repo.${i}.topics" aria-label="Topics">${esc(pairsText(r?.topics))}</textarea></td>`,
+          `<td>${r ? `<input type="checkbox" name="repo.${i}.remove" aria-label="Remove ${esc(name)}">` : ""}</td></tr>`,
+        ].join(""),
+      )
+      .join(
+        "",
+      )}</tbody></table></div><p class="muted">Adding rows${info("Blank rows add repos. Source is owner/name on the git host. Areas: one per line, name: glob, glob. Topics: one per line, name: what belongs there.")}</p>`;
   }
   const areas = [...Object.entries(config.areas), ...Array(3).fill(undefined)];
   return `<div class="table-wrap"><table class="rows"><thead><tr><th>Area</th><th>Path globs</th><th>Remove</th></tr></thead><tbody>${areas

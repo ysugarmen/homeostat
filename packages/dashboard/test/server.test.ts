@@ -241,3 +241,36 @@ describe("documents page (K7)", () => {
     expect(html).toContain("integrations/partner-calls#timeouts");
   });
 });
+
+describe("a multi-repo KB", () => {
+  test("Entries name each rule's place and filter by repo; Coverage lists each repo's folders", async () => {
+    const multi = mkdtempSync(join(tmpdir(), "homeostat-dash-multi-"));
+    cpSync(new URL("../../../examples/starter-multi-kb", import.meta.url).pathname, multi, {
+      recursive: true,
+    });
+    const started = await startDashboard({
+      kbRoot: multi,
+      port: 0,
+      now: () => new Date("2026-10-14T12:00:00Z"),
+    });
+    try {
+      const get = async (path: string) => (await fetch(`${started.url}${path}`)).text();
+      const all = await get("/entries");
+      expect(all).toContain("<td>api/integrations</td>");
+      expect(all).toContain("<td>shared</td>");
+      expect(all).toContain("<td>web/frontend</td>");
+      const web = await get("/entries?repo=web");
+      expect(web).toContain("<td>web/frontend</td>");
+      expect(web).not.toContain("<td>api/integrations</td>");
+      const coverage = await get("/coverage");
+      for (const folder of ["shared", "api/integrations", "web/frontend", "web/core"]) {
+        expect(coverage).toContain(`<td>${folder}</td>`);
+      }
+      expect(await get("/entries/outbound-http-retry-helper")).toContain(
+        "<code>knowledge/api/integrations/outbound-http-retry-helper.md</code>",
+      );
+    } finally {
+      started.server.close();
+    }
+  });
+});

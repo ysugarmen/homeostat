@@ -46,10 +46,11 @@ describe("every config key is editable (4.2)", () => {
   test("each leaf of the schema has a field or a row editor", () => {
     const covered = new Set(SECTIONS.flatMap((s) => (s.fields ?? []).map((f) => f.path.join("."))));
     const rows = SECTIONS.flatMap((s) =>
-      s.rows ? [{ team: "team.members", areas: "areas", teams: "teams" }[s.rows]] : [],
+      s.rows
+        ? [{ team: "team.members", areas: "areas", teams: "teams", repos: "repos" }[s.rows]]
+        : [],
     );
-    // repos and topics are edited in homeostat.yaml until their editors land (0.2.0 step 6).
-    const later = ["repos", "topics"];
+    const later: string[] = [];
     const missing = leafKeys(configSchema).filter(
       (k) =>
         k !== "version" &&
@@ -227,5 +228,41 @@ areas:
     form.set("notifications.slackWebhookEnv", "");
     const { text } = applySection(starterYaml, "notifications", form);
     expect(parseConfig(text ?? "").config?.notifications.slackWebhookEnv).toBeUndefined();
+  });
+});
+
+describe("the Repos and Topics sections", () => {
+  test("repos rows and topic pairs save as homeostat.yaml expects", () => {
+    const form = new URLSearchParams({
+      "repo.0.name": "api",
+      "repo.0.source": "acme/api",
+      "repo.0.areas": "payments: services/payments/**, services/ledger/**",
+      "repo.0.topics": "migrations: Alembic changes and backfills",
+      "repo.1.name": "web",
+      "repo.1.source": "acme/web",
+    });
+    const multiYaml = starterYaml
+      .replace(/^areas:\n(?: {2}.*\n)+/m, "")
+      .replace(/^ {2}repos: \[.*\]\n/m, "")
+      .replace("areas: [integrations, core]", "areas: [core]")
+      .replace("areas: [frontend]", "areas: []")
+      .replace("areas: [frontend, core]", "areas: [core]");
+    const result = applySection(multiYaml, "repos", form);
+    expect(result.issues).toEqual([]);
+    const saved = parseConfig(result.text ?? "").config;
+    expect(saved?.repos).toEqual({
+      api: {
+        source: "acme/api",
+        areas: { payments: ["services/payments/**", "services/ledger/**"] },
+        topics: { migrations: "Alembic changes and backfills" },
+      },
+      web: { source: "acme/web", areas: {} },
+    });
+    const topics = applySection(
+      starterYaml,
+      "topics",
+      new URLSearchParams({ topics: "http: Partner calls" }),
+    );
+    expect(parseConfig(topics.text ?? "").config?.topics).toEqual({ http: "Partner calls" });
   });
 });

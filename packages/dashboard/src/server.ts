@@ -86,7 +86,11 @@ export function readSnapshot(kbRoot: string, now: Date): Snapshot | undefined {
   const since = new Date(now.getTime() - 90 * 86_400_000).toISOString();
   return {
     config: kb.config,
-    entries: kb.entries.map((e) => e.entry),
+    entries: kb.entries.map((e) => ({
+      ...e.entry,
+      path: e.path,
+      ...(e.file ? { file: e.file } : {}),
+    })),
     docs: kb.docs,
     events: readEvents(kbRoot, { since }),
     now,
@@ -164,7 +168,16 @@ export function renderPage(
     case "/automation":
       return ok("Automation", automationPage(auto));
     case "/entries":
-      return ok("Entries", entriesPage(snap.entries, params.get("status"), params.get("q")));
+      return ok(
+        "Entries",
+        entriesPage(
+          snap.entries,
+          params.get("status"),
+          params.get("q"),
+          snap.config,
+          params.get("repo"),
+        ),
+      );
     case "/members":
       return ok("Members", membersPage(contributions(snap)));
     case "/coverage":

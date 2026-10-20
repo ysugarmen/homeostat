@@ -1,12 +1,17 @@
 import {
   type AgentName,
+  areaMap,
+  areasOf,
   CORE_AREA,
   type Config,
   type ContextDoc,
   detectConflicts,
   type Entry,
   type Event,
+  isMultiRepo,
   nextRun,
+  repoNames,
+  repoOf,
   STATUSES,
   type Status,
 } from "@homeostat/core";
@@ -15,9 +20,12 @@ const DAY = 86_400_000;
 const day = (d: Date) => d.toISOString().slice(0, 10);
 const daysSince = (iso: string, now: Date) => Math.floor((now.getTime() - Date.parse(iso)) / DAY);
 
+/** A rule with where it lives: its one-rule path, and its topic file when it is grouped. */
+export type PlacedEntry = Entry & { path?: string; file?: string };
+
 export interface Snapshot {
   config: Config;
-  entries: readonly Entry[];
+  entries: readonly PlacedEntry[];
   /** Knowledge documents (K1); absent in older callers. */
   docs?: readonly ContextDoc[];
   events: readonly Event[];
@@ -159,11 +167,34 @@ export function coverage({ config, entries }: Snapshot): {
   areas: AreaCoverage[];
   sources: SourceCoverage[];
 } {
-  const areas = [CORE_AREA, ...Object.keys(config.areas)].map((area) => {
-    const inArea = entries.filter((e) => e.frontmatter.area === area);
+  // A multi-repo KB: shared core, then each repo's core and areas, as `api/payments`.
+  const folders: { area: string; repo?: string; name: string; globs: readonly string[] }[] =
+    isMultiRepo(config)
+      ? [
+          { area: CORE_AREA, name: "shared", globs: ["**"] },
+          ...repoNames(config).flatMap((repo) =>
+            areasOf(config, repo).map((area) => ({
+              area,
+              repo,
+              name: `${repo}/${area}`,
+              globs: area === CORE_AREA ? ["**"] : (areaMap(config, repo)[area] ?? []),
+            })),
+          ),
+        ]
+      : [CORE_AREA, ...Object.keys(config.areas)].map((area) => ({
+          area,
+          name: area,
+          globs: area === CORE_AREA ? ["**"] : (config.areas[area] ?? []),
+        }));
+  const areas = folders.map((f) => {
+    const inArea = entries.filter(
+      (e) =>
+        e.frontmatter.area === f.area &&
+        (!isMultiRepo(config) || (e.path ? repoOf(e.path, config) : undefined) === f.repo),
+    );
     return {
-      area,
-      globs: area === CORE_AREA ? ["**"] : (config.areas[area] ?? []),
+      area: f.name,
+      globs: f.globs,
       accepted: inArea.filter((e) => e.frontmatter.status === "accepted").length,
       candidates: inArea.filter((e) => e.frontmatter.status === "candidate").length,
     };

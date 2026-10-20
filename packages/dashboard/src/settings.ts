@@ -12,7 +12,8 @@ import { isMap, parseDocument } from "yaml";
 export interface Field {
   path: string[];
   label: string;
-  kind: "text" | "number" | "select" | "checkbox" | "checks" | "lines";
+  /** `pairs`: one `name: text` per line, a name → text map such as topics. */
+  kind: "text" | "number" | "select" | "checkbox" | "checks" | "lines" | "pairs";
   options?: readonly string[];
   help?: string;
   /** Empty means "remove the key" rather than an empty value. */
@@ -25,7 +26,7 @@ export interface Section {
   intro: string;
   fields?: Field[];
   /** Row editors for the two keyed lists. */
-  rows?: "team" | "areas" | "teams";
+  rows?: "team" | "areas" | "teams" | "repos";
 }
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
@@ -76,6 +77,28 @@ export const SECTIONS: Section[] = [
         label: "Reviewers",
         kind: "lines",
         help: "One member id per line; only they are asked to review",
+        optional: true,
+      },
+    ],
+  },
+  {
+    id: "repos",
+    title: "Repos",
+    intro:
+      "A multi-repo knowledge base: each code repo by short name, its folder under knowledge/. Shared rules live in knowledge/core/, each repo's in knowledge/<repo>/<area>/, and a session gets only its own repo's rules. Leave empty for one repo.",
+    rows: "repos",
+  },
+  {
+    id: "topics",
+    title: "Topics",
+    intro:
+      "Group rules into one file per topic. These are the shared rules' topics (or every rule's, with one repo); each repo lists its own in Repos. general is always there.",
+    fields: [
+      {
+        path: ["topics"],
+        label: "Topics",
+        kind: "pairs",
+        help: "One per line: name: what belongs there, e.g. migrations: Alembic changes and backfills",
         optional: true,
       },
     ],
@@ -325,6 +348,16 @@ export function currentValue(config: Config, field: Field): unknown {
   return v;
 }
 
+/** `name: text` per line into a map; lines without a colon are skipped. */
+const pairs = (s: string): Record<string, string> =>
+  Object.fromEntries(
+    s
+      .split("\n")
+      .map((l) => /^\s*([^:]+?)\s*:\s*(.+?)\s*$/.exec(l))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map((m) => [m[1] ?? "", m[2] ?? ""]),
+  );
+
 const lines = (s: string) =>
   s
     .split(/[\n,]/)
@@ -405,6 +438,27 @@ export function applySection(
     }
     if (Object.keys(teams).length) doc.setIn(["teams"], doc.createNode(teams));
     else if (doc.has("teams")) doc.delete("teams");
+  } else if (section.rows === "repos") {
+    const repos: Record<string, unknown> = {};
+    for (const i of rowIndices(form, "repo")) {
+      const name = form.get(`repo.${i}.name`)?.trim();
+      if (!name || form.get(`repo.${i}.remove`)) continue;
+      const areas = Object.fromEntries(
+        Object.entries(pairs(form.get(`repo.${i}.areas`) ?? "")).map(([a, globs]) => [
+          a,
+          lines(globs),
+        ]),
+      );
+      const topics = pairs(form.get(`repo.${i}.topics`) ?? "");
+      repos[name] = {
+        source: form.get(`repo.${i}.source`)?.trim() ?? "",
+        ...(Object.keys(areas).length ? { areas } : {}),
+        ...(Object.keys(topics).length ? { topics } : {}),
+      };
+    }
+    if (Object.keys(repos).length === 0) {
+      if (doc.hasIn(["repos"])) doc.deleteIn(["repos"]);
+    } else if (!unchanged(["repos"], repos)) doc.setIn(["repos"], doc.createNode(repos));
   } else if (section.rows === "areas") {
     const areas: Record<string, string[]> = {};
     for (const i of rowIndices(form, "area")) {
@@ -425,6 +479,7 @@ export function applySection(
       const clear =
         (field.kind === "number" && (raw === null || raw === "")) ||
         (field.kind === "lines" && field.optional && lines(raw ?? "").length === 0) ||
+        (field.kind === "pairs" && field.optional && Object.keys(pairs(raw ?? "")).length === 0) ||
         (field.kind !== "checkbox" &&
           field.kind !== "checks" &&
           field.kind !== "lines" &&
@@ -442,9 +497,11 @@ export function applySection(
             ? form.getAll(name)
             : field.kind === "lines"
               ? lines(raw ?? "")
-              : field.kind === "number"
-                ? Number(raw)
-                : raw?.trim();
+              : field.kind === "pairs"
+                ? pairs(raw ?? "")
+                : field.kind === "number"
+                  ? Number(raw)
+                  : raw?.trim();
       if (value === undefined || unchanged(field.path, value)) continue;
       doc.setIn(field.path, Array.isArray(value) ? doc.createNode(value) : value);
     }
