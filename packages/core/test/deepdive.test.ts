@@ -271,3 +271,52 @@ describe("Claude merger and judge", () => {
     expect(found).toEqual([{ id: (b as Entry).frontmatter.id, reason: "r" }]);
   });
 });
+
+describe("deepDive: a multi-repo KB", () => {
+  const multi = new URL("../../../examples/starter-multi-kb/", import.meta.url).pathname;
+  function multiKb(): Record<string, string> {
+    const files: Record<string, string> = {};
+    for (const f of readdirSync(multi, { recursive: true, encoding: "utf8" })) {
+      if ((f.endsWith(".md") || f.endsWith(".yaml")) && f !== "README.md") {
+        files[f] = readFileSync(join(multi, f), "utf8");
+      }
+    }
+    return files;
+  }
+  const twin = (id: string, scope: string[]) =>
+    entryText(
+      {
+        id,
+        title: "Commit the lock file with every dependency change",
+        area: "core",
+        scope,
+        created: "2026-10-10",
+        lastConfirmed: "2026-10-10",
+      },
+      "Commit uv.lock together with every change to pyproject.toml dependencies.",
+      "A missing lock file let CI install a different version than the developer tested.",
+    );
+
+  test("the same rule in two repos is a note to share it, not a merge", async () => {
+    const files = {
+      ...multiKb(),
+      "knowledge/api/core/lock-files.md": twin("lock-files", ["**"]),
+      "knowledge/web/core/lock-files-too.md": twin("lock-files-too", ["**"]),
+    };
+    const result = await deepDive({ files, today: TODAY });
+    expect(result.changes.filter((c) => c.actions.some((a) => a.action === "merged"))).toEqual([]);
+    expect(result.notes.join("\n")).toContain(
+      "lock-files (api) and lock-files-too (web) teach the same lesson in two repos",
+    );
+  });
+
+  test("within one repo, duplicates still merge", async () => {
+    const files = {
+      ...multiKb(),
+      "knowledge/api/core/lock-files.md": twin("lock-files", ["**"]),
+      "knowledge/api/core/lock-files-too.md": twin("lock-files-too", ["**"]),
+    };
+    const result = await deepDive({ files, today: TODAY });
+    expect(result.changes.some((c) => c.actions.some((a) => a.action === "merged"))).toBe(true);
+  });
+});

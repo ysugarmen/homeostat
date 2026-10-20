@@ -7,6 +7,7 @@ import {
   type Config,
   type CuratedEntry,
   candidatesBranch,
+  comparable,
   confidence,
   curate,
   type DecisionRecord,
@@ -195,7 +196,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     d.decided.flatMap((r) => {
       if (r.decision !== "review" || !r.pr || !open.has(r.pr)) return [];
       const entry = parseEntry(showRule(root, remote(r.pr), r.path) ?? "").entry;
-      return entry ? [entry] : [];
+      return entry ? [{ path: r.path, entry }] : [];
     }),
   );
 
@@ -313,9 +314,9 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   }
 
   // 2. Decide each lesson.
-  const inForce = kb.entries
-    .filter((e) => e.entry.frontmatter.status === "accepted")
-    .map((e) => e.entry);
+  // Lessons are compared within their repo, or with shared rules; never across two repos.
+  const inForce = kb.entries.filter((e) => e.entry.frontmatter.status === "accepted");
+  const near = (a: string, b: string) => comparable(a, b, config);
   // New lessons that teach the same thing, from anyone in this run, are decided together.
   const fresh = lessons.flatMap((l) => {
     const entry = l.kind === "new" ? parseEntry(l.text).entry : undefined;
@@ -325,14 +326,21 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   for (const a of fresh) {
     groups.set(
       a.l,
-      fresh.filter((b) => b === a || sameLesson(a.entry, b.entry)).map((b) => b.l),
+      fresh
+        .filter((b) => b === a || (near(a.l.path, b.l.path) && sameLesson(a.entry, b.entry)))
+        .map((b) => b.l),
     );
   }
-  for (const l of lessons) decide(l, files, config, inForce, groups.get(l)?.length ?? 1);
+  for (const l of lessons) {
+    const peers = inForce.filter((e) => near(e.path, l.path)).map((e) => e.entry);
+    decide(l, files, config, peers, groups.get(l)?.length ?? 1);
+  }
   for (const { l, entry } of fresh) {
     const twin = inReview.find(
-      (r) => r.frontmatter.id === entry.frontmatter.id || sameLesson(r, entry),
-    );
+      (r) =>
+        r.entry.frontmatter.id === entry.frontmatter.id ||
+        (near(r.path, l.path) && sameLesson(r.entry, entry)),
+    )?.entry;
     if (!twin || l.decision === "declined") continue;
     l.decision = "review";
     l.reason = `the same lesson as ${twin.frontmatter.id}, which is waiting in review: decide them together`;

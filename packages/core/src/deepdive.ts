@@ -4,6 +4,7 @@ import type { Asker } from "./claude.ts";
 import type { Config } from "./config.ts";
 import { sameLesson, scopesOverlap } from "./conflicts.ts";
 import { type Entry, formatEntry } from "./entry.ts";
+import { comparable, repoOf } from "./layout.ts";
 import type { Frontmatter } from "./schema.ts";
 import { score } from "./score.ts";
 import { countTokens } from "./tokens.ts";
@@ -101,7 +102,14 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
   const pairs: [Working, Working][] = [];
   const pool = accepted();
   for (const [i, a] of pool.entries()) {
-    for (const b of pool.slice(i + 1)) if (sameLesson(a.entry, b.entry)) pairs.push([a, b]);
+    for (const b of pool.slice(i + 1)) {
+      if (!sameLesson(a.entry, b.entry)) continue;
+      if (comparable(a.path, b.path, config)) pairs.push([a, b]);
+      else
+        notes.push(
+          `${a.fm.id} (${repoOf(a.path, config)}) and ${b.fm.id} (${repoOf(b.path, config)}) teach the same lesson in two repos; if it holds in every repo, move one to knowledge/core/ and retire the other`,
+        );
+    }
   }
   for (const [a, b] of pairs) {
     if (a.fm.status !== "accepted" || b.fm.status !== "accepted") continue;

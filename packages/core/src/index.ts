@@ -205,6 +205,7 @@ export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.
 export {
   areaMap,
   areasOf,
+  comparable,
   docFilePath,
   isKnownArea,
   isMultiRepo,

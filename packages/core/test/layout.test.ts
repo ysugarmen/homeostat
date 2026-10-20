@@ -54,3 +54,16 @@ describe("isKnownArea", () => {
     expect(isKnownArea({ areas: { payments: ["p/**"] } }, "api/payments")).toBe(false);
   });
 });
+
+describe("comparable", () => {
+  test("two rules can be the same lesson within a repo, or with a shared rule; never across repos", async () => {
+    const { comparable } = await import("../src/layout.ts");
+    const config = {
+      repos: { api: { source: "acme/api", areas: {} }, web: { source: "acme/web", areas: {} } },
+    };
+    expect(comparable("knowledge/api/core/a.md", "knowledge/api/core/b.md", config)).toBe(true);
+    expect(comparable("knowledge/api/core/a.md", "knowledge/core/b.md", config)).toBe(true);
+    expect(comparable("knowledge/api/core/a.md", "knowledge/web/core/b.md", config)).toBe(false);
+    expect(comparable("knowledge/core/a.md", "knowledge/frontend/b.md", {})).toBe(true);
+  });
+});

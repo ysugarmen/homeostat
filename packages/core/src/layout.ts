@@ -102,3 +102,13 @@ export function docFilePath(
   const folder = isMultiRepo(config) && at.repo ? `${at.repo}/${at.area}` : at.area;
   return `knowledge/${folder}/docs/${at.topic.replace(/\.md$/, "")}.md`;
 }
+
+/**
+ * Whether two KB paths can hold the same lesson: the same repo, or either one shared. Two
+ * repos' rules are never duplicates of each other (each repo has its own config.py).
+ */
+export function comparable(a: string, b: string, config: Pick<Config, "repos">): boolean {
+  const ra = repoOf(a, config);
+  const rb = repoOf(b, config);
+  return ra === rb || ra === undefined || rb === undefined;
+}
