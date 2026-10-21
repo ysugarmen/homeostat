@@ -6,7 +6,7 @@ import {
   type KbFiles,
   mergeTopicFile,
 } from "@homeostat/core";
-import { commitFile, git, showFile } from "./git.ts";
+import { commitFile, commitTree, git, showFile } from "./git.ts";
 import type { FileChange } from "./publish.ts";
 
 /** The KB's files at a git ref: everything under knowledge/, plus homeostat.yaml. */
@@ -132,10 +132,13 @@ export function rebuildOnBase(
  * push for minutes and keep judging a PR's old commit; an ordinary push makes it look again.
  */
 export function nudgeBranch(root: string, branch: string, sha: string): string | undefined {
-  const tree = git(root, "rev-parse", `${sha}^{tree}`);
-  if (!tree) return undefined;
-  const next = git(root, "commit-tree", tree, "-p", sha, "-m", "homeostat: refresh the PR");
-  if (!next) return undefined;
+  let next: string;
+  try {
+    // No files: the same tree on top of `sha`, with an identity even where git has none (CI).
+    next = commitTree(root, sha, {}, "homeostat: refresh the PR");
+  } catch {
+    return undefined;
+  }
   return git(root, "push", "--quiet", "origin", `${next}:refs/heads/${branch}`) === undefined
     ? undefined
     : next;
