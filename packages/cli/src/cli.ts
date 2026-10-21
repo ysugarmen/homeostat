@@ -27,6 +27,7 @@ import { HOOK_EVENTS, runHook } from "./hook.ts";
 import { HOSTS, type InitOptions, runInit } from "./init.ts";
 import { type LearnOptions, runLearn } from "./learn.ts";
 import { runMcp } from "./mcp.ts";
+import { runMetrics } from "./metrics-command.ts";
 import { runMigrate } from "./migrate.ts";
 import { runExplain, runList, runSearch, runStatus } from "./query.ts";
 import { type ReviewOptions, runReview } from "./review.ts";
@@ -425,6 +426,17 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--json", "print JSON")
     .action((opts) => {
       exitCode = runEvents(opts, io);
+    });
+
+  program
+    .command("metrics")
+    .description("Performance metrics: decisions, calibration, review latency, reach and runtime.")
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--days <n>", "window in days", "30")
+    .option("--runs <n>", "daily runs to read", "30")
+    .option("--json", "print JSON")
+    .action((opts) => {
+      exitCode = runMetrics(opts, io);
     });
 
   program

@@ -21,6 +21,10 @@ A local, read-mostly view of the KB, the daily run's records (from the clone's c
 
 `homeostat up` serves it too, alongside the scheduled agents. In Docker it listens on all interfaces: put it behind your own authentication.
 
+## From the terminal
+
+`homeostat metrics` prints the Performance page's figures as text, under the same headings, over the last 30 days and 30 daily runs (`--days`, `--runs`). `--json` prints one object for scripts and CI logs. It reads the clone and its local event log only, never the git host, so it is safe to run against any checkout.
+
 ## Share it with your team
 
 `homeostat dashboard --build <dir>` writes the dashboard as static, read-only pages instead of serving it. CI rebuilds it on every push to the KB and publishes it, so the shared copy is never more than one CI run behind the repo, and no server runs anywhere. The recipe below uses Cloudflare Pages behind Cloudflare Access, both free (Access up to 50 users), so only your team can open it.

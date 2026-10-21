@@ -55,6 +55,7 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat dashboard [--build <dir>]` | Serve just the dashboard on localhost:4747, or build a shared read-only copy for CI to publish |
 | `homeostat search`, `explain`, `list`, `status` | Read the KB from the terminal (`--json` for agents) |
 | `homeostat events` | The local event log, one line per event |
+| `homeostat metrics` | Performance metrics: decisions, calibration, review latency, reach and runtime (`--json` for scripts) |
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |
 | `homeostat mcp` | Serve the KB to any agent over MCP (stdio) |
 | `homeostat docs convert <file...>` | Bring existing markdown documents into `knowledge/[<repo>/]<area>/docs/`, with section ids and provenance |

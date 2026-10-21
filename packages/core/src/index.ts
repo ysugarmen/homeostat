@@ -11,6 +11,7 @@ export {
   type RunReport,
   STALE_HEARTBEAT_HOURS,
   STATE_BRANCH,
+  type UsageDay,
 } from "./automation.ts";
 export {
   type AutoMergeDecision,
@@ -227,6 +228,35 @@ export {
   repoOf,
   ruleFilePath,
 } from "./layout.ts";
+export {
+  type Calibration,
+  type CalibrationBand,
+  calibration,
+  wasReview,
+} from "./metrics/calibration.ts";
+export {
+  type DecisionsMetrics,
+  type DecisionTotals,
+  decisionsMetrics,
+  isDuplicate,
+} from "./metrics/decisions.ts";
+export {
+  type HealthPoint,
+  healthTrend,
+  type KbSnapshot,
+  kbSnapshot,
+} from "./metrics/health-trend.ts";
+export { type MetricsReport, metricsReport } from "./metrics/index.ts";
+export { type OpenReview, type ReviewLatency, reviewLatency } from "./metrics/latency.ts";
+export { type Reach, reach } from "./metrics/reach.ts";
+export { type Runtime, runtime } from "./metrics/runtime.ts";
+export {
+  type DailyCount as MetricsDailyCount,
+  DEFAULT_WINDOW,
+  type MetricsSnapshot,
+  type Percentiles,
+} from "./metrics/types.ts";
+export { percentiles } from "./metrics/util.ts";
 export {
   ClaudeTopicProposer,
   type MigrationPlan,

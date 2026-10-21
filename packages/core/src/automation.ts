@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { KbSnapshot } from "./metrics/health-trend.ts";
 
 /**
  * Shared names for the automated daily flow (local pending lessons → one daily PR per developer
@@ -31,11 +32,26 @@ export interface DecisionRecord {
   confidence?: number;
   pr?: string;
   at: string;
+  /** When the record was first written, which is when its review PR opened; for review latency. */
+  openedAt?: string;
+  /** When a reviewer's merge or close was recorded: the host's merge time when it has one. */
+  settledAt?: string;
 }
 
 export interface DecisionsFile {
   member: string;
   decided: DecisionRecord[];
+}
+
+/** One day's usage counts from a member's event log; counts only, never ids or paths. */
+export interface UsageDay {
+  /** Distinct session ids that logged an injection. */
+  sessions: number;
+  injections: number;
+  /** Rules injected, summed over the day's injections. */
+  rules: number;
+  mcpCalls: number;
+  docReads: number;
 }
 
 export interface Heartbeat {
@@ -47,6 +63,12 @@ export interface Heartbeat {
   behind: number;
   pending: number;
   version: string;
+  /**
+   * The last seven days' counts by day, only when the member opted in (`usage: true` on their
+   * member entry, or HOMEOSTAT_SHARE_USAGE=1). Off by default: it is the one usage figure that
+   * leaves a laptop.
+   */
+  usage?: Record<string, UsageDay>;
 }
 
 /** One daily run, written to `runs/<date>.json` on the state branch. */
@@ -79,7 +101,23 @@ export interface RunReport {
     decision: Decision;
     confidence?: number;
     reason: string;
+    /** The entry's `source.type` (`doc` for a document patch), for decisions by source. */
+    source?: string;
+    /** Whether the lesson came from the developer's pending set or from a review on their PR. */
+    origin?: "pending" | "review";
+    /** The accepted rule this lesson repeated, when it was declined as a duplicate. */
+    duplicateOf?: string;
   }[];
+  /** The run's own cost: wall time and the model calls it made. */
+  timing?: {
+    started: string;
+    finished: string;
+    modelCalls: number;
+    chars: number;
+    failedCalls: number;
+  };
+  /** The KB's health after the run's merges, for the trend over runs. */
+  kb?: KbSnapshot;
 }
 
 /** Review items older than this are repeated in the morning notice and marked on the dashboard. */
