@@ -1,7 +1,7 @@
 {
   "name": "homeostat",
   "displayName": "homeostat",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Capture, explain and review your team's knowledge base entries from inside Claude Code.",
   "author": {
     "name": "homeostat contributors"
