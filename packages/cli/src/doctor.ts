@@ -1,6 +1,14 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { bitbucketAuth, type Config, readKbFiles, VERSION, validate } from "@homeostat/core";
+import { delimiter, join, resolve } from "node:path";
+import {
+  bitbucketAuth,
+  type Config,
+  readKbFiles,
+  readState,
+  VERSION,
+  validate,
+} from "@homeostat/core";
 import { minimatch } from "minimatch";
 import type { Io } from "./cli.ts";
 import { painter } from "./format.ts";
@@ -211,6 +219,39 @@ function pinnedVersions(root: string): Check[] {
   return checks;
 }
 
+/** Members whose heartbeat carries usage counts: by config, or by their last heartbeat. */
+function sharingUsage(root: string, config: Config): string[] {
+  const byConfig = config.team.members.filter((m) => m.usage).map((m) => m.id);
+  const byHeartbeat = readState(root)
+    .heartbeats.filter((h) => h.usage)
+    .map((h) => h.member);
+  return [...new Set([...byConfig, ...byHeartbeat])].sort();
+}
+
+/**
+ * The plugin's hooks run a `homeostat` found on the PATH only when its version matches the
+ * plugin's; an older one would reject the KB and leave sessions without rules, silently.
+ */
+function pathBinaryCheck(io: Io): Check {
+  const dirs = (io.env?.PATH ?? "").split(delimiter).filter(Boolean);
+  const bin = dirs.map((d) => join(d, "homeostat")).find((p) => existsSync(p));
+  if (!bin) return info("no homeostat on the PATH: the plugin runs its pinned version through npx");
+  let version: string | undefined;
+  try {
+    version = execFileSync(bin, ["--version"], {
+      encoding: "utf8",
+      timeout: 2000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    version = undefined;
+  }
+  if (version === VERSION) return ok(`${bin} is ${VERSION}, the version running here`);
+  return warn(
+    `${bin} is ${version || "not answering --version"}, not ${VERSION}: the plugin skips it and runs its pinned version through npx; upgrade it (npm i -g homeostat@${VERSION}) or remove it`,
+  );
+}
+
 /** The security review: one section per question in docs/security.md. */
 export async function securityReport(root: string, config: Config, io: Io): Promise<Section[]> {
   const s = config.security;
@@ -237,6 +278,14 @@ export async function securityReport(root: string, config: Config, io: Io): Prom
     info("homeostat curate --show-prompts prints every prompt and sends none"),
     ok("no telemetry: the only outbound calls are to your git host and the model runtime above"),
   ];
+  const sharing = sharingUsage(root, config);
+  leaves.push(
+    sharing.length
+      ? info(
+          `usage counts shared in the heartbeat by: ${sharing.join(", ")} (per-day counts of sessions, injections, rules served, MCP calls and document reads; nothing named)`,
+        )
+      : ok("nobody shares usage counts (a member's usage: true, or HOMEOSTAT_SHARE_USAGE=1)"),
+  );
   if (config.agents.runtime === "claude-code") {
     leaves.push(warn("agents.runtime: claude-code is for personal use or a Team/Enterprise plan"));
   }
@@ -259,6 +308,7 @@ export async function securityReport(root: string, config: Config, io: Io): Prom
   const compromised: Check[] = [
     ...blast,
     ...pinnedVersions(root),
+    pathBinaryCheck(io),
     ok(
       `local event logs are pruned after ${s.eventRetentionDays} days and never leave the machine`,
     ),

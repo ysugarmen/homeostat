@@ -256,6 +256,7 @@ export {
   type MetricsSnapshot,
   type Percentiles,
 } from "./metrics/types.ts";
+export { usageCounts } from "./metrics/usage.ts";
 export { percentiles } from "./metrics/util.ts";
 export {
   ClaudeTopicProposer,

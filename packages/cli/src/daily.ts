@@ -20,6 +20,7 @@ import {
   flagEntry,
   HEARTBEAT_PATH,
   isDocPath,
+  kbSnapshot,
   lessonHash,
   logEvent,
   loginKey,
@@ -39,7 +40,7 @@ import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
 import { commitTree, forcePush, git, mergeText, showFile } from "./git.ts";
-import { foldChanges, nudgeBranch, showRule } from "./kb-write.ts";
+import { foldChanges, nudgeBranch, refFiles, showRule } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { type FileChange, publish } from "./publish.ts";
 
@@ -120,6 +121,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   const kbRepo = repoRef(sources.kbRepo);
   const now = io.now?.() ?? new Date();
   const today = now.toISOString().slice(0, 10);
+  const stats = { calls: 0, chars: 0, failed: 0 };
   const provider = providerFor(sources.host, io, "read pull requests and open the daily PRs");
   const remote = (ref: string) => `refs/remotes/origin/${ref}`;
 
@@ -164,9 +166,10 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   if (closed.length) {
     // Ask the host which review PRs were merged: a document has no id line to look for on main.
     const since = new Date(Math.min(...closed.map((r) => Date.parse(r.at))) - 86_400_000);
-    const merged = new Set(
-      (await provider.listMergedPullRequests(kbRepo, since)).map((p) => p.sourceBranch),
-    );
+    const mergedPrs = await provider.listMergedPullRequests(kbRepo, since);
+    const merged = new Set(mergedPrs.map((p) => p.sourceBranch));
+    // The host's merge time (Bitbucket gives the last update) measures how long a review waited.
+    const mergedAt = new Map(mergedPrs.map((p) => [p.sourceBranch, p.mergedAt]));
     for (const r of closed) {
       const onMain = onBase(r.path);
       // A reviewer can drop one lesson by deleting its file from the PR before merging.
@@ -180,6 +183,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
         if (r.pr?.startsWith(DISPUTE_PREFIX)) retiring.push(r);
       }
       r.at = now.toISOString();
+      r.settledAt = (r.pr && mergedAt.get(r.pr)) || now.toISOString();
       settled++;
     }
   }
@@ -243,7 +247,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     const since = opts.since
       ? new Date(opts.since)
       : new Date(now.getTime() - config.agents.curator.lookbackHours * 3_600_000);
-    const asker = askerFor(config, "curator", io, root);
+    const asker = askerFor(config, "curator", io, root, stats);
     const result = await curate({
       files,
       provider,
@@ -419,7 +423,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     io.fixer ??
     (opts.noReviews
       ? { fix: async () => null }
-      : new ClaudeRuleFixer(askerFor(config, "curator", io, root)));
+      : new ClaudeRuleFixer(askerFor(config, "curator", io, root, stats)));
   for (const { path, entry } of kb.entries) {
     const id = entry.frontmatter.id;
     if (entry.frontmatter.status !== "disputed") continue;
@@ -598,7 +602,9 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
 
   // 5. Record decisions, heartbeats and the report for the laptops and the dashboard.
   for (const l of lessons) {
-    const rule = l.kind === "doc" ? undefined : parseEntry(l.text).entry?.sections.rule;
+    const parsed = l.kind === "doc" ? undefined : parseEntry(l.text).entry;
+    const rule = parsed?.sections.rule;
+    const source = l.kind === "doc" ? "doc" : parsed?.frontmatter.source.type;
     report.lessons.push({
       member: l.member,
       id: l.id,
@@ -608,6 +614,9 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       decision: l.decision,
       ...(l.confidence ? { confidence: l.confidence.score } : {}),
       reason: l.reason,
+      ...(source ? { source } : {}),
+      origin: l.origin,
+      ...(l.duplicateOf ? { duplicateOf: l.duplicateOf } : {}),
     });
     const record: DecisionRecord = {
       path: l.path,
@@ -618,11 +627,26 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       ...(l.confidence ? { confidence: l.confidence.score } : {}),
       ...((l as { pr?: string }).pr ? { pr: (l as { pr?: string }).pr } : {}),
       at: now.toISOString(),
+      openedAt: now.toISOString(),
     };
     const d = decisions.get(l.member) ?? { member: l.member, decided: [] };
     d.decided = [...d.decided.filter((r) => r.hash !== l.hash), record].slice(-500);
     decisions.set(l.member, d);
   }
+  // The run's own cost, and the KB's health after its merges, for the trend over runs.
+  git(root, "fetch", "--quiet", "origin", `+refs/heads/${base}:${remote(base)}`);
+  report.kb = kbSnapshot(
+    validate(refFiles(root, remote(base))).entries.map((e) => e.entry),
+    config,
+    now,
+  );
+  report.timing = {
+    started: now.toISOString(),
+    finished: (io.now?.() ?? new Date()).toISOString(),
+    modelCalls: stats.calls,
+    chars: stats.chars,
+    failedCalls: stats.failed,
+  };
   if (!opts.dryRun) {
     const state: Record<string, string> = {
       // One file per run (a day can have several: the schedule, a manual run, a rerun).

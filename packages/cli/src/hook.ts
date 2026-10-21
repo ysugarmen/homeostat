@@ -60,7 +60,38 @@ async function sessionStart(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
   const kbRoot = findKb(io.env, cwd);
   if (!kbRoot) return;
+  // The injection event is written last, so it carries the hook's wall time (as the CLI saw it,
+  // without the launcher's spawn or Node's startup) and whether the start got through.
+  const started = performance.now();
+  const ts = (io.now?.() ?? new Date()).toISOString();
+  const record: Record<string, unknown> = {};
+  let failed = false;
+  try {
+    await selectForSession(input, io, cwd, kbRoot, (fields) => Object.assign(record, fields));
+  } catch (e) {
+    failed = true;
+    throw e;
+  } finally {
+    logEvent(kbRoot, {
+      ts,
+      type: "injection",
+      session: input.session_id,
+      source: input.source,
+      cwd,
+      ...record,
+      ok: !failed,
+      ms: Math.round(performance.now() - started),
+    });
+  }
+}
 
+async function selectForSession(
+  input: HookInput,
+  io: Io,
+  cwd: string,
+  kbRoot: string,
+  note: (fields: Record<string, unknown>) => void,
+) {
   const { config, entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files);
   if (!config) throw new HookSkip("knowledge base config is invalid; run homeostat validate");
   pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
@@ -89,12 +120,7 @@ async function sessionStart(input: HookInput, io: Io) {
       maxChars: MAX_CONTEXT_CHARS - INDEX_RESERVE - docRoom,
     },
   );
-  logEvent(kbRoot, {
-    ts: (io.now?.() ?? new Date()).toISOString(),
-    type: "injection",
-    session: input.session_id,
-    source: input.source,
-    cwd,
+  note({
     ...(repo ? { repo } : {}),
     paths: paths.length,
     entries: selection.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
@@ -147,6 +173,7 @@ async function sessionStart(input: HookInput, io: Io) {
       ? `# Homeostat\n\nThis checkout is not one of the knowledge base's repos (${repoNames(config).join(", ")}), so only the team's shared rules apply here.`
       : "";
   const context = [rules, index, documents.text, header, unplaced].filter(Boolean).join("\n\n");
+  note({ chars: context.length });
   if (!context) return;
   io.stdout(
     `${JSON.stringify({

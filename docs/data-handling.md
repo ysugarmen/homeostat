@@ -18,14 +18,15 @@ What Homeostat reads, what leaves your network, where it goes, what it keeps, an
 - **Review threads, to the model.** Only the daily run (and `curate`, which runs its drafting on its own), the deep dive and `migrate --topics` call a model; `migrate --topics` sends rule titles and text, once. They send a review thread (comment text, PR title, file path and line, area names) or entry text. Secrets are redacted first. Where it goes depends on `agents.runtime`: Anthropic's API, your own AWS (Bedrock) or Google Cloud (Vertex) account, or Claude Code's login. See [runtimes.md](runtimes.md).
 - **Code, only when someone runs `homeostat seed` or `homeostat bootstrap`.** They send selected files from local checkouts to draft first documents. `--dry-run` lists every file (and `--prompts` prints exactly what would be sent) and sends nothing; a real `bootstrap` asks before the first call. Nothing schedules them.
 - **API calls, to your git host.** These read PRs, and open and merge pull requests on the KB repo only. `export` and `doctor` also make one unauthenticated call to check whether a repo is public.
-- **Nothing else.** There is no telemetry and no Homeostat service. The hooks and MCP server make no network calls of their own. A background `homeostat sync`, started by the session hooks, fetches the KB repo and pushes your pending lessons plus a small heartbeat (your member id, KB commit, pending count, Homeostat version) to your `candidates/<member>` branch on the KB repo's origin, with your own git credentials. The dashboard shows teammates' heartbeats as sync health.
+- **Nothing else.** There is no telemetry and no Homeostat service. The hooks and MCP server make no network calls of their own. A background `homeostat sync`, started by the session hooks, fetches the KB repo and pushes your pending lessons plus a small heartbeat (your member id, KB commit, pending count, Homeostat version, and, only if you set `usage: true` on your member or `HOMEOSTAT_SHARE_USAGE=1`, per-day counts of your sessions, injections, rules served, MCP calls and document reads for the last seven days: never rule ids, paths or times finer than a day) to your `candidates/<member>` branch on the KB repo's origin, with your own git credentials. The dashboard shows teammates' heartbeats as sync health.
 
 ## What it stores
 
 - **The KB repo**: entries, as reviewed pull requests. An entry keeps a link to the review comment and member ids, never quotes or emails. Secrets fail validation, so they cannot be merged.
-- **`.homeostat/events.db` on each machine**: rule ids injected per session, tool calls, agent runs, and model-call sizes, never content. It is git-ignored, never uploaded, and pruned after `security.eventRetentionDays` (90).
+- **`.homeostat/events.db` on each machine**: rule ids injected per session, tool calls, agent runs, model-call sizes, and how long each session start, MCP call and sync took, never content. It is git-ignored, never uploaded, and pruned after `security.eventRetentionDays` (90).
 - **Your clone's `.homeostat/pending/`** (git-ignored): lessons you saved that the daily run has not decided yet. They are also on your `candidates/<member>` branch until decided.
-- **The `homeostat/state` branch** of the KB repo: each daily run's decisions per lesson (id, content hash, decision, confidence, reason, PR branch), developers' heartbeats, and a run report. No lesson text.
+- **The `homeostat/state` branch** of the KB repo: each daily run's decisions per lesson (id, content hash, decision, confidence, reason, PR branch, when it was opened and settled), developers' heartbeats, and a run report with the run's own timing, model-call counts and the KB's health counts. No lesson text.
+- **Usage counts in your heartbeat**, only when you opt in (`usage: true` on your member, or `HOMEOSTAT_SHARE_USAGE=1`): seven days of per-day counts, for the team's Performance page. Nothing named.
 - **Your CI secrets**: the git-host token and the model credential. They never appear in files, prompts or logs.
 
 ## How to turn each part off
@@ -46,3 +47,4 @@ What Homeostat reads, what leaves your network, where it goes, what it keeps, an
 | Rules reaching a public repo | `export` refuses unless you pass `--allow-public` |
 | Rules reaching sessions at all | Uninstall the plugin, or unset its `kb_dir` |
 | The local event log | Delete `.homeostat/`; lower `security.eventRetentionDays` |
+| Sharing usage counts | Leave `usage` unset on your member and `HOMEOSTAT_SHARE_USAGE` unset (the default) |

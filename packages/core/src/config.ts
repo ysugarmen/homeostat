@@ -71,6 +71,12 @@ export const configSchema = z.strictObject({
           role: z.enum(ROLES),
           /** The curator never reads this member's pull requests or review comments. */
           optOut: z.boolean().optional(),
+          /**
+           * Share per-day usage counts (sessions, injections, rules served, MCP calls, document
+           * reads for the last seven days) in the heartbeat, for the team's Performance page.
+           * Off by default; HOMEOSTAT_SHARE_USAGE=1 on the member's machine does the same.
+           */
+          usage: z.boolean().optional(),
           areas: z.array(z.string()).default([]),
           /**
            * The member's git-host identity: `@login`, `@org/team` or an email. On Bitbucket it is

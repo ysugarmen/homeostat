@@ -61,6 +61,7 @@ const instructions = (writes: boolean) =>
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t.slice(0, MAX_CHARS) }] });
 const fail = (t: string) => ({ ...text(t), isError: true });
+type ToolResult = ReturnType<typeof text> & { isError?: boolean };
 
 const asList = (v: unknown) => (typeof v === "string" ? [v] : v);
 
@@ -284,180 +285,196 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
       );
     }
     if (alias) deps.log({ ts, type: "mcp-alias", name, resolved: tool });
-    deps.log({ ts, type: "mcp-call", tool });
+    // Logged after the call, with its wall time and whether it answered or failed.
+    const started = performance.now();
+    const dispatch = async (): Promise<ToolResult> => {
+      const parsed = schemas[tool].safeParse(normalizeArgs(tool, rawArgs));
+      if (!parsed.success) {
+        const problems = parsed.error.issues.map(
+          (i) => `${i.path.join(".") || "arguments"}: ${i.message}`,
+        );
+        return fail(`Invalid arguments for ${tool}: ${problems.join("; ")}`);
+      }
+      const args = parsed.data as Record<string, unknown>;
 
-    const parsed = schemas[tool].safeParse(normalizeArgs(tool, rawArgs));
-    if (!parsed.success) {
-      const problems = parsed.error.issues.map(
-        (i) => `${i.path.join(".") || "arguments"}: ${i.message}`,
-      );
-      return fail(`Invalid arguments for ${tool}: ${problems.join("; ")}`);
-    }
-    const args = parsed.data as Record<string, unknown>;
-
-    const kb = validate(deps.readKb());
-    const config = kb.config;
-    if (!config) {
-      return fail(
-        "No usable knowledge base: homeostat.yaml is missing or invalid. Point Homeostat at your KB checkout with the plugin's kb_dir setting or HOMEOSTAT_DIR.",
-      );
-    }
-    // A multi-repo KB: the shared rules plus the session's repo; none of the other repos'.
-    const repo = deps.checkout ? detectRepo(deps.checkout(), config) : undefined;
-    const entries = visibleTo(
-      inRepo(kb.entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
-      config,
-      deps.member?.(),
-    );
-    const docs = visibleTo(
-      inRepo(kb.docs, config, repo).map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
-      config,
-      deps.member?.(),
-    );
-    if (WRITE_TOOLS.has(tool)) {
-      if (!config.security.mcpWrites) {
+      const kb = validate(deps.readKb());
+      const config = kb.config;
+      if (!config) {
         return fail(
-          `Saving through MCP is off for this knowledge base (security.mcpWrites). Tell the user what you would ${tool}; they can run /homeostat:${tool === "learn" ? "learn" : "review"} or homeostat ${tool}.`,
+          "No usable knowledge base: homeostat.yaml is missing or invalid. Point Homeostat at your KB checkout with the plugin's kb_dir setting or HOMEOSTAT_DIR.",
         );
       }
-      if (writes >= config.security.mcpWriteLimit) {
-        return fail(
-          `This session has used its ${config.security.mcpWriteLimit} MCP writes (security.mcpWriteLimit). Tell the user what else you would save.`,
-        );
+      // A multi-repo KB: the shared rules plus the session's repo; none of the other repos'.
+      const repo = deps.checkout ? detectRepo(deps.checkout(), config) : undefined;
+      const entries = visibleTo(
+        inRepo(kb.entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
+        config,
+        deps.member?.(),
+      );
+      const docs = visibleTo(
+        inRepo(kb.docs, config, repo).map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+        config,
+        deps.member?.(),
+      );
+      if (WRITE_TOOLS.has(tool)) {
+        if (!config.security.mcpWrites) {
+          return fail(
+            `Saving through MCP is off for this knowledge base (security.mcpWrites). Tell the user what you would ${tool}; they can run /homeostat:${tool === "learn" ? "learn" : "review"} or homeostat ${tool}.`,
+          );
+        }
+        if (writes >= config.security.mcpWriteLimit) {
+          return fail(
+            `This session has used its ${config.security.mcpWriteLimit} MCP writes (security.mcpWriteLimit). Tell the user what else you would save.`,
+          );
+        }
+        writes++;
       }
-      writes++;
-    }
 
-    try {
-      switch (tool) {
-        case "search": {
-          const a = args as z.infer<typeof schemas.search>;
-          const hits = searchEntries(entries, a.query, {
-            ...(a.area ? { area: a.area } : {}),
-            ...(a.path ? { path: a.path } : {}),
-            limit: a.limit ?? 5,
-          });
-          return text(
-            hits.length
-              ? hits.map((h) => hitLine(h.entry)).join("\n")
-              : `No accepted rules match "${a.query}". The team may not have one yet; if you learn one, save it with learn.`,
-          );
-        }
-        case "context": {
-          const a = args as z.infer<typeof schemas.context>;
-          const selection = selectEntries(entries, {
-            paths: a.paths,
-            tokenBudget: a.tokenBudget ?? config.distribution.tokenBudget,
-            maxChars: MAX_CHARS,
-          });
-          deps.log({
-            ts,
-            type: "injection",
-            source: "mcp",
-            ...(repo ? { repo } : {}),
-            entries: selection.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
-            tokens: selection.tokens,
-          });
-          return text(renderContext(selection) || "No team rules apply to these files.");
-        }
-        case "explain": {
-          const a = args as z.infer<typeof schemas.explain>;
-          const e = entries.find((x) => x.frontmatter.id === a.id);
-          if (!e) {
-            const hits = searchEntries(entries, a.id.replace(/-/g, " "), { limit: 3 });
-            const hint = hits.length
-              ? ` Closest: ${hits.map((h) => h.entry.frontmatter.id).join(", ")}.`
-              : "";
-            return fail(`No entry with id "${a.id}".${hint}`);
-          }
-          return text(explainEntry(e, config));
-        }
-        case "learn":
-          return text(await deps.learn(args as unknown as LearnInput));
-        case "flag": {
-          const a = args as z.infer<typeof schemas.flag>;
-          if (!entries.some((x) => x.frontmatter.id === a.id))
-            return fail(`No entry with id "${a.id}".`);
-          return text(await deps.flag(a.id, a.reason));
-        }
-        case "docs": {
-          const a = args as z.infer<typeof schemas.docs>;
-          const shown = docs.filter(
-            ({ doc }) =>
-              (!a.area || doc.frontmatter.area === a.area) && (!a.path || docCovers(doc, a.path)),
-          );
-          return text(
-            shown.length
-              ? shown
-                  .map(
-                    ({ path, doc }) =>
-                      `- ${docRef(path)}: ${doc.frontmatter.title} [${doc.frontmatter.scope.join(", ")}]\n  sections: ${doc.sections
-                        .filter((s) => s.id)
-                        .map((s) => `${s.id} (${s.heading})`)
-                        .join(", ")}`,
-                  )
-                  .join("\n")
-              : "No team documents match. The team may not have written one for this area yet.",
-          );
-        }
-        case "read": {
-          const a = args as z.infer<typeof schemas.read>;
-          const ref = a.doc
-            .replace(/^knowledge\//, "")
-            .replace(/\/docs\//, "/")
-            .replace(/\.md$/, "");
-          const found = docs.find((d) => docRef(d.path) === ref);
-          if (!found) {
-            return fail(
-              `No document "${a.doc}". Documents: ${docs.map((d) => docRef(d.path)).join(", ") || "none"}.`,
+      try {
+        switch (tool) {
+          case "search": {
+            const a = args as z.infer<typeof schemas.search>;
+            const hits = searchEntries(entries, a.query, {
+              ...(a.area ? { area: a.area } : {}),
+              ...(a.path ? { path: a.path } : {}),
+              limit: a.limit ?? 5,
+            });
+            return text(
+              hits.length
+                ? hits.map((h) => hitLine(h.entry)).join("\n")
+                : `No accepted rules match "${a.query}". The team may not have one yet; if you learn one, save it with learn.`,
             );
           }
-          const { doc } = found;
-          const section = a.section ? doc.sections.find((s) => s.id === a.section) : undefined;
-          if (a.section && !section) {
-            return fail(
-              `No section "${a.section}" in ${ref}. Sections: ${doc.sections.map((s) => s.id).join(", ")}.`,
+          case "context": {
+            const a = args as z.infer<typeof schemas.context>;
+            const selection = selectEntries(entries, {
+              paths: a.paths,
+              tokenBudget: a.tokenBudget ?? config.distribution.tokenBudget,
+              maxChars: MAX_CHARS,
+            });
+            deps.log({
+              ts,
+              type: "injection",
+              source: "mcp",
+              ...(repo ? { repo } : {}),
+              entries: selection.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
+              tokens: selection.tokens,
+            });
+            return text(renderContext(selection) || "No team rules apply to these files.");
+          }
+          case "explain": {
+            const a = args as z.infer<typeof schemas.explain>;
+            const e = entries.find((x) => x.frontmatter.id === a.id);
+            if (!e) {
+              const hits = searchEntries(entries, a.id.replace(/-/g, " "), { limit: 3 });
+              const hint = hits.length
+                ? ` Closest: ${hits.map((h) => h.entry.frontmatter.id).join(", ")}.`
+                : "";
+              return fail(`No entry with id "${a.id}".${hint}`);
+            }
+            return text(explainEntry(e, config));
+          }
+          case "learn":
+            return text(await deps.learn(args as unknown as LearnInput));
+          case "flag": {
+            const a = args as z.infer<typeof schemas.flag>;
+            if (!entries.some((x) => x.frontmatter.id === a.id))
+              return fail(`No entry with id "${a.id}".`);
+            return text(await deps.flag(a.id, a.reason));
+          }
+          case "docs": {
+            const a = args as z.infer<typeof schemas.docs>;
+            const shown = docs.filter(
+              ({ doc }) =>
+                (!a.area || doc.frontmatter.area === a.area) && (!a.path || docCovers(doc, a.path)),
+            );
+            return text(
+              shown.length
+                ? shown
+                    .map(
+                      ({ path, doc }) =>
+                        `- ${docRef(path)}: ${doc.frontmatter.title} [${doc.frontmatter.scope.join(", ")}]\n  sections: ${doc.sections
+                          .filter((s) => s.id)
+                          .map((s) => `${s.id} (${s.heading})`)
+                          .join(", ")}`,
+                    )
+                    .join("\n")
+                : "No team documents match. The team may not have written one for this area yet.",
             );
           }
-          deps.log({ ts, type: "doc-read", doc: ref, ...(section ? { section: section.id } : {}) });
-          const source = (s: (typeof doc.sections)[number]) =>
-            s.provenance
-              ? `(source: ${s.provenance.source}${s.provenance.updated ? `, ${s.provenance.updated}` : ""}${s.provenance.url ? `, ${s.provenance.url}` : ""})`
-              : "";
-          const render = (s: (typeof doc.sections)[number]) =>
-            `## ${s.heading} {#${s.id}}\n${source(s)}\n${s.body}`.replace(/\n\n+/g, "\n\n");
-          return text(
-            section
-              ? `# ${doc.frontmatter.title} (${ref})\n\n${render(section)}`
-              : [`# ${doc.frontmatter.title} (${ref})`, doc.intro, ...doc.sections.map(render)]
-                  .filter(Boolean)
-                  .join("\n\n"),
-          );
+          case "read": {
+            const a = args as z.infer<typeof schemas.read>;
+            const ref = a.doc
+              .replace(/^knowledge\//, "")
+              .replace(/\/docs\//, "/")
+              .replace(/\.md$/, "");
+            const found = docs.find((d) => docRef(d.path) === ref);
+            if (!found) {
+              return fail(
+                `No document "${a.doc}". Documents: ${docs.map((d) => docRef(d.path)).join(", ") || "none"}.`,
+              );
+            }
+            const { doc } = found;
+            const section = a.section ? doc.sections.find((s) => s.id === a.section) : undefined;
+            if (a.section && !section) {
+              return fail(
+                `No section "${a.section}" in ${ref}. Sections: ${doc.sections.map((s) => s.id).join(", ")}.`,
+              );
+            }
+            deps.log({
+              ts,
+              type: "doc-read",
+              doc: ref,
+              ...(section ? { section: section.id } : {}),
+            });
+            const source = (s: (typeof doc.sections)[number]) =>
+              s.provenance
+                ? `(source: ${s.provenance.source}${s.provenance.updated ? `, ${s.provenance.updated}` : ""}${s.provenance.url ? `, ${s.provenance.url}` : ""})`
+                : "";
+            const render = (s: (typeof doc.sections)[number]) =>
+              `## ${s.heading} {#${s.id}}\n${source(s)}\n${s.body}`.replace(/\n\n+/g, "\n\n");
+            return text(
+              section
+                ? `# ${doc.frontmatter.title} (${ref})\n\n${render(section)}`
+                : [`# ${doc.frontmatter.title} (${ref})`, doc.intro, ...doc.sections.map(render)]
+                    .filter(Boolean)
+                    .join("\n\n"),
+            );
+          }
+          case "report":
+            return text(
+              kbReport(entries, config, {
+                days: (args as { days?: number }).days ?? 7,
+                now: deps.now(),
+                events: deps.events?.() ?? [],
+              }),
+            );
+          case "list": {
+            const a = args as z.infer<typeof schemas.list>;
+            const accepted = entries.filter(
+              (e) =>
+                e.frontmatter.status === "accepted" && (!a.area || e.frontmatter.area === a.area),
+            );
+            return text(
+              accepted
+                .map((e) => `- ${e.frontmatter.id}: ${e.frontmatter.title} [${e.frontmatter.area}]`)
+                .join("\n") || "No accepted rules yet.",
+            );
+          }
         }
-        case "report":
-          return text(
-            kbReport(entries, config, {
-              days: (args as { days?: number }).days ?? 7,
-              now: deps.now(),
-              events: deps.events?.() ?? [],
-            }),
-          );
-        case "list": {
-          const a = args as z.infer<typeof schemas.list>;
-          const accepted = entries.filter(
-            (e) =>
-              e.frontmatter.status === "accepted" && (!a.area || e.frontmatter.area === a.area),
-          );
-          return text(
-            accepted
-              .map((e) => `- ${e.frontmatter.id}: ${e.frontmatter.title} [${e.frontmatter.area}]`)
-              .join("\n") || "No accepted rules yet.",
-          );
-        }
+      } catch (e) {
+        return fail(`${tool} failed: ${(e as Error).message}`);
       }
-    } catch (e) {
-      return fail(`${tool} failed: ${(e as Error).message}`);
-    }
+    };
+    const result = await dispatch();
+    deps.log({
+      ts,
+      type: "mcp-call",
+      tool,
+      ms: Math.round(performance.now() - started),
+      ok: result.isError !== true,
+    });
+    return result;
   });
 
   return server;

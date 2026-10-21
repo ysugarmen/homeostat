@@ -131,7 +131,11 @@ describe("homeostat hook session-start", () => {
       source: "startup",
       entries: expect.arrayContaining([{ id: "web-a11y", form: "full" }]),
       dropped: [],
+      ok: true,
     });
+    // The hook's own wall time and the size of what it injected, for the Performance page.
+    expect(event?.ms).toBeGreaterThanOrEqual(0);
+    expect(event?.chars).toBeGreaterThan(100);
   });
 
   test("with no KB configured it stays silent and succeeds", async () => {
@@ -154,6 +158,11 @@ describe("homeostat hook session-start", () => {
     expect(code).toBe(0);
     expect(stdout).toBe("");
     expect(stderr).toContain("homeostat: knowledge base config is invalid");
+    // The start is still recorded, as a failure, with its time and no selection.
+    const [event] = readEvents(kbDir);
+    expect(event).toMatchObject({ type: "injection", ok: false });
+    expect(event?.ms).toBeGreaterThanOrEqual(0);
+    expect(event?.entries).toBeUndefined();
   });
 
   test("malformed hook input never fails the session", async () => {

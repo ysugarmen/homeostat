@@ -253,6 +253,34 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(t.g(t.origin, "show", "homeostat/state:heartbeats/lee.json")).toContain(
       '"member": "lee"',
     );
+    // The run's own cost (no model ran: the test drafts with a fake), the KB after its merges,
+    // and where each lesson came from, for the Performance page.
+    expect(report.timing).toEqual({
+      started: "2026-10-16T06:00:00.000Z",
+      finished: "2026-10-16T06:00:00.000Z",
+      modelCalls: 0,
+      chars: 0,
+      failedCalls: 0,
+    });
+    // The fake host does not land merges on main, so the KB reads as it was before the run.
+    expect(report.kb).toMatchObject({ accepted: 2, disputed: 0, flagged: 0 });
+    expect(report.lessons).toContainEqual(
+      expect.objectContaining({
+        id: "use-colour-tokens-instead-of-hex-values",
+        origin: "review",
+        source: "pr-feedback",
+      }),
+    );
+    expect(report.lessons).toContainEqual(
+      expect.objectContaining({
+        id: "use-the-shared-button-component",
+        origin: "pending",
+        source: "manual",
+      }),
+    );
+    expect(
+      decisions.decided.find((d: { id: string }) => d.id === "use-the-shared-button-component"),
+    ).toMatchObject({ openedAt: "2026-10-16T06:00:00.000Z" });
   });
 
   test("review PRs open after every daily PR has merged, on top of them; daily branches skip CI", async () => {
@@ -308,6 +336,11 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     const subject = (ref: string) => t.g(t.origin, "log", "-1", "--format=%s", ref);
     expect(subject("homeostat/daily-lee-2026-10-16")).toContain("[skip ci]");
     expect(subject("homeostat/review-dana-2026-10-16")).not.toContain("[skip ci]");
+    // The KB's health is read after the merges landed: the starter's two rules plus Lee's.
+    const report = JSON.parse(
+      t.g(t.origin, "show", "homeostat/state:runs/2026-10-16T06-00-00Z.json"),
+    );
+    expect(report.kb).toMatchObject({ accepted: 3 });
   });
 
   test("with named reviewers, only they are asked, not the area's senior", async () => {
@@ -491,6 +524,38 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     });
     expect(stdout).not.toContain("merged   use-");
     expect(stdout.match(/outbound-http-retry-helper/g)?.length).toBe(2);
+  });
+
+  test("a declined duplicate names the rule it repeats in the run report", async () => {
+    const t = team();
+    await run([
+      "learn",
+      "--dir",
+      t.lee,
+      "--author",
+      "lee",
+      "--area",
+      "integrations",
+      "--title",
+      "Use the shared retry helper for partner calls",
+      "--rule",
+      "Wrap every partner API call in withRetry() from services/integrations/http.ts.",
+      "--why",
+      "Partner APIs time out; hand-rolled retries skipped the request-id header.",
+    ]);
+    await run(["sync", "--dir", t.lee]);
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider: new FakeProvider() });
+    const report = JSON.parse(
+      t.g(t.origin, "show", "homeostat/state:runs/2026-10-16T06-00-00Z.json"),
+    );
+    expect(report.lessons).toContainEqual(
+      expect.objectContaining({
+        member: "lee",
+        decision: "declined",
+        duplicateOf: "outbound-http-retry-helper",
+        source: "manual",
+      }),
+    );
   });
 
   test("two developers flagging one rule make one change carrying both flags", async () => {
@@ -728,6 +793,10 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
         ["knowledge/integrations/docs/partner-calls.md", "merged", "merged by a reviewer"],
       ]),
     );
+    // Opened by the first run, settled at the host's merge time: the review's latency.
+    expect(
+      decided.find((d: { id: string }) => d.id === "use-the-shared-button-component"),
+    ).toMatchObject({ openedAt: "2026-10-16T06:00:00.000Z", settledAt: "2026-10-16T12:00:00Z" });
   });
 
   test("one refused reviewer doesn't stop the others being asked", async () => {

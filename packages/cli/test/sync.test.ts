@@ -1,8 +1,16 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { lessonHash } from "@homeostat/core";
+import { lessonHash, readEvents } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -112,7 +120,12 @@ async function session(kb: string, sessionId: string, event = "session-start") {
   writeFileSync(join(cwd, "apps/web/src/App.tsx"), "x");
   const r = await run(["hook", event], {
     env: { HOMEOSTAT_DIR: kb },
-    stdin: async () => JSON.stringify({ session_id: sessionId, cwd }),
+    stdin: async () =>
+      JSON.stringify({
+        session_id: sessionId,
+        cwd,
+        ...(event === "session-start" ? { source: "startup" } : {}),
+      }),
   });
   return {
     ...r,
@@ -133,6 +146,11 @@ describe("homeostat sync (automation, step 2)", () => {
       t.g(t.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json"),
     );
     expect(heartbeat).toMatchObject({ member: "lee", pending: 1, behind: 0 });
+    // Usage counts are not shared unless the member opts in; the sync itself is timed.
+    expect(heartbeat.usage).toBeUndefined();
+    const syncs = readEvents(t.lee, { types: ["sync-run"] });
+    expect(syncs.at(-1)).toMatchObject({ ok: true });
+    expect(syncs.at(-1)?.ms).toBeGreaterThanOrEqual(0);
     // Nothing changed: a second sync pushes nothing, and says so.
     const again = (await run(["sync", "--dir", t.lee])).stdout;
     expect(again).not.toContain("sent");
@@ -198,6 +216,57 @@ describe("homeostat sync (automation, step 2)", () => {
     expect(next.context).toContain("use-the-shared-button-component");
     expect(next.context).not.toContain("redact-before-logging"); // already given at start
     expect((await session(t.lee, "long", "prompt")).stdout).toBe("");
+    // The start was timed; the prompt-time update is not a session start, so it carries no time.
+    const injections = readEvents(t.lee, { types: ["injection"] });
+    expect(injections.find((e) => e.source === "startup")?.ms).toBeGreaterThanOrEqual(0);
+    const update = injections.find((e) => e.source === "update");
+    expect(update).toBeDefined();
+    expect(update?.ms).toBeUndefined();
+  });
+
+  test("a member who opts in shares seven days of counts in the heartbeat, and nothing named", async () => {
+    const t = team();
+    await learnButton(t.lee);
+    await session(t.lee, "u1");
+    await run(["sync", "--dir", t.lee], { env: { HOMEOSTAT_SHARE_USAGE: "1" } });
+    const heartbeat = JSON.parse(
+      t.g(t.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json"),
+    );
+    expect(Object.keys(heartbeat.usage)).toHaveLength(7);
+    const today = Object.values(heartbeat.usage).at(-1) as Record<string, number>;
+    expect(today.sessions).toBe(1);
+    expect(today.injections).toBeGreaterThanOrEqual(1);
+    expect(Object.keys(today).sort()).toEqual([
+      "docReads",
+      "injections",
+      "mcpCalls",
+      "rules",
+      "sessions",
+    ]);
+    expect(JSON.stringify(heartbeat.usage)).not.toContain("u1");
+    // The same through the config, so the choice is visible in the KB.
+    const t2 = team();
+    const config = join(t2.lee, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("    - id: lee\n", "    - id: lee\n      usage: true\n"),
+    );
+    await learnButton(t2.lee);
+    await run(["sync", "--dir", t2.lee]);
+    expect(
+      JSON.parse(t2.g(t2.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json")).usage,
+    ).toBeDefined();
+  });
+
+  test("a sync whose origin is gone is logged as failed at the fetch", async () => {
+    const t = team();
+    await run(["sync", "--dir", t.lee]);
+    rmSync(t.origin, { recursive: true, force: true });
+    await run(["sync", "--dir", t.lee]);
+    expect(readEvents(t.lee, { types: ["sync-run"] }).at(-1)).toMatchObject({
+      ok: false,
+      step: "fetch",
+    });
   });
 
   test("HOMEOSTAT_NO_SYNC=1 starts no background sync", async () => {

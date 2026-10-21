@@ -9,14 +9,17 @@ import {
   type Heartbeat,
   lessonHash,
   locate,
+  logEvent,
   memberFromGit,
   migratedPath,
   parseEntry,
+  readEvents,
   readKbFiles,
   readPendingFiles,
   removePendingFile,
   repoNames,
   STATE_BRANCH,
+  usageCounts,
   VERSION,
   validate,
   writePendingFile,
@@ -99,8 +102,22 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
     io.stderr("homeostat.yaml is missing or invalid; run homeostat validate\n");
     return 1;
   }
+  // Every sync logs how long it took and the first step that failed, for the Performance page.
+  const started = performance.now();
+  let failedAt: string | undefined;
+  const failed = (step: string) => {
+    failedAt ??= step;
+  };
+  const record = () =>
+    logEvent(root, {
+      type: "sync-run",
+      ms: Math.round(performance.now() - started),
+      ok: failedAt === undefined,
+      ...(failedAt ? { step: failedAt } : {}),
+    });
   if (git(root, "remote", "get-url", "origin") === undefined) {
     say("no origin remote: lessons stay local\n");
+    record();
     return 0;
   }
   const base = config.sources?.baseBranch ?? "main";
@@ -110,8 +127,13 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   const state = readSyncState(root);
   const notices: Notice[] = [];
 
-  // 1. Fetch. A branch that does not exist yet (no daily run so far) is fine.
-  git(root, "fetch", "--quiet", "origin", `+refs/heads/${base}:refs/remotes/origin/${base}`);
+  // 1. Fetch. A branch that does not exist yet (no daily run so far) is fine; the base branch
+  // failing to fetch is not.
+  if (
+    git(root, "fetch", "--quiet", "origin", `+refs/heads/${base}:refs/remotes/origin/${base}`) ===
+    undefined
+  )
+    failed("fetch");
   git(
     root,
     "fetch",
@@ -211,6 +233,14 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
       pending: Object.keys(pending).length,
       version: VERSION,
     };
+    // Usage counts leave the laptop only when the member chose to share them.
+    const shares =
+      config.team.members.find((m) => m.id === member)?.usage === true ||
+      io.env?.HOMEOSTAT_SHARE_USAGE === "1";
+    if (shares) {
+      const since = new Date(Date.parse(now) - 8 * 86_400_000).toISOString();
+      heartbeat.usage = usageCounts(readEvents(root, { since }), new Date(now));
+    }
     try {
       const commit = commitTree(
         root,
@@ -229,6 +259,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
           : `sent a heartbeat to ${candidatesBranch(member)} (no pending lessons)\n`,
       );
     } catch (e) {
+      failed("push");
       say(`could not push ${candidatesBranch(member)}: ${(e as Error).message}\n`);
     }
   }
@@ -252,6 +283,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
     ...(reported ? { reported } : {}),
     unseen: [...(state.unseen ?? []), ...notices].slice(-20),
   });
+  record();
   return 0;
 }
 

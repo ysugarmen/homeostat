@@ -418,6 +418,7 @@ export function applySection(
           role: form.get(`member.${i}.role`) ?? "member",
           areas,
           ...(form.get(`member.${i}.optOut`) ? { optOut: true } : {}),
+          ...(form.get(`member.${i}.usage`) ? { usage: true } : {}),
         },
       ];
     });

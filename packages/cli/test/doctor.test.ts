@@ -92,7 +92,42 @@ describe("homeostat doctor --security (T8)", () => {
     expect(stdout).toContain("✓ the token reads acme/web-app without write access");
     expect(stdout).toContain("✓ CI pins an exact homeostat version");
     expect(stdout).toContain("model calls go to Anthropic's Claude API");
+    expect(stdout).toContain("✓ nobody shares usage counts");
+    expect(stdout).toContain("· no homeostat on the PATH");
     expect(stdout).toContain("0 to fix");
+  });
+
+  test("members sharing usage counts are listed, and a homeostat on the PATH is checked against this version", async () => {
+    const routes = {
+      "/acme/team-kb/branches/main": { protected: true },
+      "/acme/integrations-api": { permissions: { push: false } },
+      "/acme/web-app": { permissions: { push: false } },
+    };
+    const dir = kb(`homeostat@${VERSION}`);
+    const config = join(dir, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("    - id: lee\n", "    - id: lee\n      usage: true\n"),
+    );
+    const fake = (version: string) => {
+      const bin = mkdtempSync(join(tmpdir(), "homeostat-doc-bin-"));
+      writeFileSync(join(bin, "homeostat"), `#!/bin/sh\necho ${version}\n`, { mode: 0o755 });
+      return bin;
+    };
+    const old = await doctor(dir, {
+      fetch: github(routes).fetch,
+      env: { GITHUB_TOKEN: "t", PATH: fake("0.1.7") },
+    });
+    expect(old.stdout).toContain("usage counts shared in the heartbeat by: lee");
+    expect(old.stdout).toContain(`! ${""}`.trimEnd());
+    expect(old.stdout).toMatch(/! .*homeostat is 0\.1\.7, not /);
+    const same = await doctor(dir, {
+      fetch: github(routes).fetch,
+      env: { GITHUB_TOKEN: "t", PATH: fake(VERSION) },
+    });
+    expect(same.stdout).toMatch(
+      new RegExp(`✓ .*homeostat is ${VERSION.replace(/\./g, "\\.")}, the version running here`),
+    );
   });
 
   test("an unprotected branch, an over-scoped token, a floating version and a public KB fail", async () => {

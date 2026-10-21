@@ -134,14 +134,14 @@ The goal: no per-lesson PRs, no per-lesson approvals, no per-developer setup, an
 | --- | --- | --- |
 | `main` | daily-run PRs, reviewers | the team KB |
 | `candidates/<member>` | that developer's sync, force-pushed | `main` + their pending lessons + a heartbeat; transport only, never merged |
-| `homeostat/state` | the daily run | `decisions/<member>.json`, `heartbeats/<member>.json`, `runs/<date>.json` |
+| `homeostat/state` | the daily run | `decisions/<member>.json` (with when each review opened and settled), `heartbeats/<member>.json`, `runs/<date>.json` (with the run's timing and the KB's health counts) |
 
 **On the laptop: sync rides on session hooks.** `homeostat sync` runs detached in the background from the plugin's hooks: at SessionStart, on UserPromptSubmit at most every 3 hours (so a session left open for days still syncs), and at Stop when the pending set changed. Each sync:
 
 1. fetches `main` and `homeostat/state`
 2. clears pending lessons the daily run decided (matched by content hash), keeping a one-time notice for the next session
 3. fast-forwards the clone when it is on `main` with clean tracked files; otherwise it notes how far behind it is
-4. pushes pending lessons and a heartbeat to `candidates/<member>` when they changed, or when the heartbeat is 12 hours old
+4. pushes pending lessons and a heartbeat to `candidates/<member>` when they changed, or when the heartbeat is 12 hours old; a member who opted in (`usage: true`) adds seven days of per-day usage counts to it
 
 A long session gets only the rules that are new since its start, on the next prompt.
 
@@ -254,7 +254,7 @@ The default model is `claude-opus-5-5` at `medium` effort, configurable per agen
 
 **Scheduling.** `init` writes the CI jobs: validate on every PR, the daily run (`homeostat daily`), the deep dive weekly, and a weekly read-only digest (GitHub Actions or Bitbucket Pipelines). `homeostat up` is the alternative for one shared box or the Docker image. It runs the same agents and the digest on their cron schedules, and serves the dashboard.
 
-**Event log.** SQLite through `node:sqlite` at `.homeostat/events.db`, local to each machine. It records injections, MCP calls and desire paths, captures, flags, agent runs, model calls, document reads and auto-merges. It feeds `homeostat events`, `status`, the dashboard and the digest.
+**Event log.** SQLite through `node:sqlite` at `.homeostat/events.db`, local to each machine. It records injections (with the hook's wall time and size), MCP calls (with their time) and desire paths, captures, flags, agent runs, model calls, document reads, syncs and auto-merges. It feeds `homeostat events`, `status`, `metrics`, the dashboard and the digest.
 
 **Dashboard.** Server-rendered HTML with inline SVG charts, no framework. Pages: overview and agent liveness, automation (daily runs, review queue, developer sync), entries, members, coverage, impact, documents (section use and decay), desire paths, events, and settings forms for every config key (a test enforces that).
 

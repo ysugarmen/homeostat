@@ -116,6 +116,9 @@ describe("tools", () => {
     expect(r.text).toContain("(outbound-http-retry-helper)");
     expect(r.text).toContain("(redact-before-logging)");
     expect(events).toContainEqual(expect.objectContaining({ type: "injection", source: "mcp" }));
+    const logged = events.find((e) => e.type === "mcp-call");
+    expect(logged).toMatchObject({ tool: "context", ok: true });
+    expect(logged?.ms).toBeGreaterThanOrEqual(0);
   });
 
   test("explain gives the source, score breakdown and owner", async () => {
@@ -214,11 +217,14 @@ describe("desire paths (3.2)", () => {
     expect((await call("list_rules")).text).toContain("- outbound-http-retry-helper:");
   });
 
-  test("bad arguments get a clear message", async () => {
-    const { call } = await connect();
+  test("bad arguments get a clear message, and the call is logged as failed", async () => {
+    const { call, events } = await connect();
     const r = await call("search", {});
     expect(r.isError).toBe(true);
     expect(r.text).toContain("Invalid arguments for search: query:");
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "mcp-call", tool: "search", ok: false }),
+    );
   });
 });
 

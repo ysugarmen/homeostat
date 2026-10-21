@@ -1,0 +1,44 @@
+import type { UsageDay } from "../automation.ts";
+import type { Event } from "../events.ts";
+import { DAY, day } from "./util.ts";
+
+/**
+ * The last `days` days of a machine's event log as per-day counts, for a member who chose to
+ * share them in their heartbeat. Counts only: no rule ids, paths, repos or session ids leave.
+ */
+export function usageCounts(
+  events: readonly Event[],
+  now: Date,
+  days = 7,
+): Record<string, UsageDay> {
+  const out: Record<string, UsageDay> = {};
+  const sessions = new Map<string, Set<string>>();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = day(new Date(now.getTime() - i * DAY));
+    out[d] = { sessions: 0, injections: 0, rules: 0, mcpCalls: 0, docReads: 0 };
+    sessions.set(d, new Set());
+  }
+  for (const e of events) {
+    const d = e.ts.slice(0, 10);
+    const u = out[d];
+    if (!u) continue;
+    switch (e.type) {
+      case "injection":
+        u.injections++;
+        u.rules += ((e.entries as unknown[] | undefined) ?? []).length;
+        if (typeof e.session === "string") sessions.get(d)?.add(e.session);
+        break;
+      case "mcp-call":
+        u.mcpCalls++;
+        break;
+      case "doc-read":
+        u.docReads++;
+        break;
+    }
+  }
+  for (const [d, ids] of sessions) {
+    const u = out[d];
+    if (u) u.sessions = ids.size;
+  }
+  return out;
+}

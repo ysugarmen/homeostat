@@ -18,6 +18,8 @@ export function askerFor(
   agent: "curator" | "deepDive",
   io: Io,
   kbRoot: string,
+  /** Counts every call, its size and failures across the run, for the run report's timing. */
+  stats?: { calls: number; chars: number; failed: number },
 ): Asker {
   const { model, effort } = config.agents[agent];
   const runtime = config.agents.runtime;
@@ -28,15 +30,15 @@ export function askerFor(
     vertex: () => vertexAsker({ model, effort, ...config.agents.vertex }),
   }[runtime]();
   return async (system, user, schema) => {
-    const record = (ok: boolean) =>
-      logEvent(kbRoot, {
-        type: "model-call",
-        agent,
-        runtime,
-        model,
-        chars: system.length + user.length,
-        ok,
-      });
+    const record = (ok: boolean) => {
+      const chars = system.length + user.length;
+      if (stats) {
+        stats.calls++;
+        stats.chars += chars;
+        if (!ok) stats.failed++;
+      }
+      logEvent(kbRoot, { type: "model-call", agent, runtime, model, chars, ok });
+    };
     try {
       const out = await ask(system, user, schema);
       record(true);

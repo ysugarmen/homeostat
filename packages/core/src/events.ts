@@ -137,6 +137,8 @@ export function describeEvent(e: Event): string {
         const sections = (rest.sections as unknown[] | undefined) ?? [];
         return `${docs.length} document${docs.length === 1 ? "" : "s"} listed, ${sections.length} section${sections.length === 1 ? "" : "s"} included`;
       }
+      case "sync-run":
+        return `${rest.ms} ms${rest.ok ? "" : `, failed at ${rest.step}`}`;
       case "seed-run":
         return `${rest.repo}: ${(rest.topics as string[] | undefined)?.join(", ") ?? ""} from ${rest.paths} paths (${rest.chars} chars sent)`;
       default:

@@ -19,6 +19,10 @@ describe("describeEvent", () => {
         sections: [{ doc: "integrations/partner-notes", id: "webhooks" }],
       }),
     ).toBe("1 document listed, 1 section included");
+    expect(describeEvent({ ts: "t", type: "sync-run", ms: 1200, ok: true })).toBe("1200 ms");
+    expect(describeEvent({ ts: "t", type: "sync-run", ms: 80, ok: false, step: "push" })).toBe(
+      "80 ms, failed at push",
+    );
     expect(
       describeEvent({
         ts: "t",
