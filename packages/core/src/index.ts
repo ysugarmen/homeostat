@@ -288,6 +288,7 @@ export {
   selectEntries,
 } from "./select.ts";
 export { slugify } from "./slug.ts";
+export { readState, type StateView } from "./state.ts";
 export { countTokens } from "./tokens.ts";
 export {
   findRule,

@@ -3,82 +3,22 @@ import {
   type Config,
   type DecisionRecord,
   type DecisionsFile,
-  HEARTBEAT_PATH,
   type Heartbeat,
   REVIEW_REMINDER_DAYS,
   type RunReport,
+  readState,
   STALE_HEARTBEAT_HOURS,
   STATE_BRANCH,
+  type StateView,
 } from "@homeostat/core";
 import { columns, type Datum, dataTable, esc, info } from "./charts.ts";
 
 /**
- * The Automation page reads the `homeostat/state` branch the daily run writes. It reads the
- * clone's copy (`origin/homeostat/state`), which every sync fetches, so the page makes no network
- * call: it is as current as this clone's last sync.
+ * The Automation page reads the `homeostat/state` branch the daily run writes, through core's
+ * `readState`: the clone's copy, so the page makes no network call.
  */
-export interface AutomationState {
-  /** False when no daily run has written the state branch yet (or this clone never fetched it). */
-  present: boolean;
-  runs: RunReport[];
-  heartbeats: Heartbeat[];
-  decisions: DecisionsFile[];
-}
-
-const REF = `refs/remotes/origin/${STATE_BRANCH}`;
-const CANDIDATES = "refs/remotes/origin/candidates/";
-
-function git(dir: string, ...args: string[]): string | undefined {
-  try {
-    return execFileSync("git", ["-C", dir, ...args], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      maxBuffer: 32 * 1024 * 1024,
-    });
-  } catch {
-    return undefined;
-  }
-}
-
-function json<T>(dir: string, path: string): T | undefined {
-  try {
-    return JSON.parse(git(dir, "show", `${REF}:${path}`) ?? "") as T;
-  } catch {
-    return undefined;
-  }
-}
-
-export function readAutomation(kbRoot: string, maxRuns = 30): AutomationState {
-  const listing = git(kbRoot, "ls-tree", "-r", "--name-only", REF);
-  if (listing === undefined) return { present: false, runs: [], heartbeats: [], decisions: [] };
-  const paths = listing.split("\n").filter(Boolean);
-  const under = (dir: string) =>
-    paths.filter((p) => p.startsWith(`${dir}/`) && p.endsWith(".json"));
-  const runs = under("runs")
-    .sort()
-    .slice(-maxRuns)
-    .flatMap((p) => json<RunReport>(kbRoot, p) ?? []);
-  // The daily run's copy of each heartbeat is as old as the run; each developer's candidates
-  // branch has the latest one their sync pushed (sync fetches them all). Keep the newer.
-  const latest = new Map<string, Heartbeat>();
-  const fresher = (h: Heartbeat | undefined) => {
-    if (!h?.member) return;
-    const known = latest.get(h.member);
-    if (!known || h.at > known.at) latest.set(h.member, h);
-  };
-  for (const p of under("heartbeats")) fresher(json<Heartbeat>(kbRoot, p));
-  const branches = git(kbRoot, "for-each-ref", "--format=%(refname)", CANDIDATES) ?? "";
-  for (const ref of branches.split("\n").filter(Boolean)) {
-    try {
-      fresher(JSON.parse(git(kbRoot, "show", `${ref}:${HEARTBEAT_PATH}`) ?? "") as Heartbeat);
-    } catch {
-      // A candidates branch without a heartbeat: skip it.
-    }
-  }
-  const heartbeats = [...latest.values()];
-  const decisions = under("decisions").flatMap((p) => json<DecisionsFile>(kbRoot, p) ?? []);
-  return { present: true, runs, heartbeats, decisions };
-}
+export type AutomationState = StateView;
+export const readAutomation = readState;
 
 export interface SyncHealth {
   member: string;
@@ -355,7 +295,15 @@ export function lamps(
 
 /** The first name in this checkout's git identity, for the greeting; undefined when unset. */
 export function firstName(kbRoot: string): string | undefined {
-  const name = git(kbRoot, "config", "user.name")?.trim();
+  let name: string | undefined;
+  try {
+    name = execFileSync("git", ["-C", kbRoot, "config", "user.name"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return undefined;
+  }
   return name ? name.split(/\s+/)[0] : undefined;
 }
 
