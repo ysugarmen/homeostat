@@ -61,7 +61,7 @@ All fields are optional. Old events, reports and heartbeats keep working, and a 
 **Run report** (`runs/<timestamp>.json` on `homeostat/state`):
 
 - each lesson gains `source` (the entry's `source.type`), `origin` (`pending` or `review`) and `duplicateOf` when declined as a duplicate
-- a `timing` block: `started` and `finished` as ISO strings, `modelCalls`, `chars`, `failedCalls`, counted by the asker that already logs one `model-call` event per call
+- a `timing` block: `started` and `finished` as ISO strings, `modelCalls`, `chars`, `failedCalls`, summed over every asker the run creates (curator, patcher, fixer), each of which already logs one `model-call` event per call
 - a `kb` block: `accepted`, `stale`, `flagged`, `disputed`, `possibleDuplicates`, from the existing health computation
 
 **Decision records** gain `openedAt`, the run time when the record is first written (the daily run opens the review PR itself in that run), and `settledAt` on settling: the host's `mergedAt` when the PR was merged (exact on GitHub, the last update on Bitbucket), else the settling run's time. `listMergedPullRequests` already returns `mergedAt`, so this adds no host call, and the dashboard still makes none. `at` keeps its meaning.
@@ -84,7 +84,7 @@ In the nav after Automation. Same layout and style as the other pages: dark, inl
 
 1. **KPI row**: auto-merge share, reviewer agreement, median review latency, last daily-run duration (team figures), then rules served as a share of the rules visible here and median session-start latency (local figures). Each with a trend arrow against the previous window; the run duration compares with the median of the previous runs.
 2. **Calibration**: columns per ten-point band, each split into merged, review then merged, review then declined, declined, with the three configured lines drawn. Under it one computed sentence: "Lessons sent to review at 60 to 69 were merged by a reviewer N of M times." The page states, never recommends.
-3. **Decisions and health over time**: stacked columns per run, last 30 runs, split by decision including duplicates, with the health trend (accepted, stale, flagged, disputed) as lines on the same chart. The Automation page keeps its per-day count; this one is per run and links there.
+3. **Decisions and health over time**: stacked columns per run, last 30 runs, split by decision including duplicates, with the health trend (accepted, stale, flagged, disputed, possible duplicates) as lines on the same chart. The Automation page keeps its per-day count; this one is per run and links there.
 4. **Reach**: injections per day over 30 days as an area chart; when members share usage, their counts for the last seven days are stacked on the same axis, with "N of M members share usage counts". Under the chart, three stats: reachable rules served, index overflow, document pull-through.
 5. **Runtime**: four small panels: session start (latency percentiles, context size), MCP (latency and calls per tool), daily run (duration, model calls, calls per lesson decided, failures per run), sync (duration, failures).
 6. **Review latency**: rows per review PR, oldest open first, overdue marked, in the Automation page's queue style, with hours open per row. The Automation queue links here.
@@ -115,7 +115,7 @@ The same objects as a compact text report under the same six headings, each metr
 
 The trial showed that the plugin's `run.mjs` prefers any `homeostat` on the PATH over the pinned npx version. On the author's laptop that was a global 0.1.7, which rejects the 0.2 config, so the session hooks, the sync and the MCP server exited silently for a day.
 
-1. `run.mjs` order becomes: `HOMEOSTAT_CLI` when set; else a PATH `homeostat` (found by walking `PATH` with `existsSync`) only when `homeostat --version`, run with a two-second timeout, equals the plugin's version, with the answer cached per binary path and modification time for 24 hours in the OS temp dir, so the extra spawn happens once a day; else `npx --yes homeostat@<pinned>`.
+1. `run.mjs` order becomes: `HOMEOSTAT_CLI` when set; else a PATH `homeostat` (found by walking `PATH` with `existsSync`) only when `homeostat --version`, run with a two-second timeout, prints exactly the plugin's version (a timeout, a non-zero exit or any other output falls through to npx), with the answer cached per binary path and modification time for 24 hours in the OS temp dir, so the extra spawn happens once a day; else `npx --yes homeostat@<pinned>`.
 2. `homeostat doctor` runs `homeostat --version` on the PATH and warns when it differs from its own `VERSION`, since that is the mismatch the plugin would hit.
 
 ## Out of scope
