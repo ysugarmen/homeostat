@@ -56,6 +56,9 @@ describe("homeostat dashboard --build", () => {
   test("leaves out the pages only a laptop's event log can fill, and its events", () => {
     for (const page of ["impact.html", "desire-paths.html", "events.html"])
       expect(existsSync(join(out, page))).toBe(false);
+    // The Performance page is built, without its per-machine panels.
+    expect(read("performance.html")).toContain('aria-labelledby="calibration"');
+    expect(read("performance.html")).not.toContain('id="session-start"');
     for (const f of html()) {
       expect(read(f)).not.toContain('href="/events"');
       expect(read(f)).not.toContain("search-secret-query");

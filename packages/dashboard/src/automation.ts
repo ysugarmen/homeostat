@@ -98,7 +98,8 @@ export function automationView(state: AutomationState, config: Config, now: Date
   };
 }
 
-const age = (hours?: number) =>
+/** Hours as people read them: under 1h, 7h, 3d. */
+export const age = (hours?: number) =>
   hours === undefined
     ? "—"
     : hours < 1
@@ -293,17 +294,21 @@ export function lamps(
   return [daily, queue, sync, kbLamp];
 }
 
-/** The first name in this checkout's git identity, for the greeting; undefined when unset. */
-export function firstName(kbRoot: string): string | undefined {
-  let name: string | undefined;
+/** This checkout's git user.name; undefined when unset or outside a repo. */
+export function gitUserName(kbRoot: string): string | undefined {
   try {
-    name = execFileSync("git", ["-C", kbRoot, "config", "user.name"], {
+    return execFileSync("git", ["-C", kbRoot, "config", "user.name"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
   } catch {
     return undefined;
   }
+}
+
+/** The first name in this checkout's git identity, for the greeting; undefined when unset. */
+export function firstName(kbRoot: string): string | undefined {
+  const name = gitUserName(kbRoot);
   return name ? name.split(/\s+/)[0] : undefined;
 }
 

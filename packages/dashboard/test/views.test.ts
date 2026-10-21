@@ -1,6 +1,17 @@
 import { parseConfig, parseEntry } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
-import { entryPage, eventsPage, gauge, schedule } from "../src/views.ts";
+import { entryPage, eventsPage, gauge, layout, schedule } from "../src/views.ts";
+
+describe("layout", () => {
+  test("the nav lists Performance right after Automation", () => {
+    const html = layout({ title: "t", path: "/", kbRoot: "/nowhere", body: "" });
+    const automation = html.indexOf('title="Automation"');
+    const performance = html.indexOf('title="Performance"');
+    expect(automation).toBeGreaterThan(-1);
+    expect(performance).toBeGreaterThan(automation);
+    expect(html.indexOf('title="Entries"')).toBeGreaterThan(performance);
+  });
+});
 
 describe("schedule", () => {
   test("common cron shapes read as words; anything else is shown as is", () => {

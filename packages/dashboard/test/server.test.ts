@@ -109,6 +109,12 @@ describe("pages render from the KB and the event log (4.3)", () => {
     expect(html).not.toMatch(/<(script|link)\b/);
   });
 
+  test("the Performance page is served and marked current in the nav", async () => {
+    const html = await (await fetch(`${url}/performance`)).text();
+    expect(html).toContain('<a href="/performance" aria-current="page" title="Performance">');
+    expect(html).toContain('aria-labelledby="calibration"');
+  });
+
   test("unknown pages are 404", async () => {
     expect((await get("/nope")).status).toBe(404);
     expect((await get("/entries/nope")).status).toBe(404);

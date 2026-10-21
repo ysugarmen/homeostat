@@ -10,6 +10,7 @@ A local, read-mostly view of the KB, the daily run's records (from the clone's c
 | --- | --- |
 | Overview | Health, agent liveness (last run, failures, next run), recent activity |
 | Automation | The daily run: lessons merged, declined and sent to review per run; the review queue, with lessons waiting over 2 days marked; each developer's sync (last report, clone behind, pending lessons, version) |
+| Performance | Whether it works and what it costs, over the last 30 days and 30 runs: the share merged without a person; calibration (decisions per confidence band against the configured lines, and how often reviewers merged what the run held back); lessons and KB health per run; reach (sessions given rules, the share of reachable rules served, index overflow, document sections read, plus team counts from members who share them); runtime (session-start time and context size, MCP calls, each daily run's duration and model calls, syncs); and review latency with what still waits |
 | Entries | Every rule by status, with the full explanation per rule |
 | Members | Who contributes and reviews |
 | Coverage | Areas and repos with and without rules |
@@ -29,7 +30,7 @@ A local, read-mostly view of the KB, the daily run's records (from the clone's c
 
 `homeostat dashboard --build <dir>` writes the dashboard as static, read-only pages instead of serving it. CI rebuilds it on every push to the KB and publishes it, so the shared copy is never more than one CI run behind the repo, and no server runs anywhere. The recipe below uses Cloudflare Pages behind Cloudflare Access, both free (Access up to 50 users), so only your team can open it.
 
-What the shared copy leaves out: event data never leaves a laptop, so Impact, Desire paths and Events are not built, and agent activity on the Overview is empty (the daily run's own records, on the Automation page, are there). Settings are read-only; change them through a PR to `homeostat.yaml`. Search and the theme switch need a server, so they are off.
+What the shared copy leaves out: event data never leaves a laptop, so Impact, Desire paths and Events are not built, agent activity on the Overview is empty (the daily run's own records, on the Automation page, are there), and the Performance page keeps only what the state branch holds: decisions, calibration, review latency, the daily run's timing, and the usage counts of members who share them. Settings are read-only; change them through a PR to `homeostat.yaml`. Search and the theme switch need a server, so they are off.
 
 **Once, in Cloudflare:**
 1. Create a Pages project: `npx --yes wrangler@4.151.1 pages project create team-kb-dashboard --production-branch main` (or Workers & Pages > Create > Pages > Direct Upload).

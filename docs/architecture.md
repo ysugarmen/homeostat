@@ -168,7 +168,7 @@ All thresholds and weights are in `scoring.confidence`. `--dry-run` decides and 
 
 **Merging review PRs.** In a KB with topic files, review PRs that add sections to the same file conflict once one of them merges. `homeostat review merge` rebuilds such a PR on the base branch, merging topic files section by section, waits until the host shows the rebuilt commit (an ordinary push nudges Bitbucket, which can miss a force push), and merges it. Bitbucket merges run asynchronously and are polled. A PR whose same rule changed on both sides is left for a person.
 
-**Monitoring.** The dashboard's Automation page reads the clone's copy of `homeostat/state`, with no network call. It shows the last run, lessons decided per run, the review queue (overdue items marked), and each developer's sync health: last heartbeat, clone behind, pending count, version, and "not syncing" after 48 hours.
+**Monitoring.** The dashboard's Automation page reads the clone's copy of `homeostat/state`, with no network call. It shows the last run, lessons decided per run, the review queue (overdue items marked), and each developer's sync health: last heartbeat, clone behind, pending count, version, and "not syncing" after 48 hours. The Performance page (and `homeostat metrics`) computes, from the same branch and the local event log, the share merged without a person, calibration per confidence band, review latency, reach and the cost of every step; see [guide/dashboard.md](guide/dashboard.md).
 
 ## Maintenance and ownership
 
@@ -256,7 +256,7 @@ The default model is `claude-opus-5-5` at `medium` effort, configurable per agen
 
 **Event log.** SQLite through `node:sqlite` at `.homeostat/events.db`, local to each machine. It records injections (with the hook's wall time and size), MCP calls (with their time) and desire paths, captures, flags, agent runs, model calls, document reads, syncs and auto-merges. It feeds `homeostat events`, `status`, `metrics`, the dashboard and the digest.
 
-**Dashboard.** Server-rendered HTML with inline SVG charts, no framework. Pages: overview and agent liveness, automation (daily runs, review queue, developer sync), entries, members, coverage, impact, documents (section use and decay), desire paths, events, and settings forms for every config key (a test enforces that).
+**Dashboard.** Server-rendered HTML with inline SVG charts, no framework. Pages: overview and agent liveness, automation (daily runs, review queue, developer sync), performance (decisions, calibration, review latency, reach, runtime), entries, members, coverage, impact, documents (section use and decay), desire paths, events, and settings forms for every config key (a test enforces that).
 
 **Digest.** `homeostat digest` builds a Slack message without a model: new and reconfirmed rules, rejected decisions, updated sections, the review queue, flags and guessed tool names. It posts to the webhook named by `notifications.slackWebhookEnv`.
 

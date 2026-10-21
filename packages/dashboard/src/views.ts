@@ -149,7 +149,7 @@ h3 { font-size: 15px; }
 .trend { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 650; letter-spacing: 0; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--rule); }
 .trend.up { color: var(--good); } .trend.down { color: var(--critical); } .trend.flat { color: var(--ink-3); }
 .big-sub { color: var(--ink-3); margin-top: 10px; font-size: 14px; }
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 22px; border: 1px solid var(--rule); border-radius: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); margin-top: 22px; border: 1px solid var(--rule); border-radius: 16px; }
 .kpi { padding: 16px 20px; border-left: 1px solid var(--rule); }
 .kpi:first-child { border-left: 0; }
 .kpi .k { color: var(--ink-2); font-size: 14px; display: block; margin-bottom: 6px; }
@@ -234,6 +234,10 @@ tr:last-child td { border-bottom: 0; }
 .chart .base { stroke: var(--rule); }
 .chart text { font: 12px var(--sans); fill: var(--ink-3); }
 .chart text.v { fill: var(--ink); }
+.chart .m:hover .part { filter: brightness(1.15); }
+.chart polyline { fill: none; stroke-width: 1.5; }
+.chart .marker { stroke: var(--ink-3); stroke-dasharray: 3 4; }
+.chart .marker-label { fill: var(--ink-2); font-size: 11px; }
 .dial { width: 100%; max-width: 220px; display: block; margin: 0 auto; }
 .dial .track { fill: none; stroke: var(--raised); stroke-width: 10; stroke-linecap: round; }
 .dial .fill { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; }
@@ -297,6 +301,7 @@ const ICON: Record<string, string> = {
   "/": '<rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/>',
   "/automation":
     '<path d="M20 12a8 8 0 0 1-14 5.3"/><path d="M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4"/><path d="M6 21v-4h4"/>',
+  "/performance": '<path d="M4 16a8 8 0 0 1 16 0"/><path d="M12 16l4-5"/>',
   "/entries":
     '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/>',
   "/members":
@@ -320,6 +325,7 @@ const SHORT: Record<Lamp["key"], string> = { daily: "Run", queue: "Queue", sync:
 const NAV: [string, string][] = [
   ["/", "Overview"],
   ["/automation", "Automation"],
+  ["/performance", "Performance"],
   ["/entries", "Entries"],
   ["/members", "Members"],
   ["/coverage", "Coverage"],
@@ -509,6 +515,22 @@ const arrow = (d: number) =>
     16,
   );
 
+/**
+ * One cell of a KPI row: the label with its (i), the value, and an arrow for the change since the
+ * previous window (`delta` drives only the arrow; pass it negated where lower is better).
+ */
+export function kpi(label: string, value: string, delta: number | undefined, tip: string): string {
+  const trend =
+    delta === undefined
+      ? ""
+      : `<span class="trend ${delta > 0 ? "up" : delta < 0 ? "down" : "flat"}" style="border:0;padding:0">${arrow(delta)}</span>`;
+  return `<div class="kpi"><span class="k">${label}${info(tip)}</span><span class="v">${trend}${value}</span></div>`;
+}
+
+/** One figure with its caption, for a `.stats` row. */
+export const stat = (n: number | string, k: string) =>
+  `<div class="stat"><span class="n">${n}</span><span class="k">${k}</span></div>`;
+
 export interface OverviewExtras {
   name?: string;
   /** Rules accepted in the last 7 days. */
@@ -539,8 +561,6 @@ export function overviewPage(
   const prev = runs.at(-2);
   const sum = (r: typeof last, k: "merged" | "review" | "declined") =>
     r?.members.reduce((n, m) => n + m[k], 0) ?? 0;
-  const kpi = (label: string, now: number, before: number | undefined, tip: string) =>
-    `<div class="kpi"><span class="k">${label}${info(tip)}</span><span class="v">${before === undefined ? "" : `<span class="trend ${now > before ? "up" : now < before ? "down" : "flat"}" style="border:0;padding:0">${arrow(now - before)}</span>`}${now}</span></div>`;
   const totals = {
     merged: runs.reduce((n, r) => n + sum(r, "merged"), 0),
     review: runs.reduce((n, r) => n + sum(r, "review"), 0),
@@ -575,10 +595,10 @@ export function overviewPage(
     })}</div>
   </div>
   <div class="kpis">
-    ${kpi("Merged", sum(last, "merged"), prev ? sum(prev, "merged") : undefined, "Lessons the last daily run merged on its own: confident, safe and not repeats.")}
-    ${kpi("To review", sum(last, "review"), prev ? sum(prev, "review") : undefined, "Lessons the last daily run sent to a reviewer, in a review PR.")}
-    ${kpi("Declined", sum(last, "declined"), prev ? sum(prev, "declined") : undefined, "Lessons the last daily run declined: weak, invalid, or a repeat of a rule the team already has.")}
-    ${kpi("Settled", last?.settled ?? 0, prev?.settled, "Review PRs reviewers merged or closed since the run before.")}
+    ${kpi("Merged", String(sum(last, "merged")), prev ? sum(last, "merged") - sum(prev, "merged") : undefined, "Lessons the last daily run merged on its own: confident, safe and not repeats.")}
+    ${kpi("To review", String(sum(last, "review")), prev ? sum(last, "review") - sum(prev, "review") : undefined, "Lessons the last daily run sent to a reviewer, in a review PR.")}
+    ${kpi("Declined", String(sum(last, "declined")), prev ? sum(last, "declined") - sum(prev, "declined") : undefined, "Lessons the last daily run declined: weak, invalid, or a repeat of a rule the team already has.")}
+    ${kpi("Settled", String(last?.settled ?? 0), prev ? (last?.settled ?? 0) - prev.settled : undefined, "Review PRs reviewers merged or closed since the run before.")}
   </div>
 </section>
 <section class="card span-5" aria-labelledby="runs">

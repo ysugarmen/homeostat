@@ -45,9 +45,16 @@ export function buildDashboard(opts: BuildOptions): string[] {
   const shared = { repo, builtAt: now.toISOString() };
 
   const pages: { path: string; render: string; params?: URLSearchParams }[] = [
-    ...["/", "/automation", "/entries", "/members", "/coverage", "/documents", "/settings"].map(
-      (path) => ({ path, render: path }),
-    ),
+    ...[
+      "/",
+      "/automation",
+      "/performance",
+      "/entries",
+      "/members",
+      "/coverage",
+      "/documents",
+      "/settings",
+    ].map((path) => ({ path, render: path })),
     ...STATUSES.map((s) => ({
       path: statusPath(s),
       render: "/entries",
@@ -69,7 +76,7 @@ export function buildDashboard(opts: BuildOptions): string[] {
     written.push(file);
   };
   for (const p of pages) {
-    const r = renderPage(v, p.render, p.params ?? new URLSearchParams(), {});
+    const r = renderPage(v, p.render, p.params ?? new URLSearchParams(), { shared: true });
     // The entries page highlights its filter by the path it is served at.
     const html = layout({
       title: r.title,

@@ -4,7 +4,11 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { join } from "node:path";
 import {
   CONFIG_FILE,
+  DEFAULT_WINDOW,
   type Event,
+  type MetricsReport,
+  memberFromGit,
+  metricsReport,
   readEvents,
   readKbFiles,
   sectionUsage,
@@ -15,6 +19,7 @@ import {
   automationView,
   decidedLessons,
   firstName,
+  gitUserName,
   type Lamp,
   lamps,
   readAutomation,
@@ -28,6 +33,7 @@ import {
   impact,
   type Snapshot,
 } from "./metrics.ts";
+import { performancePage } from "./performance.ts";
 import { applySection, SECTIONS } from "./settings.ts";
 import {
   coveragePage,
@@ -105,18 +111,34 @@ export interface DashboardView {
   health: ReturnType<typeof health>;
   /** The console lamps on every page: the daily run, the review queue, sync and the KB. */
   lamps: Lamp[];
+  metrics: MetricsReport;
 }
 
 export function dashboardView(kbRoot: string, snap: Snapshot): DashboardView {
-  const autoState = readAutomation(kbRoot);
+  // One read of the state branch: twice the window of runs, so trends have a previous window.
+  // The Automation page keeps its view of the last 30.
+  const state = readAutomation(kbRoot, 2 * DEFAULT_WINDOW.runs);
+  const autoState = { ...state, runs: state.runs.slice(-DEFAULT_WINDOW.runs) };
   const auto = automationView(autoState, snap.config, snap.now);
   const kbHealth = health(snap);
+  const metrics = metricsReport({
+    config: snap.config,
+    entries: snap.entries,
+    events: snap.events,
+    runs: state.runs,
+    decisions: state.decisions,
+    heartbeats: state.heartbeats,
+    member: memberFromGit(snap.config.team.members, gitUserName(kbRoot)),
+    now: snap.now,
+    window: DEFAULT_WINDOW,
+  });
   return {
     kbRoot,
     snap,
     autoState,
     auto,
     health: kbHealth,
+    metrics,
     lamps: lamps(
       auto,
       {
@@ -139,7 +161,7 @@ export function renderPage(
   v: DashboardView,
   pathname: string,
   params: URLSearchParams,
-  opts: { token?: string },
+  opts: { token?: string; shared?: boolean },
 ): { title: string; body: string; status: number } {
   const { snap, auto, autoState } = v;
   const ok = (title: string, body: string) => ({ title, body, status: 200 });
@@ -167,6 +189,8 @@ export function renderPage(
     }
     case "/automation":
       return ok("Automation", automationPage(auto));
+    case "/performance":
+      return ok("Performance", performancePage(v.metrics, { shared: opts.shared === true }));
     case "/entries":
       return ok(
         "Entries",

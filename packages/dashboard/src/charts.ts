@@ -220,3 +220,96 @@ export function rings(
     .join("");
   return `<svg class="rings" viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(title)}">${arcs}</svg>`;
 }
+
+export interface StackedDatum {
+  label: string;
+  /** Shown in the hover tooltip; defaults to the parts listed. */
+  title?: string;
+  parts: { name: string; value: number; color: string }[];
+}
+
+/**
+ * Vertical bars stacked from several parts, each in its own colour (inline, since the stylesheet
+ * colours every chart path). Markers are dashed vertical lines at fractional category positions,
+ * so a line at confidence 35 on ten-point bands sits at 3.5. Lines are series on their own scale,
+ * one value per category; an undefined value leaves a gap.
+ */
+export function stackedColumns(
+  data: readonly StackedDatum[],
+  opts: {
+    title: string;
+    height?: number;
+    tickEvery?: number;
+    markers?: { at: number; label: string }[];
+    lines?: { name: string; values: (number | undefined)[]; color: string }[];
+  },
+): string {
+  const width = 560;
+  const height = opts.height ?? 160;
+  const pad = { top: 18, bottom: 22, left: 4, right: 4 };
+  const inner = height - pad.top - pad.bottom;
+  const base = pad.top + inner;
+  const slot = (width - pad.left - pad.right) / Math.max(data.length, 1);
+  const gap = 2;
+  const bar = Math.max(2, Math.min(36, slot - gap));
+  const total = (d: StackedDatum) => d.parts.reduce((n, p) => n + p.value, 0);
+  const max = Math.max(1, ...data.map(total));
+  const marks = data
+    .map((d, i) => {
+      const x = pad.left + i * slot + (slot - bar) / 2;
+      let y = base;
+      const shapes: string[] = [];
+      const visible = d.parts.filter((p) => p.value > 0);
+      visible.forEach((p, j) => {
+        const h = (p.value / max) * inner;
+        y -= h;
+        const top = j === visible.length - 1;
+        shapes.push(
+          top
+            ? `<path class="part" style="fill:${p.color}" d="${columnPath(x, y, bar, h)}"/>`
+            : `<rect class="part" style="fill:${p.color}" x="${x}" y="${y.toFixed(1)}" width="${bar}" height="${h.toFixed(1)}"/>`,
+        );
+      });
+      const tick =
+        !opts.tickEvery || i % opts.tickEvery === 0
+          ? `<text class="t" x="${x + bar / 2}" y="${height - 6}" text-anchor="middle">${esc(d.label)}</text>`
+          : "";
+      const title =
+        d.title ?? `${d.label}: ${d.parts.map((p) => `${p.value} ${p.name}`).join(", ")}`;
+      return `<g class="m"><rect class="hit" x="${pad.left + i * slot}" y="${pad.top}" width="${slot}" height="${inner}"/>${shapes.join("")}${tick}<title>${esc(title)}</title></g>`;
+    })
+    .join("");
+  const markers = (opts.markers ?? [])
+    .map((m) => {
+      const x = (pad.left + m.at * slot).toFixed(1);
+      return `<line class="marker" x1="${x}" x2="${x}" y1="${pad.top}" y2="${base}"/><text class="marker-label" x="${x}" y="${pad.top - 6}" text-anchor="middle">${esc(m.label)}</text>`;
+    })
+    .join("");
+  const lineMax = Math.max(
+    1,
+    ...(opts.lines ?? []).flatMap((l) => l.values.flatMap((v) => (v === undefined ? [] : [v]))),
+  );
+  const lines = (opts.lines ?? [])
+    .map((l) => {
+      // Split at gaps, so a run without a value breaks the line rather than bridging it.
+      const runs: string[][] = [[]];
+      l.values.forEach((v, i) => {
+        if (v === undefined) {
+          runs.push([]);
+          return;
+        }
+        const x = (pad.left + i * slot + slot / 2).toFixed(1);
+        const y = (base - (v / lineMax) * inner).toFixed(1);
+        runs.at(-1)?.push(`${x},${y}`);
+      });
+      return runs
+        .filter((r) => r.length)
+        .map(
+          (r) =>
+            `<polyline style="stroke:${l.color}" points="${r.join(" ")}"><title>${esc(l.name)}</title></polyline>`,
+        )
+        .join("");
+    })
+    .join("");
+  return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(opts.title)}"><line class="base" x1="0" x2="${width}" y1="${base}" y2="${base}"/>${marks}${markers}${lines}</svg>`;
+}

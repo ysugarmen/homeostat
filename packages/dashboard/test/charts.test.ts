@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { areaChart, info, rings, rows } from "../src/charts.ts";
+import { areaChart, info, rings, rows, stackedColumns } from "../src/charts.ts";
 
 describe("rows", () => {
   test("a label too long for its column is shortened, and kept whole in the tooltip", () => {
@@ -11,6 +11,44 @@ describe("rows", () => {
 
   test("a label that fits is left alone", () => {
     expect(rows([{ label: "web", value: 1 }], { title: "t" })).toContain(">web</text>");
+  });
+});
+
+describe("stackedColumns", () => {
+  test("parts keep their own colour inline, markers sit at fractional positions, lines break at gaps", () => {
+    const svg = stackedColumns(
+      [
+        {
+          label: "60",
+          parts: [
+            { name: "a", value: 2, color: "red" },
+            { name: "b", value: 0, color: "blue" },
+            { name: "c", value: 1, color: "green" },
+          ],
+        },
+        { label: "70", parts: [{ name: "a", value: 0, color: "red" }] },
+      ],
+      {
+        title: "t",
+        markers: [{ at: 0.5, label: "half" }],
+        lines: [{ name: "n", values: [3, undefined], color: "pink" }],
+      },
+    );
+    expect(svg.match(/class="part"/g)).toHaveLength(2);
+    expect(svg).toContain('style="fill:red"');
+    expect(svg).toContain('style="fill:green"');
+    expect(svg).not.toContain("blue");
+    expect(svg).toContain("<title>60: 2 a, 0 b, 1 c</title>");
+    expect(svg).toContain('class="marker"');
+    expect(svg).toContain(">half</text>");
+    expect(svg.match(/<polyline/g)).toHaveLength(1);
+    expect(svg).toContain('style="stroke:pink"');
+  });
+
+  test("with no data only the baseline is drawn", () => {
+    const svg = stackedColumns([], { title: "t" });
+    expect(svg).toContain('class="base"');
+    expect(svg).not.toContain('class="m"');
   });
 });
 
