@@ -39,7 +39,7 @@ import { askerFor } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
 import { commitTree, forcePush, git, mergeText, showFile } from "./git.ts";
-import { foldChanges, showRule } from "./kb-write.ts";
+import { foldChanges, nudgeBranch, showRule } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { type FileChange, publish } from "./publish.ts";
 
@@ -463,6 +463,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   }
   const byMember = new Map<string, Lesson[]>();
   for (const l of lessons) byMember.set(l.member, [...(byMember.get(l.member) ?? []), l]);
+  const later: (() => Promise<void>)[] = [];
   for (const [member, list] of byMember) {
     const merged = list.filter((l) => l.decision === "merged");
     const review = list.filter((l) => l.decision === "review" && l.kind !== "dispute");
@@ -523,14 +524,21 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
         title: `homeostat: daily lessons · ${member} · ${today}`,
         body: prBody(member, today, list, "daily"),
         io,
+        // Merged at once: a pipeline on the branch would find it already deleted.
+        skipCi: true,
       });
       if (pr.pr) {
         row.dailyPr = pr.pr.url;
         try {
-          await provider.mergePullRequest(kbRepo, pr.pr.id);
+          await provider.mergePullRequest(kbRepo, pr.pr.id, {
+            message: `homeostat: daily lessons · ${member} · ${today}`,
+          });
           io.stdout(`  merged ${pr.pr.url}\n`);
         } catch (e) {
           // Branch protection or a failing check: the confident lessons wait for a person instead.
+          // The branch was pushed with [skip ci]; an ordinary commit lets a required build run.
+          const tip = git(root, "rev-parse", `refs/heads/${pr.branch}`);
+          if (tip) nudgeBranch(root, pr.branch, tip);
           row.mergeError = (e as Error).message;
           for (const l of merged) {
             l.decision = "review";
@@ -543,45 +551,50 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       }
       for (const l of merged) if (row.dailyPr) Object.assign(l, { pr: pr.branch });
     }
-    if (review.length) {
-      const pr = await publish({
-        root,
-        branch: `homeostat/review-${member}-${today}`,
-        changes: onFreshBase(review.map((l) => change(l, "review"))),
-        provider,
-        kbRepo,
-        base,
-        title: `homeostat: ${plural(review.length, "lesson")} to review · ${member} · ${today}`,
-        body: prBody(member, today, list, "review"),
-        io,
-      });
-      if (pr.pr) {
-        row.reviewPr = pr.pr.url;
-        await askReviewers(pr.pr, reviewerLogins(config, review, member));
+    // Review and dispute PRs open after every developer's daily PR has merged, on the base that
+    // includes them: opened earlier, a PR sharing a topic file conflicts as soon as it opens.
+    later.push(async () => {
+      if (review.length) {
+        const pr = await publish({
+          root,
+          branch: `homeostat/review-${member}-${today}`,
+          changes: onFreshBase(review.map((l) => change(l, "review"))),
+          provider,
+          kbRepo,
+          base,
+          title: `homeostat: ${plural(review.length, "lesson")} to review · ${member} · ${today}`,
+          body: prBody(member, today, list, "review"),
+          io,
+        });
+        if (pr.pr) {
+          row.reviewPr = pr.pr.url;
+          await askReviewers(pr.pr, reviewerLogins(config, review, member));
+        }
+        for (const l of review) Object.assign(l, { pr: pr.branch });
       }
-      for (const l of review) Object.assign(l, { pr: pr.branch });
-    }
-    for (const l of disputes) {
-      const flags = parseEntry(onBase(l.path) ?? "").entry?.frontmatter.flags ?? [];
-      const pr = await publish({
-        root,
-        branch: `${DISPUTE_PREFIX}${l.id}-${today}`,
-        changes: onFreshBase([change(l, "review")]),
-        provider,
-        kbRepo,
-        base,
-        title: `homeostat: fix or retire ${l.id}`,
-        body: disputeBody(l, flags),
-        io,
-      });
-      if (pr.pr) {
-        row.disputePrs = [...(row.disputePrs ?? []), pr.pr.url];
-        io.stdout(`  opened ${pr.pr.url} for the disputed ${l.id}\n`);
-        await askReviewers(pr.pr, reviewerLogins(config, [l], member));
+      for (const l of disputes) {
+        const flags = parseEntry(onBase(l.path) ?? "").entry?.frontmatter.flags ?? [];
+        const pr = await publish({
+          root,
+          branch: `${DISPUTE_PREFIX}${l.id}-${today}`,
+          changes: onFreshBase([change(l, "review")]),
+          provider,
+          kbRepo,
+          base,
+          title: `homeostat: fix or retire ${l.id}`,
+          body: disputeBody(l, flags),
+          io,
+        });
+        if (pr.pr) {
+          row.disputePrs = [...(row.disputePrs ?? []), pr.pr.url];
+          io.stdout(`  opened ${pr.pr.url} for the disputed ${l.id}\n`);
+          await askReviewers(pr.pr, reviewerLogins(config, [l], member));
+        }
+        Object.assign(l, { pr: pr.branch });
       }
-      Object.assign(l, { pr: pr.branch });
-    }
+    });
   }
+  for (const open of later) await open();
 
   // 5. Record decisions, heartbeats and the report for the laptops and the dashboard.
   for (const l of lessons) {

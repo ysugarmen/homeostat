@@ -37,6 +37,8 @@ export interface PullRequestDetails extends OpenPullRequest {
   reviewers: Person[];
   /** Whether it conflicts with its target branch; undefined while the host can't tell. */
   conflicts?: boolean;
+  /** The commit the host has for the PR's source; it lags a force push for a while. */
+  headSha?: string;
 }
 
 export interface ReviewComment {
@@ -77,8 +79,15 @@ export interface Provider {
   listReviewComments(repo: RepoRef, pullRequestId: number): Promise<ReviewComment[]>;
   listCommits(repo: RepoRef, pullRequestId: number): Promise<Commit[]>;
   openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }>;
-  /** Squash-merges a PR on the KB repo; used only for entries that pass every auto-merge gate. */
-  mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void>;
+  /**
+   * Squash-merges a PR on the KB repo. `message` is the squash commit's message, so a branch's
+   * `[skip ci]` commits never reach the base branch's message.
+   */
+  mergePullRequest(
+    repo: RepoRef,
+    pullRequestId: number,
+    opts?: { message?: string },
+  ): Promise<void>;
   getPullRequest(repo: RepoRef, pullRequestId: number): Promise<PullRequestDetails>;
   /** The PR's changes as a unified diff. */
   getPullRequestDiff(repo: RepoRef, pullRequestId: number): Promise<string>;
@@ -99,6 +108,8 @@ export interface ProviderOptions {
   user?: string;
   /** Injected for tests; defaults to the global fetch. */
   fetch?: typeof fetch;
+  /** Injected for tests; defaults to a timer. */
+  sleep?: (ms: number) => Promise<void>;
   /** API base URL, for self-hosted or proxied instances. */
   baseUrl?: string;
 }

@@ -12,7 +12,7 @@ import {
 import type { Io } from "./cli.ts";
 import { painter } from "./format.ts";
 import { findKb } from "./hook.ts";
-import { rebuildOnBase } from "./kb-write.ts";
+import { nudgeBranch, rebuildOnBase } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 
 /**
@@ -239,6 +239,30 @@ async function show(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Pro
   return 0;
 }
 
+/**
+ * Waits until the host's PR points at the rebuilt commit: merging before then judges the old,
+ * conflicting one. A host that has not caught up after a while is nudged with an ordinary push.
+ * Hosts that do not report the PR's commit are not waited for.
+ */
+async function untilHostSees(
+  ctx: Context,
+  pr: PullRequestDetails,
+  sha: string,
+  io: Io,
+): Promise<void> {
+  const sleep = io.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const same = (a: string, b: string) =>
+    a.length > 6 && b.length > 6 && (a.startsWith(b) || b.startsWith(a));
+  let want = sha;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const now = await ctx.provider.getPullRequest(ctx.kbRepo, pr.id);
+    if (now.headSha === undefined) return;
+    if (same(now.headSha, want) && now.conflicts !== true) return;
+    if (attempt === 6) want = nudgeBranch(ctx.root, pr.sourceBranch, want) ?? want;
+    await sleep(3000);
+  }
+}
+
 async function merge(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Promise<number> {
   const pr = await homeostatPr(ctx, ref, "merge");
   let rebuilt = false;
@@ -258,16 +282,17 @@ async function merge(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Pr
       io.stdout(
         `rebuilt #${pr.id} on ${pr.targetBranch}: its topic files now include both sides\n`,
       );
+    await untilHostSees(ctx, pr, r.sha, io);
   }
   try {
     // A host recomputes whether a rebuilt PR merges a moment after the push.
     for (let attempt = 0; ; attempt++) {
       try {
-        await ctx.provider.mergePullRequest(ctx.kbRepo, pr.id);
+        await ctx.provider.mergePullRequest(ctx.kbRepo, pr.id, { message: pr.title });
         break;
       } catch (e) {
         if (!rebuilt || attempt >= 4 || !(e instanceof ProviderError)) throw e;
-        await new Promise((r) => setTimeout(r, 3000));
+        await (io.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms))))(3000);
       }
     }
   } catch (e) {

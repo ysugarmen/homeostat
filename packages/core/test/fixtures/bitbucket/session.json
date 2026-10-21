@@ -721,7 +721,7 @@
     {
       "request": {
         "method": "POST",
-        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/41/merge",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/41/merge?async=true",
         "body": {
           "merge_strategy": "squash",
           "close_source_branch": true

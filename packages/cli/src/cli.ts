@@ -46,6 +46,8 @@ export interface Io {
   env?: Readonly<Record<string, string | undefined>>;
   fetch?: typeof fetch;
   now?: () => Date;
+  /** Waits; tests pass one that returns at once. */
+  sleep?: (ms: number) => Promise<void>;
   /** Reads all of stdin; hooks receive their event JSON this way. */
   stdin?: () => Promise<string>;
   /**

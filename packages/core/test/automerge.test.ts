@@ -128,25 +128,77 @@ describe("mergePullRequest", () => {
 
   test("GitHub squash-merges through the pulls API", async () => {
     const { fetch, sent } = recordingFetch();
-    await new GitHubProvider({ token: "t", fetch }).mergePullRequest(kb, 7);
+    await new GitHubProvider({ token: "t", fetch }).mergePullRequest(kb, 7, {
+      message: "homeostat: daily lessons",
+    });
     expect(sent).toEqual([
       {
         method: "PUT",
         url: "https://api.github.com/repos/acme/team-kb/pulls/7/merge",
-        body: { merge_method: "squash" },
+        body: {
+          merge_method: "squash",
+          commit_title: "homeostat: daily lessons (#7)",
+          commit_message: "",
+        },
       },
     ]);
   });
 
   test("Bitbucket squash-merges and closes the branch", async () => {
     const { fetch, sent } = recordingFetch();
-    await new BitbucketProvider({ token: "t", fetch }).mergePullRequest(kb, 7);
+    await new BitbucketProvider({ token: "t", fetch }).mergePullRequest(kb, 7, {
+      message: "homeostat: daily lessons",
+    });
     expect(sent).toEqual([
       {
         method: "POST",
-        url: "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/7/merge",
-        body: { merge_strategy: "squash", close_source_branch: true },
+        url: "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pullrequests/7/merge?async=true",
+        body: {
+          merge_strategy: "squash",
+          close_source_branch: true,
+          message: "homeostat: daily lessons",
+        },
       },
     ]);
+  });
+
+  test("Bitbucket polls a slow merge's task until it succeeds", async () => {
+    const calls: string[] = [];
+    let polls = 0;
+    const fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = String(input);
+      calls.push(`${init.method ?? "GET"} ${url}`);
+      const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "content-type": "application/json", ...headers },
+        });
+      if (url.endsWith("/merge?async=true"))
+        return json({}, 202, { location: "https://api.bitbucket.org/2.0/task/1" });
+      if (url.endsWith("/task/1"))
+        return json({ task_status: ++polls < 3 ? "PENDING" : "SUCCESS" });
+      return json({}, 404);
+    }) as typeof globalThis.fetch;
+    const bb = new BitbucketProvider({ token: "t", fetch, sleep: async () => {} });
+    await bb.mergePullRequest(kb, 7);
+    expect(polls).toBe(3);
+  });
+
+  test("Bitbucket trusts the PR's state when a merge task never reports back", async () => {
+    const fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "content-type": "application/json", ...headers },
+        });
+      if (url.endsWith("/merge?async=true"))
+        return json({}, 202, { location: "https://api.bitbucket.org/2.0/task/1" });
+      if (url.endsWith("/task/1")) return json({ task_status: "PENDING" });
+      if (url.endsWith("/pullrequests/7")) return json({ id: 7, state: "MERGED" });
+      return json({}, 404);
+    }) as typeof globalThis.fetch;
+    const bb = new BitbucketProvider({ token: "t", fetch, sleep: async () => {} });
+    await expect(bb.mergePullRequest(kb, 7)).resolves.toBeUndefined();
   });
 });

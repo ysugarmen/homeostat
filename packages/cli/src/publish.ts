@@ -22,6 +22,11 @@ export interface PublishOptions {
   title: string;
   body: string;
   io: Io;
+  /**
+   * Mark the commits `[skip ci]`: for a PR merged at once, whose branch is gone before a pipeline
+   * could start. The squash merge carries its own message, so the base branch still runs CI.
+   */
+  skipCi?: boolean;
 }
 
 /** First of `base`, `base-2`, ... that exists neither locally nor on origin. */
@@ -47,7 +52,8 @@ export async function publish(
     git(root, "rev-parse", "--verify", "--quiet", `refs/remotes/origin/${opts.base}`) ??
     git(root, "rev-parse", "--verify", "--quiet", `refs/heads/${opts.base}`);
   if (baseRef) git(root, "branch", branch, baseRef);
-  for (const c of opts.changes) commitFile(root, branch, c.path, c.text, c.message);
+  for (const c of opts.changes)
+    commitFile(root, branch, c.path, c.text, opts.skipCi ? `${c.message} [skip ci]` : c.message);
   io.stdout(`committed ${plural(opts.changes.length, "file")} to ${branch}\n`);
 
   if (git(root, "remote", "get-url", "origin") === undefined) {

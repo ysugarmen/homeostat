@@ -31,7 +31,7 @@ interface BbPullRequest {
   author: BbUser;
   updated_on: string;
   description?: string;
-  source: { branch: { name: string } };
+  source: { branch: { name: string }; commit?: { hash: string } };
   destination: { branch: { name: string } };
   links: { html: { href: string } };
 }
@@ -91,8 +91,12 @@ export class BitbucketProvider implements Provider {
   private readonly token: string;
   private readonly user: string | undefined;
   private readonly members = new Map<string, Promise<BbUser[]>>();
+  private readonly sleep: (ms: number) => Promise<void>;
+  /** Polls of an async merge, two seconds apart. */
+  private readonly mergePolls = 60;
 
   constructor(opts: ProviderOptions) {
+    this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.token = opts.token;
     this.user = opts.user;
     this.fetch = opts.fetch ?? globalThis.fetch;
@@ -226,6 +230,7 @@ export class BitbucketProvider implements Provider {
       createdAt: pr.created_on,
       reviewers: (pr.reviewers ?? []).map(person),
       ...(conflicts === undefined ? {} : { conflicts }),
+      ...(pr.source.commit?.hash ? { headSha: pr.source.commit.hash } : {}),
     };
   }
 
@@ -296,16 +301,49 @@ export class BitbucketProvider implements Provider {
     return { id: created.id, url: created.links.html.href };
   }
 
-  async mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void> {
-    await requestJson(
+  /**
+   * Merges asynchronously: a squash merge of a large PR can outlast the request, and Bitbucket then
+   * merges without ever answering. It returns a task to poll instead; if that runs out, the PR's
+   * own state decides.
+   */
+  async mergePullRequest(
+    repo: RepoRef,
+    pullRequestId: number,
+    opts: { message?: string } = {},
+  ): Promise<void> {
+    const url = `${this.repoUrl(repo)}/pullrequests/${pullRequestId}`;
+    const { body, headers } = await requestJson(
       "Bitbucket",
       this.fetch,
-      `${this.repoUrl(repo)}/pullrequests/${pullRequestId}/merge`,
+      `${url}/merge?async=true`,
       {
         method: "POST",
         headers: this.headers(),
-        body: { merge_strategy: "squash", close_source_branch: true },
+        body: {
+          merge_strategy: "squash",
+          close_source_branch: true,
+          ...(opts.message ? { message: opts.message } : {}),
+        },
       },
+    );
+    const task = headers.get("location");
+    if (!task || (body as { state?: string } | undefined)?.state === "MERGED") return;
+    for (let i = 0; i < this.mergePolls; i++) {
+      await this.sleep(2000);
+      const { body: status } = await requestJson("Bitbucket", this.fetch, task, {
+        headers: this.headers(),
+      });
+      if ((status as { task_status?: string }).task_status === "SUCCESS") return;
+    }
+    const { body: pr } = await requestJson("Bitbucket", this.fetch, url, {
+      headers: this.headers(),
+    });
+    if ((pr as { state?: string }).state === "MERGED") return;
+    throw new ProviderError(
+      "Bitbucket",
+      504,
+      url,
+      "the merge did not finish in time; check the PR",
     );
   }
 

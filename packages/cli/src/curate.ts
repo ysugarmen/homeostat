@@ -281,7 +281,9 @@ async function curateRun(opts: CurateOptions, io: Io): Promise<number> {
       );
     } else if (pr) {
       try {
-        await provider.mergePullRequest(kbRepo, pr.id);
+        await provider.mergePullRequest(kbRepo, pr.id, {
+          message: `homeostat: auto-merge ${entriesNoun(auto.length)} from review feedback`,
+        });
         io.stdout(`auto-merged ${pr.url}\n`);
         logEvent(root, {
           ts: now.toISOString(),

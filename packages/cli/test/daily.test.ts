@@ -255,6 +255,61 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     );
   });
 
+  test("review PRs open after every daily PR has merged, on top of them; daily branches skip CI", async () => {
+    const t = team();
+    // Dana, handled first, has a lesson for review; Lee's daily PR merges after it in the run.
+    const dana = mkdtempSync(join(tmpdir(), "homeostat-daily-dana-"));
+    execFileSync("git", ["clone", "-q", t.origin, dana]);
+    execFileSync("git", ["-C", dana, "config", "user.name", "Dana"]);
+    execFileSync("git", ["-C", dana, "config", "user.email", "dana@example.com"]);
+    await run([
+      "learn",
+      "--dir",
+      dana,
+      "--author",
+      "dana",
+      "--area",
+      "frontend",
+      "--title",
+      "Keep colours consistent with the design system",
+      "--rule",
+      "Pick colours the design system already offers rather than inventing new shades.",
+      "--why",
+      "Copied palettes drifted from the theme after the rebrand.",
+    ]);
+    await run(["sync", "--dir", dana]);
+    await leeLearns(t.lee);
+
+    // A host whose merges land on main, recording the order of opens and merges.
+    const events: string[] = [];
+    class LandingProvider extends FakeProvider {
+      override async openPullRequest(repo: RepoRef, pr: NewPullRequest) {
+        events.push(`open ${pr.sourceBranch}`);
+        return super.openPullRequest(repo, pr);
+      }
+      override async mergePullRequest(repo: RepoRef, id: number) {
+        const branch = this.opened.find((o) => o.id === id)?.pr.sourceBranch ?? "";
+        t.g(t.origin, "update-ref", "refs/heads/main", `refs/heads/${branch}`);
+        events.push(`merge ${branch}`);
+        return super.mergePullRequest(repo, id);
+      }
+    }
+    const provider = new LandingProvider();
+    const { stdout } = await run(["daily", "--dir", t.ci], { provider });
+    expect(stdout).toContain("dana: 0 merged, 1 to review");
+    expect(stdout).toContain("lee: 1 merged, 1 to review");
+
+    const firstReview = events.findIndex((e) => e.startsWith("open homeostat/review-"));
+    const lastMerge = events.findLastIndex((e) => e.startsWith("merge "));
+    expect(firstReview).toBeGreaterThan(lastMerge);
+    // Both review PRs are cut from the main that already holds Lee's merged lesson.
+    for (const review of ["homeostat/review-dana-2026-10-16", "homeostat/review-lee-2026-10-16"])
+      t.g(t.origin, "merge-base", "--is-ancestor", "homeostat/daily-lee-2026-10-16", review);
+    const subject = (ref: string) => t.g(t.origin, "log", "-1", "--format=%s", ref);
+    expect(subject("homeostat/daily-lee-2026-10-16")).toContain("[skip ci]");
+    expect(subject("homeostat/review-dana-2026-10-16")).not.toContain("[skip ci]");
+  });
+
   test("with named reviewers, only they are asked, not the area's senior", async () => {
     const t = team();
     const config = join(t.ci, "homeostat.yaml");

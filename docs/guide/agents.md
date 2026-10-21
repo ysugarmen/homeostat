@@ -9,14 +9,16 @@ Homeostat's agents run in your KB repo's CI (or on one shared box with `homeosta
 1. **Collects** their pending lessons, which their sessions pushed to `candidates/<member>`, and drafts lessons from review comments on their own merged PRs (below).
 2. **Scores** each lesson for confidence, 0–100: its source, the role of whoever vouches for it (junior less, senior and lead more), whether it is specific, and its flags and conflicts.
 3. **Decides** each one: merge at 70 or above (80 for `core`), decline below 35 or as a duplicate, and a reviewer for anything in between. Risky content, conflicts, document patches and areas outside `scoring.autoMerge` always go to a reviewer.
-4. **Opens one daily PR** with the merged lessons, each decision explained in the body, and merges it.
-5. **Opens one review PR** for the middle band and requests the area's owners as reviewers (on Bitbucket the token needs `read:workspace` to find them by nickname). Merging it accepts them; closing it declines them. Reviewers can do that on the host, or with `homeostat review` (`list`, `show`, `merge`, `close --reason`), which works the same on GitHub and Bitbucket and is what `/homeostat:review` uses.
+4. **Opens one daily PR** with the merged lessons, each decision explained in the body, and merges it. Its commits are marked `[skip ci]`, since the branch is gone before a pipeline could start; the merge commit on the base branch is not, so the base branch is still validated.
+5. **Opens one review PR** for the middle band, after every developer's daily PR has merged, so it starts level with the base branch, and requests the area's owners as reviewers (on Bitbucket the token needs `read:workspace` to find them by nickname). Merging it accepts them; closing it declines them. Reviewers can do that on the host, or with `homeostat review` (`list`, `show`, `merge`, `close --reason`), which works the same on GitHub and Bitbucket and is what `/homeostat:review` uses.
 6. **Opens one dispute PR per flagged rule.** A flag takes the rule out of sessions at once; the PR proposes a fix drafted from the flags (a renamed helper, a moved file), keeping the parts nobody disputed. Merging puts it back in force; closing retires the rule.
 7. **Records** the decisions on the `homeostat/state` branch. Developers' sessions pick them up and tell them, and the dashboard's Automation page shows them.
 
 `--dry-run` prints every decision and writes nothing. `--no-reviews` skips the model and decides pending lessons only; dispute PRs then propose retiring the rule. Weights and thresholds: `scoring.confidence` ([config](config.md)). If Slack is set up, the run posts the review queue each morning and repeats lessons waiting more than 2 days.
 
-Protect the base branch and let only the daily run's token bypass it (`init` prints how). If the host refuses the merge, the daily PR stays open for a reviewer.
+Protect the base branch and let only the daily run's token bypass it (`init` prints how). If the host refuses the merge, the daily PR stays open for a reviewer, with a commit that lets its pipeline run.
+
+In a KB with topic files, review PRs that share a file conflict once one of them merges. `homeostat review merge` rebuilds such a PR on the base branch, adding its rules beside the ones already there, waits until the host shows the rebuilt commit (nudging Bitbucket, which can miss a force push, with an ordinary one), and merges it.
 
 ### Lessons from reviews
 

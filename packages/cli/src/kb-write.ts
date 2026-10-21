@@ -81,7 +81,7 @@ export function rebuildOnBase(
   root: string,
   base: string,
   branch: string,
-): { rebuilt: true } | { rebuilt: false; reason: string } {
+): { rebuilt: true; sha: string } | { rebuilt: false; reason: string } {
   const B = `refs/remotes/origin/${base}`;
   const S = `refs/remotes/origin/${branch}`;
   git(root, "fetch", "--quiet", "origin", `+refs/heads/${base}:${B}`, `+refs/heads/${branch}:${S}`);
@@ -120,8 +120,23 @@ export function rebuildOnBase(
     "origin",
     `refs/heads/${tmp}:refs/heads/${branch}`,
   );
+  const sha = git(root, "rev-parse", tmp) ?? "";
   git(root, "branch", "-D", tmp);
   return pushed === undefined
     ? { rebuilt: false, reason: `could not push the rebuilt ${branch}` }
-    : { rebuilt: true };
+    : { rebuilt: true, sha };
+}
+
+/**
+ * Pushes an empty commit on top of `sha` to `branch`, without force. Bitbucket can miss a force
+ * push for minutes and keep judging a PR's old commit; an ordinary push makes it look again.
+ */
+export function nudgeBranch(root: string, branch: string, sha: string): string | undefined {
+  const tree = git(root, "rev-parse", `${sha}^{tree}`);
+  if (!tree) return undefined;
+  const next = git(root, "commit-tree", tree, "-p", sha, "-m", "homeostat: refresh the PR");
+  if (!next) return undefined;
+  return git(root, "push", "--quiet", "origin", `${next}:refs/heads/${branch}`) === undefined
+    ? undefined
+    : next;
 }

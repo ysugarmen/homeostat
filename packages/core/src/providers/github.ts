@@ -229,11 +229,20 @@ export class GitHubProvider implements Provider {
     );
   }
 
-  async mergePullRequest(repo: RepoRef, pullRequestId: number): Promise<void> {
+  async mergePullRequest(
+    repo: RepoRef,
+    pullRequestId: number,
+    opts: { message?: string } = {},
+  ): Promise<void> {
     await requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls/${pullRequestId}/merge`, {
       method: "PUT",
       headers: this.headers(),
-      body: { merge_method: "squash" },
+      body: {
+        merge_method: "squash",
+        ...(opts.message
+          ? { commit_title: `${opts.message} (#${pullRequestId})`, commit_message: "" }
+          : {}),
+      },
     });
   }
 

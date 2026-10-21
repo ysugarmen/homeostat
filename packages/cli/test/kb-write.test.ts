@@ -2,8 +2,15 @@ import { execFileSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { formatTopicFile, parseEntry, parseTopicFile, ruleSection } from "@homeostat/core";
+import {
+  formatTopicFile,
+  type Provider,
+  parseEntry,
+  parseTopicFile,
+  ruleSection,
+} from "@homeostat/core";
 import { describe, expect, test } from "vitest";
+import { runCli } from "../src/cli.ts";
 import { rebuildOnBase } from "../src/kb-write.ts";
 
 const starter = new URL("../../../examples/starter-kb", import.meta.url).pathname;
@@ -55,7 +62,7 @@ describe("rebuildOnBase", () => {
     t.g("commit", "-qam", "a daily PR merged");
     t.g("push", "-q", "origin", "main");
 
-    expect(rebuildOnBase(t.dir, "main", branch)).toEqual({ rebuilt: true });
+    expect(rebuildOnBase(t.dir, "main", branch)).toMatchObject({ rebuilt: true });
     t.g("fetch", "-q", "origin");
     expect(ids(t.g("show", `origin/${branch}:${HTTP}`))).toEqual(["a-rule", "b-rule", "c-rule"]);
     // The branch now sits on top of main, so the host can merge it.
@@ -82,5 +89,71 @@ describe("rebuildOnBase", () => {
     });
     t.g("fetch", "-q", "origin");
     expect(t.g("rev-parse", `origin/${branch}`)).toBe(before);
+  });
+});
+
+describe("homeostat review merge on a host that lags a force push", () => {
+  test("waits for the rebuilt commit, nudges the host with an ordinary push, then merges", async () => {
+    const t = kb();
+    const config = join(t.dir, "homeostat.yaml");
+    writeFileSync(config, `${readFileSync(config, "utf8")}\ntopics:\n  http: HTTP calls\n`);
+    t.g("commit", "-qam", "topics");
+    t.g("push", "-q", "origin", "main");
+    const branch = "homeostat/review-lee-2026-10-20";
+    t.g("checkout", "-q", "-b", branch);
+    t.write(t.section("a-rule"), t.section("b-rule"));
+    t.g("commit", "-qam", "lee's lesson");
+    t.g("push", "-q", "origin", branch);
+    const stale = t.g("rev-parse", "HEAD");
+    t.g("checkout", "-q", "main");
+    t.write(t.section("a-rule"), t.section("c-rule"));
+    t.g("commit", "-qam", "a daily PR merged");
+    t.g("push", "-q", "origin", "main");
+
+    // Like Bitbucket this morning: a force push goes unseen, an ordinary push is noticed.
+    const tip = () => t.g("ls-remote", "origin", `refs/heads/${branch}`).split(/\s/)[0] ?? "";
+    const message = (sha: string) => t.g("log", "-1", "--format=%s", sha);
+    let lookups = 0;
+    const merged: number[] = [];
+    const provider = {
+      kind: "bitbucket",
+      getPullRequest: async () => {
+        lookups++;
+        t.g("fetch", "-q", "origin");
+        const now = tip();
+        const seen = message(now) === "homeostat: refresh the PR" ? now : stale;
+        return {
+          id: 5,
+          title: "homeostat: 1 lesson to review · lee · 2026-10-20",
+          url: "https://bitbucket.org/acme/team-kb/pull-requests/5",
+          author: { id: "ci" },
+          sourceBranch: branch,
+          targetBranch: "main",
+          body: "",
+          state: "open",
+          createdAt: "2026-10-20T06:00:00Z",
+          reviewers: [],
+          conflicts: seen === stale,
+          headSha: seen,
+        };
+      },
+      mergePullRequest: async (_r: unknown, id: number) => {
+        merged.push(id);
+      },
+    } as unknown as Provider;
+    let out = "";
+    const code = await runCli(["node", "homeostat", "review", "merge", "5", "--dir", t.dir], {
+      stdout: (s) => (out += s),
+      stderr: (s) => (out += s),
+      color: false,
+      env: {},
+      provider,
+      sleep: async () => {},
+    });
+    expect(out).toContain("rebuilt #5 on main");
+    expect(code).toBe(0);
+    expect(merged).toEqual([5]);
+    expect(message(tip())).toBe("homeostat: refresh the PR");
+    expect(lookups).toBeGreaterThan(2);
   });
 });
