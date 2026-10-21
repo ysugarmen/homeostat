@@ -1,5 +1,7 @@
 # Execution plan
 
+> **Historical.** Written while building 0.1 (October 2026) and kept as the record of how Homeostat was planned. For how it works today, see [architecture.md](architecture.md) and the [guide](index.md); where they disagree with this page, they win.
+
 This tab turns the design doc into an ordered list of steps. Every step has a **deliverable** and a **done when** test; a box gets ticked only when the test is true. We work through it one step at a time: pick the next unticked step, draft it together, verify, tick, move on. Weeks are a guide for a single engineer at roughly half time; stretch them, don't skip steps.
 
 ## Design constraint: zero per-machine maintenance

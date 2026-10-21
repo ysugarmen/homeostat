@@ -1,5 +1,7 @@
 # homeostat — Market Research & Design Doc
 
+> **Historical.** Written while building 0.1 (October 2026) and kept as the record of how Homeostat was planned. For how it works today, see [architecture.md](architecture.md) and the [guide](index.md); where they disagree with this page, they win.
+
 Oct 13, 2026
 
 > The public name is **Homeostat** (see *Naming*). Where this doc and [execution-plan.md](execution-plan.md) disagree, the execution plan wins.

@@ -18,7 +18,7 @@ Run the CLI from source with `node packages/cli/bin/homeostat.js <command>`; `ex
 
 | Package | What it is |
 | --- | --- |
-| `packages/core` | Schema, validation, scoring, selection, the agents (curator, deep dive), git-host providers. Pure where possible. |
+| `packages/core` | Schema, validation, scoring, selection, topic files and repo layout, the agents (daily-run drafting, deep dive, bootstrap), git-host providers. Pure where possible. |
 | `packages/cli` | The `homeostat` command. Thin: it reads files, calls core, prints. |
 | `packages/mcp` | The MCP server. |
 | `packages/dashboard` | The local dashboard: server-rendered HTML, no framework. |

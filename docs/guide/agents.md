@@ -22,14 +22,14 @@ In a KB with topic files, review PRs that share a file conflict once one of them
 
 ### Lessons from reviews
 
-The daily run reads pull requests merged in `sources.repos` since its last run (`homeostat curate` does the same on its own). For each review thread that:
+The daily run reads pull requests merged in the KB's code repos (`repos`, or `sources.repos` in a KB without repo folders) since its last run (`homeostat curate` does the same on its own). For each review thread that:
 - was written by a team member
 - was followed by a code change
 - is not already in the KB
 
 it does three things:
 
-1. **Redacts secrets** from the thread, then asks the model whether it holds a lasting rule, and drafts one.
+1. **Redacts secrets** from the thread, then asks the model whether it holds a lasting rule, and drafts one, with its area and its topic from the repo's list. The lesson is filed under the repo the PR came from. When no topic fits, it goes to `general` with a suggested topic, listed in the PR for you to add to `homeostat.yaml` if it is worth one.
 2. **Checks documents.** If a team document covers the file, it asks whether the thread makes one of its sections out of date, and proposes a one-section patch.
 3. **Validates the draft**, including the secret and risky-content checks.
 
@@ -49,7 +49,7 @@ Nothing is scheduled there. The Claude Code plugin's hooks run `homeostat sync` 
 
 Its changes go in one PR. `--no-llm` skips the model.
 
-## Seed (by hand only) {#seed}
+## Bootstrap and seed (by hand only) {#seed}
 
 `homeostat seed <checkout> --area <area> --owner <member>` drafts first documents from a scan of one local repository: `architecture`, `conventions` and `cross-repo` from the file tree and key files (README, manifests, build files), `data` from schemas, ORM files and migrations, `infrastructure` from charts, Terraform, manifests and pipelines. Secrets files are never read, `sources.exclude.paths` applies and the rest is redacted. `seed` and [`bootstrap`](bootstrap.md), which runs it for every repo along with importing their existing docs, are the only commands that send code to a model, so nothing schedules them. `--dry-run` prints everything it would send. Each document arrives as its own PR, every section marked `source=seed` with the model's confidence.
 
@@ -80,8 +80,8 @@ Each model call is logged locally by size, never content. Details: [runtimes](..
 
 | Where | How |
 | --- | --- |
-| GitHub Actions | `init` writes `homeostat-curator.yml` (the daily run), `homeostat-deep-dive.yml` and `homeostat-digest.yml` |
-| Bitbucket Pipelines | `init` writes custom pipelines; schedule them under Repository settings → Pipelines → Schedules. The token is the secured variable `HOMEOSTAT_BITBUCKET_TOKEN`: an access token, or an Atlassian API token with its account's email in `HOMEOSTAT_BITBUCKET_EMAIL` |
+| GitHub Actions | `init` writes `homeostat-curator.yml` (the daily run; the name is kept from 0.1), `homeostat-deep-dive.yml` and `homeostat-digest.yml` |
+| Bitbucket Pipelines | `init` writes custom pipelines (`homeostat-curator` runs the daily run, a name kept from 0.1 so existing schedules keep working); schedule them under Repository settings → Pipelines → Schedules. The token is the secured variable `HOMEOSTAT_BITBUCKET_TOKEN`: an access token, or an Atlassian API token with its account's email in `HOMEOSTAT_BITBUCKET_EMAIL` |
 | One shared box | `homeostat up` runs the daily run and the deep dive on their cron schedules and the digest on `digestDay`, and serves the dashboard. The Docker image does the same |
 
 Check a setup with `homeostat doctor --security`.

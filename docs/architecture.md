@@ -1,10 +1,10 @@
 # Homeostat: technical design
 
-As of 2026-10-15, version 0.1.0. For the threat model see [security.md](security.md); for every config key, [guide/config.md](guide/config.md).
+As of 2026-10-21, version 0.2.1. For the threat model see [security.md](security.md); for every config key, [guide/config.md](guide/config.md).
 
 ## Overview
 
-Homeostat turns a team's accepted code-review feedback into short, scored rules and sectioned team documents. It stores them as Markdown in a git repo, changes them only by pull request, and gives every coding agent the ones that apply to the files it is touching. Version 0.1.0 is on npm as `homeostat`, Apache-2.0, TypeScript on Node 22.18+.
+Homeostat turns a team's accepted code-review feedback into short, scored rules and sectioned team documents. It stores them as Markdown in a git repo, changes them only by pull request, and gives every coding agent the ones that apply to the files it is touching. It is on npm as `homeostat`, Apache-2.0, TypeScript on Node 22.18+. 0.2 added knowledge bases for several code repos, rules grouped into topic files, and `homeostat bootstrap`.
 
 **Problem.** Reviewers teach agents the same lessons repeatedly, because agent memory is per session, per person and per tool. Claude Code's own memory is unreviewed, not shared across tools, and has no provenance.
 
@@ -15,7 +15,7 @@ Homeostat turns a team's accepted code-review feedback into short, scored rules 
 - Deliver them to Claude Code, any MCP client, Cursor, Copilot and AGENTS.md, within a token budget.
 - Make the data path auditable enough for a security review.
 
-**Non-goals:** a hosted service, a vector database, per-laptop daemons, reading source code during normal operation.
+**Non-goals:** a hosted service, a vector database, per-laptop daemons, reading source code during normal operation (only `bootstrap` and `seed`, run by hand, read it).
 
 **Hard constraints**
 
@@ -38,7 +38,7 @@ flowchart TB
   end
   model["Claude model<br/>API, Bedrock or Vertex<br/>redacted threads only"]
   slack["Slack<br/>webhook, no model"]
-  kb[("KB repo · Markdown in git<br/>homeostat.yaml<br/>knowledge/area/*.md rules<br/>knowledge/area/docs/ documents")]
+  kb[("KB repo · Markdown in git<br/>homeostat.yaml<br/>knowledge/repo/area/topic.md rules<br/>knowledge/repo/area/docs/ documents<br/>knowledge/core/ shared")]
   subgraph dev["Developer machine"]
     plugin["Claude Code plugin<br/>hooks inject rules<br/>skills: learn, explain"]
     mcp["MCP server<br/>any MCP client<br/>context, docs, read"]
@@ -57,7 +57,7 @@ The daily run sends the model redacted review threads, never code. Sessions get 
 
 | Package | Runs where | Role |
 | --- | --- | --- |
-| `@homeostat/core` | everywhere | pure logic: schema, validation, scoring, selection, scanners, curator, deep dive, providers, export |
+| `@homeostat/core` | everywhere | pure logic: schema, validation, scoring, selection, scanners, the daily run's drafting, deep dive, bootstrap, providers, export |
 | `homeostat` (CLI) | CI, shared box, laptops | commands, hook handlers, git and PR plumbing |
 | `@homeostat/mcp` | laptops (stdio) | MCP server over the KB |
 | `@homeostat/dashboard` | loopback on one machine | metrics and settings forms |
@@ -85,7 +85,7 @@ The KB is a git repo: `homeostat.yaml` at the root, rules under `knowledge/<area
 
 **Scoring** is computed, never hand-set: +3 review feedback followed by a code change, +2 written by hand, +1 senior author, −2 per conflict, −2 per open flag. All weights live in `scoring.weights`. The daily run decides with a separate 0–100 **confidence** (see [Automation](#automation)).
 
-**Config** (`homeostat.yaml`, zod-validated) covers team members and teams, areas, scoring and auto-merge gates, agent runtimes and schedules, token budgets, notifications, security switches and git sources.
+**Config** (`homeostat.yaml`, zod-validated) covers team members, teams and named reviewers, the code repos with their areas and topics (or one set of areas), scoring and auto-merge gates, agent runtimes and schedules, token budgets, notifications, security switches and git sources.
 
 ## Capture
 
@@ -93,18 +93,18 @@ Knowledge enters by four paths. All of them reach `main` only through the daily 
 
 **From reviews** (part of `homeostat daily`; `homeostat curate` runs the same pipeline on its own):
 
-1. List PRs merged in `sources.repos` within `lookbackHours` (26). Skip PRs marked `homeostat:skip`, excluded repos, and authors who opted out.
+1. List PRs merged in the KB's code repos (`repos`, or `sources.repos` in a KB without repo folders) within `lookbackHours` (26). Skip PRs marked `homeostat:skip`, excluded repos, and authors who opted out.
 2. Group review comments into threads. Keep a thread only if a team member wrote it, a commit followed it, it isn't in an excluded path, and it isn't already cited by a rule or document section.
-3. Redact secrets from the thread, then ask the model for one rule (structured output: keep, title, rule, why, area).
+3. Redact secrets from the thread, then ask the model for one rule (structured output: keep, title, rule, why, area, and topic from the repo's list, or a suggested new one).
 4. If a document's scope covers the commented file, ask for at most one section patch (replace or append) with `source=curator` provenance.
 5. Build the entry, compute its score, and validate it against the whole KB. Risky-content findings keep a draft as a flagged candidate; any other error drops it.
-6. File the lesson under the developer whose PR it was, and score it with the rest of their lessons.
+6. File the lesson under the repo the PR came from and the developer whose PR it was, and score it with the rest of their lessons. A suggested new topic sends it to a reviewer, filed under `general`.
 
 **By hand.** `homeostat learn` writes a lesson to the clone's git-ignored `.homeostat/pending/`, where it applies to that developer's sessions at once. Inputs: flags, prompts or a review-comment URL. The URL route fetches the comment and detects whether code changed after it. `learn --doc <area>/<topic> --section <id>` patches one document section. `/homeostat:learn` drafts from a session and asks before writing.
 
 **Handoff notes.** The plugin's Stop hook counts edits in a session. After `handoff.minEdits` (5), it asks the agent once for a note, saved as a pending lesson with `--source agent-handoff`.
 
-**Seed** (`homeostat seed <checkout>`, manual only). It scans a local repo's tracked paths and key files (≤400 paths, 6 KB per file, 60 KB total), redacts secrets, and drafts architecture, conventions or cross-repo documents, one PR each, every section marked `source=seed`.
+**Bootstrap and seed** (manual only; the only paths that read source code). `homeostat seed <checkout>` drafts one repo's documents, each topic from its own file picker: architecture, conventions and cross-repo from the tree and key files; data from schema dumps, ORM files found by a table definition in their text, and the newest migrations of every history; infrastructure from charts, Terraform, manifests, Dockerfiles and CI pipelines. Terraform state, env files, keys, secrets folders, Secret manifests, tests and files with three or more secret findings are never read; the rest is cut to size and redacted. `homeostat bootstrap` runs this for every repo from its local checkout, imports the repo's existing Markdown docs without a model, previews every file and the cost, asks before the first call, and opens one PR per repo with drafted sections marked `source=bootstrap`.
 
 **Section patches** are byte-safe. `applySectionPatch` replaces, appends to or adds exactly one section, keeps every other byte, bumps `updated`, and refuses a patch that would break the document.
 
@@ -119,7 +119,8 @@ Every change passes `homeostat validate`, which CI runs on each KB pull request.
 | Secret scanner | cloud, git-host, Slack and AI keys, JWTs, private keys, credentialed URLs, passwords, high-entropy strings | error |
 | Emails | personal data in rule text | warning |
 | Risky content | piped shell, unlisted domains, credential handling, disabling security checks, injection phrasing, destructive commands, hidden text | error until `riskReviewedBy` |
-| Provenance | a pr-feedback URL outside `sources.repos` | error |
+| Provenance | a pr-feedback URL outside the KB's code repos | error |
+| Topic files | a topic missing from the config, duplicate ids, unsorted sections | error or warning |
 | Documents | duplicate headings or ids, repeated dates, wrapped or unclosed fences, conflict markers, sections over 400 words | error or warning |
 | Conflicts | duplicate ids, near-duplicates, declared contradictions | error or warning |
 
@@ -153,17 +154,19 @@ A long session gets only the rules that are new since its start, on the next pro
    - bonuses: area owner, specific (paths, code, identifiers), a clear title, repeated by others in the run, an optional model rating
    - penalties: open flags, conflicts, a vague title
 3. decides each lesson:
-   - merge at 70 or more (80 for `core` or a `**` scope)
+   - merge at `accept` (70) or more, `coreAccept` (80) for `core` or a `**` scope
    - decline below 35, or on a validation error, or as a duplicate (which reconfirms the original)
    - otherwise review, and always for risky content, conflicts, documents and areas outside `scoring.autoMerge`
    - a flag merges at once (the rule becomes `disputed`) and a reviewer resolves it, in a dispute PR (below)
-4. opens **one daily PR** per developer with the merged lessons and reconfirmations, every decision and its score breakdown in the body, validates the whole KB, and squash-merges it. If the host refuses the merge (branch protection, a failing check), the PR stays open and its lessons count as review
-5. opens one **review PR** per developer for the middle band, and requests the area owners as reviewers (the owning team, else members with that area, else seniors and leads)
+4. opens **one daily PR** per developer with the merged lessons and reconfirmations, every decision and its score breakdown in the body, validates the whole KB, and squash-merges it. Its commits carry `[skip ci]`, since the branch is deleted before a pipeline could start; the squash commit has its own message, so the base branch still runs CI. If the host refuses the merge (branch protection, a failing check), the PR stays open with a plain commit that lets its pipeline run, and its lessons count as review
+5. after every developer's daily PR has merged, opens one **review PR** per developer for the middle band, so it starts level with the base branch, and requests reviewers: `team.reviewers` when set (also mentioned in the morning Slack notice), else the area's owning team, else members with that area, else seniors and leads
 6. opens one **dispute PR** (`homeostat/review-dispute-<id>-<date>`) per disputed rule, with a fix the model drafts from the flags, or the rule retired when no fix can be drafted. Merging puts the fixed rule back in force; closing retires the rule
 7. settles review PRs from earlier runs: merged by a reviewer means merged, closed means declined (for a dispute PR, the rule is retired through the next daily PR)
 8. writes decisions, heartbeats and the run report to `homeostat/state`, and posts the review queue to Slack, repeating lessons that have waited more than 2 days
 
 All thresholds and weights are in `scoring.confidence`. `--dry-run` decides and prints without writing anything.
+
+**Merging review PRs.** In a KB with topic files, review PRs that add sections to the same file conflict once one of them merges. `homeostat review merge` rebuilds such a PR on the base branch, merging topic files section by section, waits until the host shows the rebuilt commit (an ordinary push nudges Bitbucket, which can miss a force push), and merges it. Bitbucket merges run asynchronously and are polled. A PR whose same rule changed on both sides is left for a person.
 
 **Monitoring.** The dashboard's Automation page reads the clone's copy of `homeostat/state`, with no network call. It shows the last run, lessons decided per run, the review queue (overdue items marked), and each developer's sync health: last heartbeat, clone behind, pending count, version, and "not syncing" after 48 hours.
 
@@ -181,10 +184,10 @@ Agents never read the stored files. They get a rendered view: no frontmatter, on
 
 1. Find the KB from the plugin's `kb_dir` setting, then `$HOMEOSTAT_DIR`, then the current repo.
 2. Collect touched paths from `git status` and recent commits.
-3. Select accepted rules whose scope matches, minus rejected decisions and other teams' team-only areas. Rank by score, then path match over global, then last confirmed.
-4. Fit them into `distribution.tokenBudget` (2,000). Each rule goes in whole, else rule-only, else dropped, capped at 10,000 characters.
+3. Select accepted rules for the session's repo (found from the checkout's `origin` remote, else its folder name) plus the shared ones, minus rejected decisions and other teams' team-only areas. Rank them in tiers: rules scoped to the touched files, then global rules that name a touched file, then global rules that name no file, then those naming other files; by score within a tier.
+4. Fit them into 80% of `distribution.tokenBudget` (2,000), within 10,000 characters overall, with room kept for the documents. Each rule goes in whole, else rule-only, else to the list of the rest: every remaining topic with its count, then titles while they fit, for the agent to fetch with `explain` or `context`.
 5. Group by kind under one guidance line each, and add the context header (rules never override the user or safety).
-6. Add a documents index and the sections that name a touched path, within `docTokenBudget` (1,000).
+6. Add a documents index (every document by title, then section ids while they fit) and the sections that name a touched path, within `docTokenBudget` (1,000).
 7. Log an `injection` event.
 
 **MCP server** (`homeostat mcp`, stdio) re-reads the KB on every call:
@@ -218,7 +221,7 @@ The main threat is knowledge poisoning: one merged rule reaches every developer'
 | Data | Leaves the network? | Control |
 | --- | --- | --- |
 | Review threads (comment, PR title, file, line) | to the chosen model runtime | secrets redacted first; `--show-prompts` prints all, sends nothing; exclusions, skip marker, opt-out |
-| Source code | only via manual `seed` | dry run; exclusions; redaction; never scheduled |
+| Source code | only via manual `bootstrap` and `seed` | dry run with every file and the cost; never-read list; exclusions; redaction; asks first; never scheduled |
 | KB content | to sessions and exports | team-only areas; public-repo guard on export |
 | Local events (`.homeostat/events.db`) | never | git-ignored; size-only model-call logs; pruned after 90 days |
 | Tokens | stay in CI secrets | never in files, prompts or logs; `doctor` checks their reach |
@@ -262,7 +265,7 @@ The default model is `claude-opus-5-5` at `medium` effort, configurable per agen
 Homeostat runs in every developer's session and in CI with tokens, so a compromised release is a top-tier risk. Releases are pinned, signed and small. See [releasing.md](releasing.md).
 
 - **One exact version everywhere.** `scripts/version.mjs` sets it in every package, the plugin manifest, core's `VERSION`, the skills and docs. A test fails on drift or on any floating range. The plugin's npx fallback runs its own version, and `init` writes the exact version into CI.
-- **Provenance.** A `v*` tag runs `release.yml` behind a required-reviewer `npm` environment. It checks the tag matches the version, runs the full check and `pnpm audit`, packs four packages, builds a CycloneDX SBOM, publishes with npm trusted publishing (OIDC, no stored token) and SLSA provenance, and attaches tarballs and SBOM to a GitHub release. 0.1.0 shipped this way on 2026-10-14.
+- **Provenance.** A `v*` tag runs `release.yml` behind a required-reviewer `npm` environment. It checks the tag matches the version, runs the full check and `pnpm audit`, packs four packages, builds a CycloneDX SBOM, publishes with npm trusted publishing (OIDC, no stored token) and SLSA provenance, and attaches tarballs and SBOM to a GitHub release. 0.1.0 shipped this way on 2026-10-14, and every release since.
 - **Runnable from source and from npm.** The bin runs TypeScript directly in a checkout (Node type stripping, `erasableSyntaxOnly`), and the compiled `dist/` when installed under `node_modules`.
 - **Few dependencies:** zod, yaml, commander, minimatch, js-tiktoken, `@anthropic-ai/sdk`, the MCP SDK, plus optional Bedrock and Vertex SDKs. Renovate and pnpm `minimumReleaseAge` wait three days before taking a new version, and CI actions are pinned to commit SHAs.
 
@@ -284,6 +287,8 @@ Homeostat runs in every developer's session and in CI with tokens, so a compromi
 | Agents in CI, not on laptops | no daemons, one place holding tokens | the team gets lessons daily; the author gets them at once |
 | Sync on session hooks | no laptop scheduler or per-developer setup; works when laptops are closed at 06:00 | a developer with no sessions doesn't sync (the dashboard shows it) |
 | Decide by confidence, humans only for the middle band | no per-lesson approvals; the role of whoever vouches for a lesson counts | relies on the weights and branch protection being right |
+| Repo folders in one KB | a team owning several repos keeps one KB; globs that collide across repos (`services/**`) stay apart | areas are named `<repo>/<area>`; a KB without folders keeps working |
+| Rules grouped into topic files | a few files per area instead of hundreds; the drafter picks from a fixed topic list | PRs touching one file conflict, so they are rebuilt section by section |
 | Section-level document edits | whole-file rewrites caused most of the pilot's document damage | bigger changes take several patches |
 | TypeScript, one pnpm monorepo | one language for CLI, MCP, plugin and dashboard; npx install | no Python SDK users |
 | Default runtime `api`, cloud runtimes optional | team-safe terms; data can stay in AWS or Google Cloud | three code paths to keep working |
@@ -292,7 +297,7 @@ Homeostat runs in every developer's session and in CI with tokens, so a compromi
 
 - Should `scope` accept language or framework selectors (`lang:ts`) as well as path globs?
 - Should the confidence weights tune themselves from reviewers' decisions on the middle band?
-- Should the deep dive re-check document sections against code? That needs code access, which only `seed` has today.
+- Should the deep dive re-check document sections against code? That needs code access, which only `seed` and `bootstrap` have today.
 - The event log is per machine, so usage and decay reflect one developer. Should there be an opt-in shared aggregate?
 - `scoring.reviewCadence` is defined but not used yet.
 - Not yet verified live: Bedrock and Vertex runs, a real Slack digest, and Cursor and Claude Desktop checks.

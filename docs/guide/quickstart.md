@@ -13,7 +13,7 @@ A handle is your GitHub login or, on Bitbucket, your Bitbucket nickname (Persona
 
 `init` writes `homeostat.yaml`, `knowledge/core/`, and CI jobs for your git host (GitHub Actions or Bitbucket Pipelines):
 - validation on every PR
-- the daily curator and the weekly deep dive
+- the daily run and the weekly deep dive
 - the weekly digest
 
 It also prints which tokens to create and how to protect the branch.

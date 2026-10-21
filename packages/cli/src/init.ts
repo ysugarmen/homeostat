@@ -259,7 +259,8 @@ jobs:
 };
 
 const TOKEN_HELP: Record<Host, string> = {
-  bitbucket: `The curator reads PRs from your code repos and opens one PR on this repo each day.
+  bitbucket: `The daily run (the homeostat-curator pipeline) reads PRs from your code repos and opens one
+PR per developer on this repo each day.
 It needs one token that reaches all of them: a workspace access token on Bitbucket Premium, or
 on other plans an API token of a bot account in the workspace (a repository access token reaches
 one repo only). Give it:
@@ -271,7 +272,8 @@ the email of the account it belongs to as HOMEOSTAT_BITBUCKET_EMAIL. Add a Claud
 as ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-commercial use
 only; a team KB needs a Console key or a Team/Enterprise plan.) Then schedule the homeostat-curator pipeline daily, and homeostat-deep-dive and homeostat-digest
 weekly, under Repository settings > Pipelines > Schedules, and add a sources section to homeostat.yaml.`,
-  github: `The curator reads PRs from your code repos and opens one PR on this repo each day.
+  github: `The daily run (homeostat-curator.yml) reads PRs from your code repos and opens one PR per
+developer on this repo each day.
 The workflow's GITHUB_TOKEN covers this repo. To read other repos, create a fine-grained
 token or GitHub App with:
   code repos:  Pull requests: read, Contents: read
@@ -283,7 +285,7 @@ a team KB needs a Console key or a Team/Enterprise plan.) Then add a sources sec
 
 /**
  * Auto-merge is safe only if nothing else can merge unreviewed: protect the base branch, require
- * the validate check and a CODEOWNERS approval, and let only the curator's token skip the approval.
+ * the validate check and a CODEOWNERS approval, and let only the daily run's token skip the approval.
  */
 const PROTECTION_HELP: Record<Host, string> = {
   bitbucket: `Protect main (Repository settings > Branch restrictions and Merge checks):
@@ -291,12 +293,12 @@ const PROTECTION_HELP: Record<Host, string> = {
     unresolved merge checks". Only Bitbucket Premium enforces merge checks; on other plans they
     are advice, so keep the KB's writers few.
   - homeostat codeowners writes .bitbucket/CODEOWNERS, which adds each area's owners as reviewers.
-  - let only the curator's token merge without an approval. It merges an entry unreviewed only
+  - let only the daily run's token merge without an approval. It merges an entry unreviewed only
     when every gate in scoring.autoMerge passes, after validating the whole knowledge base itself;
     if Bitbucket refuses the merge, those lessons wait for a reviewer instead.`,
   github: `Protect main (Settings > Rules > Rulesets, targeting the default branch):
   - require a pull request with 1 approval, review from Code Owners, and the "validate" check
-  - add the curator's GitHub App (or token user) to the bypass list. It merges an entry unreviewed
+  - add the daily run's GitHub App (or token user) to the bypass list. It merges an entry unreviewed
     only when every gate in scoring.autoMerge passes, after validating the whole knowledge base
     itself; everything else waits for a reviewer. Use the App or HOMEOSTAT_GITHUB_TOKEN, not the
     workflow's GITHUB_TOKEN: PRs opened with GITHUB_TOKEN do not trigger the validate check.`,

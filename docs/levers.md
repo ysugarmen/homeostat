@@ -1,5 +1,7 @@
 # Homeostat against Yegge's survival levers
 
+> **Historical.** Written while building 0.1 (October 2026) and kept as the record of how Homeostat was planned. For how it works today, see [architecture.md](architecture.md) and the [guide](index.md); where they disagree with this page, they win.
+
 Steve Yegge's *Software Survival 3.0* argues that software survives the agent era in proportion to (insight compression × substrate efficiency × broad utility × human coefficient) over (awareness cost + friction cost). This page checks Homeostat against each lever as built on 2026-10-14, and lists what is still open.
 
 ## 1. Insight compression

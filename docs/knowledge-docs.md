@@ -1,5 +1,7 @@
 # Knowledge documents and cross-team memory: pilot parity plan
 
+> **Historical.** Written while building 0.1 (October 2026) and kept as the record of how Homeostat was planned. For how it works today, see [architecture.md](architecture.md) and the [guide](index.md); where they disagree with this page, they win.
+
 **Status:** draft for review, 2026-10-14. The plan is Phase K in [execution-plan.md](execution-plan.md).
 
 Homeostat today holds one kind of knowledge: **atomic rules**. Each is one short, scored, reviewed instruction, matched to the files an agent touches. The pilot held mostly something else: **topic documents**, the team's living reference of how the system works. That includes architecture maps, service catalogs, cross-repo contracts, migrations in progress, legacy-to-replacement notes, tech-debt registers and domain guides, kept current by agents. That is the part teams lean on most, and the part to bring back.

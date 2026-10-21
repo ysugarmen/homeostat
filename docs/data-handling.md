@@ -6,7 +6,7 @@ What Homeostat reads, what leaves your network, where it goes, what it keeps, an
 
 | Part | Runs | Reads | Never reads |
 | --- | --- | --- | --- |
-| Curator | Your KB repo's CI, daily | Merged PRs in `sources.repos`: titles, review comments, the file and line they are on, and commit dates (to see whether code changed after a comment) | Source code, diffs, issues, CI logs. PR descriptions are only checked for the `homeostat:skip` marker, never sent anywhere |
+| Daily run | Your KB repo's CI, daily | Merged PRs in the KB's code repos (`repos`, or `sources.repos`): titles, review comments, the file and line they are on, and commit dates (to see whether code changed after a comment) | Source code, diffs, issues, CI logs. PR descriptions are only checked for the `homeostat:skip` marker, never sent anywhere |
 | Deep dive | Your KB repo's CI, weekly | The KB's own entries | Anything outside the KB repo |
 | `seed` and `bootstrap` (by hand only) | One person's terminal, when they run it | Local checkouts: the file tree, key files (README, manifests, build files), schema and migration files, deploy manifests and pipelines, minus `sources.exclude.paths`, with secrets redacted. `bootstrap` also copies the repo's existing Markdown docs, without a model | Terraform state, `.env` files, keys, Secret manifests, files full of credentials, tests; no database, cloud or cluster connections; it never runs on a schedule |
 | Session hooks, MCP server | Each developer's machine | KB files, and the paths of files changed in the current repo (`git status`, recent commits) | File contents, the conversation |
@@ -15,7 +15,7 @@ What Homeostat reads, what leaves your network, where it goes, what it keeps, an
 
 ## What leaves your network, and where to
 
-- **Review threads, to the model.** Only the daily run (and `curate`) and the deep dive call a model. They send a review thread (comment text, PR title, file path and line, area names) or entry text. Secrets are redacted first. Where it goes depends on `agents.runtime`: Anthropic's API, your own AWS (Bedrock) or Google Cloud (Vertex) account, or Claude Code's login. See [runtimes.md](runtimes.md).
+- **Review threads, to the model.** Only the daily run (and `curate`, which runs its drafting on its own), the deep dive and `migrate --topics` call a model; `migrate --topics` sends rule titles and text, once. They send a review thread (comment text, PR title, file path and line, area names) or entry text. Secrets are redacted first. Where it goes depends on `agents.runtime`: Anthropic's API, your own AWS (Bedrock) or Google Cloud (Vertex) account, or Claude Code's login. See [runtimes.md](runtimes.md).
 - **Code, only when someone runs `homeostat seed` or `homeostat bootstrap`.** They send selected files from local checkouts to draft first documents. `--dry-run` lists every file (and `--prompts` prints exactly what would be sent) and sends nothing; a real `bootstrap` asks before the first call. Nothing schedules them.
 - **API calls, to your git host.** These read PRs, and open and merge pull requests on the KB repo only. `export` and `doctor` also make one unauthenticated call to check whether a repo is public.
 - **Nothing else.** There is no telemetry and no Homeostat service. The hooks and MCP server make no network calls of their own. A background `homeostat sync`, started by the session hooks, fetches the KB repo and pushes your pending lessons plus a small heartbeat (your member id, KB commit, pending count, Homeostat version) to your `candidates/<member>` branch on the KB repo's origin, with your own git credentials. The dashboard shows teammates' heartbeats as sync health.
@@ -32,14 +32,14 @@ What Homeostat reads, what leaves your network, where it goes, what it keeps, an
 
 | To stop | Do this |
 | --- | --- |
-| Reading one repo | Remove it from `sources.repos`, or add it to `sources.exclude.repos` |
+| Reading one repo | Remove it from `repos` (or `sources.repos`), or add it to `sources.exclude.repos` |
 | Reading comments on sensitive files | Add globs to `sources.exclude.paths` |
 | Reading one pull request | Mark it `homeostat:skip` (a GitHub label, or in the title or description) |
 | Reading one person's PRs and comments | Set `optOut: true` on that member |
-| Sending anything to a model | Disable `agents.curator` and `agents.deepDive`, or run `deep-dive --no-llm`; don't run `seed` or `bootstrap` |
+| Sending anything to a model | Disable `agents.curator` (the daily run's drafting) and `agents.deepDive`, run `daily --no-reviews` and `deep-dive --no-llm`; don't run `seed`, `bootstrap` or `migrate --topics` |
 | Sending code to a model | Don't run `seed` or `bootstrap` (nothing else sends code) |
 | Syncing from a laptop | Set `HOMEOSTAT_NO_SYNC=1` in the environment; your lessons then reach the team only when you run `homeostat sync` yourself |
-| Seeing what would be sent | `homeostat curate --show-prompts` (sends nothing) |
+| Seeing what would be sent | `homeostat curate --show-prompts` for review threads, `bootstrap --dry-run --prompts` for code (both send nothing) |
 | Entries merging without review | `scoring.autoMerge.enabled: false`, or `excludeAreas` for some areas |
 | Agents saving entries | Leave `security.mcpWrites` off (the default) |
 | An area's rules spreading | Add it to `security.teamOnlyAreas`: never exported, and only its members' sessions see it |

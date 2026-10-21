@@ -13,7 +13,7 @@ The Homeostat knowledge base as an MCP server, so any agent can read and add to 
 | `read` | Reads a document, or one section of it, with where each section came from |
 | `report` | Knowledge base health over recent days |
 
-`learn` and `flag` are off unless the KB sets `security.mcpWrites: true`, and then each session may make at most `security.mcpWriteLimit` (5) writes. An agent can be steered by text it reads, so by default it suggests and a person saves (`/homeostat:learn`, `homeostat learn`). Rules in `security.teamOnlyAreas` are only returned to members of that area.
+`learn` and `flag` are off unless the KB sets `security.mcpWrites: true`, and then each session may make at most `security.mcpWriteLimit` (5) writes. An agent can be steered by text it reads, so by default it suggests and a person saves (`/homeostat:learn`, `homeostat learn`). Rules in `security.teamOnlyAreas` are only returned to members of that area. In a KB for several repos, every tool sees the session's own repo (found from the git remote of the folder the session runs in) plus the shared rules and documents.
 
 Agents guess tool and argument names. Common guesses (`get_rules`, `remember`, `list`, `q`, `entry_id`, ...) are accepted and logged as desire paths in the KB's local event log (`.homeostat/events.db`); any other unknown tool is logged and answered with the real tool list and the closest match. `homeostat status` and the dashboard show them, so the common guesses can become real tools.
 

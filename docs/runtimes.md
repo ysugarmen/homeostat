@@ -1,6 +1,6 @@
 # Claude runtimes
 
-The curator and the deep dive call Claude. `agents.runtime` in `homeostat.yaml` picks how, which decides where review comments go and whose contract covers them. The plugin, hooks and MCP server never call a model, whatever the runtime.
+The daily run and the deep dive call Claude, and so do `bootstrap`, `seed` and `migrate --topics` when someone runs them. `agents.runtime` in `homeostat.yaml` picks how, which decides where review comments go and whose contract covers them. The plugin, hooks and MCP server never call a model, whatever the runtime.
 
 | Runtime | Where prompts go | Credentials | Use it when |
 | --- | --- | --- | --- |
@@ -31,8 +31,8 @@ Model names stay as they are (`claude-opus-5-5`); on Bedrock the `anthropic.` pr
 The cloud SDKs are optional, so teams on the default runtime don't install the AWS or Google libraries. Add the SDK to the CI command:
 
 ```sh
-npx --yes -p homeostat@<version> -p @anthropic-ai/bedrock-sdk@0.34 homeostat curate
-npx --yes -p homeostat@<version> -p @anthropic-ai/vertex-sdk@0.20 homeostat curate
+npx --yes -p homeostat@<version> -p @anthropic-ai/bedrock-sdk@0.34 homeostat daily
+npx --yes -p homeostat@<version> -p @anthropic-ai/vertex-sdk@0.20 homeostat daily
 ```
 
 Give the CI identity only what it needs: on AWS, `bedrock-mantle:CreateInference` on the model ARNs you use; on Google Cloud, the Vertex AI User role on the project. Prefer federated identities (GitHub OIDC to an IAM role or to workload identity) over stored keys.

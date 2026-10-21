@@ -30,15 +30,15 @@ It lists the open review PRs, plus any open daily PR the host refused to merge (
 
 `homeostat review show <n> --dir <kb>` shows the PR's table (each lesson with its decision, confidence and why it was not decided automatically), whether it merges cleanly, and the diff with the lessons themselves. For each lesson, show the title, rule, why, source (with link), author, confidence and the reason it waits, and point out anything that matters: a risky-content finding, a conflict with an existing rule, code it names that may not exist, a document section it changes. Then ask the user to choose for the whole PR:
 
-- **Merge:** `homeostat review merge <n> --dir <kb>`. Every lesson in it is accepted. If it conflicts with the base branch, the command does not merge and prints how to update the branch or close it; relay that, and do not try to resolve the conflict yourself. If the host refuses (for example, an approval is required), say why and point the user to the PR's link.
+- **Merge:** `homeostat review merge <n> --dir <kb>`. Every lesson in it is accepted. If it conflicts with the base branch and the KB groups rules into topic files, the command rebuilds the PR on the base branch (its rules are added beside the ones already there), waits for the host to catch up, and merges; that can take up to a minute. If it cannot rebuild (the same rule changed on both sides, or the KB has no topic files), it prints how to update the branch or close it; relay that, and do not try to resolve the conflict yourself. If the host refuses (for example, an approval is required), say why and point the user to the PR's link.
 - **Close:** `homeostat review close <n> --dir <kb> --reason "<their reason>"`. Every lesson in it is declined, with that reason posted on the PR.
-- **Keep some, drop others:** the user deletes the files they reject from the PR branch (on the host's web page, or in a checkout), then merges. Only the lessons still in the PR are accepted.
+- **Keep some, drop others:** the user deletes what they reject from the PR branch (on the host's web page, or in a checkout): the lesson's file, or in a topic file its `##` section, comment included. Then merge. Only the lessons still in the PR are accepted.
 - **Ask the author:** `homeostat review comment <n> --dir <kb> "<question>"`, and leave it open.
 - **Skip:** leave it for later.
 
 A lesson of kind `decision` with `adopted: false` is a record that the team considered a proposal and turned it down: its Rule is the proposal and its Why is why not. Merging it records the rejection, so agents stop proposing it; it never tells an agent to do the proposal. Describe it that way.
 
-Never merge or close without the user's choice for that PR. Do not edit lesson files yourself.
+Never merge or close without the user's choice for that PR, and run only the command for the choice they made. Do not edit lesson files yourself.
 
 ## 4. Finish
 

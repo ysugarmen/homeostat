@@ -1,25 +1,25 @@
 # Configuration: `homeostat.yaml`
 
-One file at the KB root. `homeostat validate` checks it, and the dashboard's Settings pages edit every key. Only `version`, `team` and `areas` are required; everything else has a default.
+One file at the KB root. `homeostat validate` checks it, and the dashboard's Settings pages edit every key. Only `version` and `team` are required; everything else has a default. A KB for one code repo lists its `areas`; a KB for several lists each repo under `repos`, with its own areas.
 
-## `version`, `team`, `teams`, `areas`
+## `version`, `team`, `teams`, `areas`, `repos`, `topics`
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `version` | (required) | Always `1` |
-| `team.members` | (required) | Each member has an `id` (lowercase), `role` (`junior`, `member`, `senior` or `lead`; seniors and leads own the config), and `areas` they review. Optional: `handle` (`@user`, `@org/team` or an email, used for CODEOWNERS and to recognise reviewers on the git host), `slack` (their Slack member ID; the morning review notice mentions named reviewers), and `optOut: true` (the curator never reads their PRs or review comments) |
+| `team.members` | (required) | Each member has an `id` (lowercase), `role` (`junior`, `member`, `senior` or `lead`; seniors and leads own the config), and `areas` they review. Optional: `handle` (`@user`, `@org/team` or an email, used for CODEOWNERS and to recognise reviewers on the git host), `slack` (their Slack member ID; the morning review notice mentions named reviewers), and `optOut: true` (the daily run never reads their PRs or review comments) |
+| `team.reviewers` | (unset) | Member ids who decide the lessons the daily run is unsure about. When set, only they are asked to review its PRs and listed in CODEOWNERS; other members' roles only weigh their lessons. Unset, area owners decide, then seniors and leads. Give them a `slack` member ID to be mentioned in the morning notice |
 | `teams` | `{}` | Team name → `handle` (`@org/team`), `members`, `areas` it owns, and `repos` it works in. The owning team approves its areas' rules and documents. Every session still reads every team's rules for the files it touches |
-| `areas` | (required) | Area name → path globs in your code repos. `core` is implicit and applies everywhere |
+| `areas` | `{}` | Area name → path globs in your code repo, for a KB without repo folders. `core` is implicit and applies everywhere. With `repos`, leave it out: each repo has its own |
+| `repos` | (unset) | A multi-repo KB: each code repo by short name (its folder under `knowledge/`), with `source` (owner/name on the git host) and its own `areas`. Shared rules live in `knowledge/core/`, each repo's in `knowledge/<repo>/<area>/`, and a session gets only its own repo's rules. Then leave top-level `areas` and `sources.repos` out, and name areas elsewhere as `<repo>/<area>`. Unset, every rule applies to every repo |
+| `topics` | (unset) | Topic name → one-line description. With topics, rules are grouped into one file per topic, `knowledge/<area>/<topic>.md`, each rule a `##` section; without them, each rule is its own file. In a multi-repo KB these are the shared rules' topics, and each repo lists its own as `repos.<name>.topics`. `general` is always allowed |
+| `migrated.on` | (unset) | Written by `homeostat migrate`: the day it ran. A developer's sync moves their pending lessons created by then to the new layout; leave it as written |
+| `migrated.areas` | (unset) | Written by `homeostat migrate`: each old area and the repo it moved to (`shared` for `knowledge/core/`) |
 
 ## `scoring`
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `team.reviewers` | (unset) | Member ids who decide the lessons the daily run is unsure about. When set, only they are asked to review its PRs and listed in CODEOWNERS; other members' roles only weigh their lessons. Unset, area owners decide, then seniors and leads. Give them a `slack` member ID to be mentioned in the morning notice |
-| `migrated.on` | (unset) | Written by `homeostat migrate`: the day it ran. A developer's sync moves their pending lessons created by then to the new layout; leave it as written |
-| `migrated.areas` | (unset) | Written by `homeostat migrate`: each old area and the repo it moved to (`shared` for `knowledge/core/`) |
-| `repos` | (unset) | A multi-repo KB: each code repo by short name (its folder under `knowledge/`), with `source` (owner/name on the git host) and its own `areas`. Shared rules live in `knowledge/core/`, each repo's in `knowledge/<repo>/<area>/`, and a session gets only its own repo's rules. Then leave top-level `areas` and `sources.repos` out, and name areas elsewhere as `<repo>/<area>`. Unset, every rule applies to every repo |
-| `topics` | (unset) | Topic name → one-line description. With topics, rules are grouped into one file per topic, `knowledge/<area>/<topic>.md`, each rule a `##` section; without them, each rule is its own file. In a multi-repo KB these are the shared rules' topics, and each repo lists its own as `repos.<name>.topics`. `general` is always allowed |
 | `scoring.weights.prFeedbackChangedCode` | `3` | Review feedback followed by a code change |
 | `scoring.weights.prFeedback` | `0` | Review feedback with no code change after it |
 | `scoring.weights.manual` | `2` | Written by a member by hand |
@@ -32,7 +32,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `scoring.autoMerge.enabled` | `true` | Turn auto-merge off entirely |
 | `scoring.autoMerge.areas` | `[]` | Areas that may auto-merge; empty means all |
 | `scoring.autoMerge.excludeAreas` | `[]` | Areas that always need a reviewer, e.g. `core` |
-| `scoring.autoMerge.maxPerRun` | `5` | Most entries one curator run may auto-merge |
+| `scoring.autoMerge.maxPerRun` | `5` | Legacy: the most entries `homeostat curate`, run on its own, may auto-merge |
 | `scoring.confidence.accept` | `70` | The daily run merges a lesson at or above this confidence (0–100) with no reviewer |
 | `scoring.confidence.coreAccept` | `80` | The same, for `core` and global rules, which reach every session |
 | `scoring.confidence.decline` | `35` | Lessons below this are declined; between `decline` and `accept` they go to a reviewer |
@@ -59,11 +59,11 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `agents.runtime` | `api` | How the curator and deep dive reach Claude: `api` (a Console key), `bedrock`, `vertex`, or `claude-code`. See [runtimes](../runtimes.md) |
+| `agents.runtime` | `api` | How the daily run, the deep dive, `bootstrap` and `migrate --topics` reach Claude: `api` (a Console key), `bedrock`, `vertex`, or `claude-code`. See [runtimes](../runtimes.md) |
 | `agents.bedrock.region` | `AWS_REGION` | AWS region for `runtime: bedrock` |
 | `agents.vertex.projectId` | `ANTHROPIC_VERTEX_PROJECT_ID` | Google Cloud project for `runtime: vertex` |
 | `agents.vertex.region` | `global` | `global`, `us`, `eu` or a region |
-| `agents.curator.enabled` | `true` | Run the curator under `homeostat up` |
+| `agents.curator.enabled` | `true` | Run the daily run under `homeostat up`. The `curator` settings (model, effort) also apply to `bootstrap`, `seed` and `migrate --topics` |
 | `agents.curator.schedule` | `0 6 * * *` | Cron (UTC) for `homeostat up`; CI uses its own schedule |
 | `agents.curator.model` | `claude-opus-5-5` | Any model id the runtime accepts |
 | `agents.curator.effort` | `medium` | `low`, `medium`, `high`, `xhigh` or `max` |
@@ -104,13 +104,13 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 
 ## `sources`
 
-Needed by the curator, not by validation.
+Needed by the daily run, `review`, `bootstrap` and `migrate`, not by validation.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `sources.host` | (required) | `github` or `bitbucket` |
 | `sources.kbRepo` | (required) | `owner/name` of this KB repo: the only repo the agents write to |
 | `sources.baseBranch` | `main` | Where the agents open pull requests |
-| `sources.repos` | `[]` | Code repos whose merged PRs the curator reads |
+| `sources.repos` | `[]` | A KB without repo folders: code repos whose merged PRs the daily run reads. With `repos`, leave it out; it is taken from each repo's `source` |
 | `sources.exclude.repos` | `[]` | Repos never read |
 | `sources.exclude.paths` | `[]` | Globs: review comments on these files are never read or sent |

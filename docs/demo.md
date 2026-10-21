@@ -1,14 +1,14 @@
 # End-to-end demo: from a review comment to a rule the agent follows
 
-This is the step 2.8 check and the launch demo. One person runs it by hand on GitHub in under ten minutes: a reviewer's comment on a pull request turns into a team rule that the next Claude Code session follows.
+One person runs it by hand on GitHub in under ten minutes: a reviewer's comment on a pull request turns into a team rule that the next Claude Code session follows.
 
 ## Before you start
 
-- Node 24+, `git`, and the GitHub CLI logged in (`gh auth status`).
-- `homeostat` on your PATH. Until it is on npm: `pnpm install && pnpm --filter homeostat link --global` in a checkout of this repo.
+- Node 22.18+, `git`, and the GitHub CLI logged in (`gh auth status`).
+- `homeostat` on your PATH: `npm install -g homeostat@0.2.1`.
 - Claude Code logged in (`claude`). The demo runs the agents through it (`agents.runtime: claude-code`), so your own subscription is enough. That is fine for a personal sandbox; a team KB uses a Console API key instead (the default), because a personal subscription is for personal, non-commercial use only.
-- A **second GitHub account** for the reviewer. The curator only learns from feedback by someone other than the PR author.
-- Claude Code with the homeostat plugin. From a checkout: `claude plugin marketplace add <path-to-homeostat>` then `claude plugin install homeostat@homeostat`.
+- A **second GitHub account** for the reviewer. The daily run only learns from feedback by someone other than the PR author.
+- Claude Code with the homeostat plugin: `claude plugin marketplace add ysugarmen/homeostat` then `claude plugin install homeostat@homeostat`.
 
 Below, `ME` is your GitHub login and `REVIEWER` is the second account's login.
 
@@ -87,22 +87,25 @@ git commit -am "use colour token" && git push
 gh pr merge --squash --delete-branch
 ```
 
-The commit after the comment is what tells the curator the feedback was accepted (+3).
+The commit after the comment is what tells the daily run the feedback was accepted: a review comment followed by a code change starts at 50 points of confidence.
 
-## 5. Run the curator and accept the rule (2 min)
+## 5. Run the daily run (2 min)
 
-In a team setup this runs in CI with a Console key. For the demo, run it from the KB checkout; it drafts through your Claude Code login:
+In a team setup this runs each morning in the KB repo's CI with a Console key. For the demo, run it from the KB checkout; it drafts through your Claude Code login:
 
 ```sh
 cd ../homeostat-demo-kb
-GITHUB_TOKEN=$(gh auth token) homeostat curate
+GITHUB_TOKEN=$(gh auth token) homeostat daily --dry-run
 ```
 
-Expect: `+ knowledge/frontend/....md (accepted, score 4)` and `opened https://github.com/.../pull/1`. Open that PR, read the entry, and merge it. Until homeostat is published on npm, the KB repo's own validate check fails with `E404`; run `homeostat validate` on the branch instead and merge with `--admin`:
+The dry run prints the decision and writes nothing. Expect `me: 1 merged, 0 to review, 0 declined`: the reviewer is a senior who owns `frontend`, so the lesson scores well past the 70 needed to merge on its own: 50 for the comment and the code change, 14 for a senior, 6 for the area's owner, plus points for naming real code and a clear title. The daily PR body shows the exact breakdown. Then run it for real:
 
 ```sh
-gh pr merge --squash --delete-branch --admin && git pull
+GITHUB_TOKEN=$(gh auth token) homeostat daily
+git pull
 ```
+
+It opens `homeostat: daily lessons · me · <date>` with the decision and its score breakdown in the body, and merges it. If you made the reviewer a `member` instead, the lesson lands in a review PR: `homeostat review list`, then `homeostat review merge <number>`.
 
 ## 6. Start a session and see the rule applied (3 min)
 
@@ -119,6 +122,8 @@ Ask: *"Add a `.badge` style in web/badge.css with a blue background."*
 Done when the agent uses `var(--color-*)` rather than a hex value without being told, and says so when asked why (`/homeostat:explain web/badge.css` shows the rule, its PR comment and its owner).
 
 For Cursor and Copilot, run `homeostat export --kb ../homeostat-demo-kb --out .` in `homeostat-demo-app`, commit, and ask the same question in each tool.
+
+To see a first base built from the code itself, run `homeostat bootstrap --dry-run --checkout ../homeostat-demo-app` in the KB checkout ([details](guide/bootstrap.md)).
 
 ## Clean up
 

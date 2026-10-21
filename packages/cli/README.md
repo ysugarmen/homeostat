@@ -16,7 +16,9 @@ claude plugin install homeostat@homeostat
 Common commands:
 - `homeostat learn`: capture a rule
 - `homeostat validate`: check the knowledge base
-- `homeostat curate`: the daily curator, run in CI
+- `homeostat daily`: the daily run in CI: one scored PR per developer
+- `homeostat review list`, `merge`, `close`: work the review queue
+- `homeostat bootstrap`: a first base for each repo, from its checkout
 - `homeostat export`: write rules files for other tools
 - `homeostat mcp`: serve the MCP server
 - `homeostat dashboard`: open the local dashboard
