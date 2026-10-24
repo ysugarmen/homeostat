@@ -194,8 +194,8 @@ Agents never read the stored files. They get a rendered view: no frontmatter, on
 
 1. Find the KB from the plugin's `kb_dir` setting, then `$HOMEOSTAT_DIR`, then the current repo.
 2. Collect touched paths from `git status` and recent commits.
-3. Select accepted rules for the session's repo (found from the checkout's `origin` remote, else its folder name) plus the shared ones, minus rejected decisions and other teams' team-only areas. Rank them in tiers: rules scoped to the touched files, then global rules that name a touched file, then global rules that name no file, then those naming other files; by score within a tier.
-4. Fit them into `distribution.tokenBudget` (2,000) less the lookup guide, at most 80% of it, within 10,000 characters overall, with room kept for the documents. Each rule goes in whole, else rule-only, else to the rest, which is counted by topic.
+3. Select accepted rules for the session's repo (found from the checkout's `origin` remote, else its folder name) plus the shared ones, minus rejected decisions and other teams' team-only areas. Rank them in tiers: rules scoped to the touched files together with global rules that name a touched file outright, then global rules naming a file next to one, then global rules that name no file, then those naming other files. Within a tier, reciprocal rank fusion (k = 60) of three rankings: scope (narrowest matching glob first, then score), keywords (BM25 of the touched paths' words against the rule text) and code references (touched files the rule names); score breaks ties. A rule scoped to the touched files never loses to a general one that does not name them.
+4. Fit them into `distribution.tokenBudget` (2,000) less the lookup guide, at most 80% of it, within 10,000 characters overall, with room kept for the documents. Each rule goes in whole, else rule-only, else to the rest, which is counted by topic; a rule that does not fit never stops a smaller one after it.
 5. Group by kind under one guidance line each, and add the context header (rules never override the user or safety).
 6. Add the document sections that name a touched path, within `docTokenBudget` (1,000).
 7. End with the lookup guide: the rest counted by topic and the covering documents by area, never by title; the tools (`context`, `search`, `docs` then `read`, `explain`); the moments to look things up (a bug report, a test, new code or making parts fit, a why or what's-left question, a commit); and the credit line `> From Homeostat (<id>)`. A budget too small for it gets a compact form.
@@ -226,6 +226,8 @@ Descriptions and the server instructions name the moments to call each tool and 
 - a marked AGENTS.md block, with documents under `.agents/homeostat/`
 
 `--check` fails CI when they're stale. Team-only areas and rejected decisions are never exported, and public repos need `--allow-public`.
+
+**Measuring selection** (`homeostat eval`): a team writes cases in `eval/selection.yaml` (touched `paths` or a search `task`, an optional `repo`, and the rule ids it `expect`s) and the command runs them through `selectEntries` and `searchEntries`, the code the hook and MCP use, scoring Hit, MRR, nDCG, recall and precision at 1, 3, 5 and 10, R-precision, and the share of expected rules served within the budget. No model call; it fails only on a broken case file or a `--min` floor. The metrics are adapted from vectorize-io/hindsight (MIT). The repo's tests run a synthetic 150-rule, two-repo fixture through it (see [the guide](guide/eval.md)).
 
 **Why this shape.** Measured on Claude, a lean Markdown render costs 1.0×, YAML or minified JSON 1.34×, the stored files with frontmatter 2.9×. Accuracy was identical across formats up to about 150k tokens, so selection and caching matter more than syntax.
 

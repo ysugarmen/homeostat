@@ -21,7 +21,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./testing": "./test/providers/replay.ts"
+    "./testing": "./test/providers/replay.ts",
+    "./eval-fixture": "./test/selection-fixture.ts"
   },
   "files": [
     "dist/src",

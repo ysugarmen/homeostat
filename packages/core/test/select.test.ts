@@ -92,6 +92,63 @@ describe("selectEntries", () => {
     ]);
   });
 
+  describe("within a tier", () => {
+    const area = (id: string, score: number, rule: string, scope = ["services/billing/**"]) =>
+      entry(id, { scope, score, title: `Billing rule ${id}` }, rule);
+    const rules = [
+      area("money-in-cents", 6, "Keep amounts as integer cents."),
+      area("currency-enum", 5, "Take currency codes from the enum."),
+      area("tax-per-line", 2, "Call applyTaxRounding() from tax.ts on each line."),
+      area("totals-helper", 1, "Call formatTotal() from services/billing/totals.ts.", [
+        "services/**",
+      ]),
+      entry(
+        "ledger-replica",
+        { scope: ["**"], score: 1 },
+        "Reads in services/orders/ledger.ts use the replica.",
+      ),
+    ];
+    const order = (paths: string[]) =>
+      selectEntries(rules, { paths, tokenBudget: 10_000 }).items.map((i) => i.entry.frontmatter.id);
+
+    test("the rule naming the touched file comes first, whatever its score", () => {
+      expect(order(["services/billing/tax.ts"])[0]).toBe("tax-per-line");
+      // Scoped broadly, but it names the exact file.
+      expect(order(["services/billing/totals.ts"])[0]).toBe("totals-helper");
+    });
+
+    test("with nothing named, the narrowest scope and then the score lead", () => {
+      const ids = order(["services/billing/invoice_pdf.ts"]);
+      expect(ids[0]).toBe("money-in-cents");
+      expect(ids.indexOf("currency-enum")).toBeLessThan(ids.indexOf("tax-per-line"));
+      // A general rule naming only another file comes last.
+      expect(ids.at(-1)).toBe("ledger-replica");
+    });
+
+    test("a general rule naming the touched file joins the scoped ones; naming a neighbour does not", () => {
+      expect(order(["services/orders/ledger.ts"])).toEqual(["ledger-replica", "totals-helper"]);
+      const both = order(["services/orders/ledger.ts", "services/billing/invoice_pdf.ts"]);
+      expect(both.indexOf("ledger-replica")).toBeLessThan(both.length - 1);
+      const near = order(["services/orders/state.ts", "services/billing/invoice_pdf.ts"]);
+      expect(near.at(-1)).toBe("ledger-replica");
+    });
+  });
+
+  test("a rule too big for what is left is skipped, and a smaller one after it still goes in", () => {
+    const big = parseEntry(
+      formatEntry(
+        { ...entry("big", { score: 9 }).frontmatter, scope: ["services/api/**"] },
+        `## Rule\n${words(55)}\n\n## Why\n${words(90)}`,
+      ),
+    ).entry;
+    if (!big) throw new Error("fixture");
+    const small = entry("small", { score: 1, scope: ["services/api/**"] }, "Short.");
+    const budget = countTokens(CONTEXT_HEADER) + 30;
+    const sel = selectEntries([big, small], { paths: ["services/api/x.ts"], tokenBudget: budget });
+    expect(sel.dropped).toEqual(["big"]);
+    expect(sel.items.map((i) => i.entry.frontmatter.id)).toEqual(["small"]);
+  });
+
   test("rules that do not fit are left over, and counted by topic", () => {
     const sel = selectEntries(kb, { paths: ["services/api/handler.ts"], tokenBudget: 60 });
     expect(sel.rest.map((e) => e.frontmatter.id)).toEqual(sel.dropped);

@@ -1,6 +1,8 @@
 import { Minimatch } from "minimatch";
 import type { Entry } from "./entry.ts";
+import { reciprocalRankFusion } from "./rank.ts";
 import { isRejectedDecision, type Kind } from "./schema.ts";
+import { tokenize } from "./search.ts";
 import { countTokens } from "./tokens.ts";
 
 export const CONTEXT_HEADER = `# Team knowledge (homeostat)
@@ -49,8 +51,6 @@ const glob = (pattern: string) => {
 };
 /** Whether `path` matches the glob (dotfiles included), with the glob compiled once. */
 export const globMatch = (path: string, pattern: string) => glob(pattern).match(path);
-const matches = (path: string, scope: readonly string[]) =>
-  scope.some((pattern) => glob(pattern).match(path));
 
 const CODE_FILE =
   /\b[\w-]+\.(?:py|pyi|ts|tsx|js|jsx|mjs|go|rb|java|kt|rs|sql|ya?ml|tpl|toml|json|sh|proto)\b/g;
@@ -87,6 +87,27 @@ function namesPath(ref: string, path: string): boolean {
   if (p === r || p.endsWith(`/${r}`) || under(r)) return true;
   const folder = r.includes("/") && /\.\w+$/.test(r) ? r.slice(0, r.lastIndexOf("/")) : undefined;
   return folder !== undefined && folder.includes("/") && under(folder);
+}
+
+/**
+ * Whether a rule names this very file, or a folder holding it: the strong form of `namesPath`,
+ * which also counts a file next to the one named.
+ */
+function namesExactly(ref: string, path: string): boolean {
+  const p = path.toLowerCase();
+  if (!ref.includes("/")) return p === ref || p.endsWith(`/${ref}`);
+  const r = ref.replace(/\/$/, "");
+  return p === r || p.endsWith(`/${r}`) || p.startsWith(`${r}/`) || p.includes(`/${r}/`);
+}
+
+/** Literal folders a glob names before its first wildcard: `services/billing/**` is 2. */
+function depth(pattern: string): number {
+  let n = 0;
+  for (const part of pattern.split("/")) {
+    if (/[*?[{]/.test(part)) break;
+    n++;
+  }
+  return n;
 }
 
 function block({ entry, form }: SelectedEntry): string {
@@ -134,37 +155,77 @@ export function renderContext(selection: Pick<Selection, "items">): string {
 }
 
 /**
- * Picks the accepted entries relevant to `paths`, best first, within the token budget. Ranking
- * is by tier, then score, then most recently confirmed:
- *   1. a scope glob matches a path the session touches;
- *   2. a global rule whose text names a touched file or folder;
+ * Picks the accepted entries relevant to `paths`, best first, within the token budget.
+ *
+ * Tiers come first, so a rule scoped to the touched files never loses to a general one:
+ *   1. a scope glob matches a touched path, or a global rule names a touched file (or a folder
+ *      holding it) outright;
+ *   2. a global rule naming a file next to a touched one;
  *   3. a global rule naming no file at all (a convention for everything);
  *   4. a global rule naming only other files (most likely about other code).
- * Each entry is taken whole if it fits, else as its Rule alone, else left for the index.
+ * Within a tier, three rankings are fused by reciprocal rank (see `rank.ts`): scope (the
+ * narrowest matching glob first, then score), keywords (BM25 of the touched paths' words against
+ * the rule's text), and code references (how many touched files the rule names). Score, then the
+ * last confirmation, breaks ties. Measured with `homeostat eval`: see docs/guide/eval.md.
+ *
+ * Each entry is taken whole if it fits, else as its Rule alone, else left for the index; a rule
+ * that does not fit never stops a smaller one after it.
  */
 export function selectEntries(entries: readonly Entry[], opts: SelectOptions): Selection {
-  const relevant = entries
+  const applicable = entries
     // A rejected decision is context for search and explain, never an instruction.
     .filter((e) => e.frontmatter.status === "accepted" && !isRejectedDecision(e.frontmatter))
     .map((e) => {
       // A global glob matches every path, so only narrower globs count as a path match.
-      const narrow = e.frontmatter.scope.filter((g) => !isGlobalGlob(g));
-      const specific = opts.paths.some((p) => matches(p, narrow));
-      const refs = specific
-        ? []
-        : fileRefs(`${e.frontmatter.title} ${e.sections.rule ?? ""} ${e.sections.why ?? ""}`);
-      const named = refs.some((r) => opts.paths.some((p) => namesPath(r, p)));
-      const tier = specific ? 0 : named ? 1 : refs.length === 0 ? 2 : 3;
-      return { e, specific, tier, applies: specific || isGlobal(e.frontmatter.scope) };
+      const hit = e.frontmatter.scope.filter(
+        (g) => !isGlobalGlob(g) && opts.paths.some((p) => glob(g).match(p)),
+      );
+      const refs = fileRefs(
+        `${e.frontmatter.title} ${e.sections.rule ?? ""} ${e.sections.why ?? ""}`,
+      );
+      let exact = 0;
+      let near = false;
+      for (const r of refs) {
+        for (const p of opts.paths) {
+          if (namesExactly(r, p)) exact++;
+          else if (!near && namesPath(r, p)) near = true;
+        }
+      }
+      const specific = hit.length > 0;
+      const tier = specific || exact ? 0 : near ? 1 : refs.length === 0 ? 2 : 3;
+      return {
+        e,
+        id: e.frontmatter.id,
+        specific,
+        exact,
+        tier,
+        depth: Math.max(0, ...hit.map(depth)),
+        applies: specific || isGlobal(e.frontmatter.scope),
+      };
     })
-    .filter((r) => r.applies)
-    .sort(
-      (a, b) =>
-        a.tier - b.tier ||
-        b.e.frontmatter.score - a.e.frontmatter.score ||
-        b.e.frontmatter.lastConfirmed.localeCompare(a.e.frontmatter.lastConfirmed) ||
-        a.e.frontmatter.id.localeCompare(b.e.frontmatter.id),
-    );
+    .filter((r) => r.applies);
+  type Ranked = (typeof applicable)[number];
+  const prior = (a: Ranked, b: Ranked) =>
+    b.e.frontmatter.score - a.e.frontmatter.score ||
+    b.e.frontmatter.lastConfirmed.localeCompare(a.e.frontmatter.lastConfirmed) ||
+    a.id.localeCompare(b.id);
+  const fused = reciprocalRankFusion([
+    applicable
+      .filter((r) => r.specific)
+      .sort((a, b) => b.depth - a.depth || prior(a, b))
+      .map((r) => r.id),
+    keywordRanking(
+      applicable.map((r) => r.e),
+      opts.paths,
+    ),
+    applicable
+      .filter((r) => r.exact > 0)
+      .sort((a, b) => b.exact - a.exact || prior(a, b))
+      .map((r) => r.id),
+  ]);
+  const relevant = applicable.sort(
+    (a, b) => a.tier - b.tier || (fused.get(b.id) ?? 0) - (fused.get(a.id) ?? 0) || prior(a, b),
+  );
 
   const items: SelectedEntry[] = [];
   const dropped: string[] = [];
@@ -205,4 +266,74 @@ export function restCounts(rest: readonly Entry[]): Map<string, number> {
     groups.set(key, (groups.get(key) ?? 0) + 1);
   }
   return new Map([...groups].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
+}
+
+/** Rule text keyword ranking reads, weighted as search weighs it. */
+const KEYWORD_FIELDS: [(e: Entry) => string, number][] = [
+  [(e) => e.frontmatter.title, 3],
+  [(e) => (e.frontmatter.tags ?? []).join(" "), 2.5],
+  [(e) => e.sections.rule ?? "", 2],
+  [(e) => e.sections.why ?? "", 1],
+];
+
+/** Path words that say nothing about the code: extensions and the source folder. */
+const PATH_NOISE = new Set([
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "mjs",
+  "py",
+  "md",
+  "json",
+  "yml",
+  "yaml",
+  "sql",
+  "src",
+]);
+
+/**
+ * The rules whose text shares words with the touched paths (`services/billing/tax.ts` gives
+ * service, billing, tax), best first by BM25. Words no rule holds are dropped up front.
+ */
+function keywordRanking(entries: readonly Entry[], paths: readonly string[]): string[] {
+  const docs = entries.map((e) => {
+    const tf = new Map<string, number>();
+    let length = 0;
+    for (const [get, weight] of KEYWORD_FIELDS) {
+      for (const t of tokenize(get(e))) {
+        tf.set(t, (tf.get(t) ?? 0) + weight);
+        length++;
+      }
+    }
+    return { id: e.frontmatter.id, tf, length };
+  });
+  const df = new Map<string, number>();
+  for (const d of docs) for (const t of d.tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
+  const terms = new Set<string>();
+  for (const p of paths) {
+    for (const t of tokenize(p.replace(/\.[a-z0-9]+$/i, ""))) {
+      if (!PATH_NOISE.has(t) && df.has(t)) terms.add(t);
+    }
+  }
+  if (terms.size === 0) return [];
+  const avg = docs.reduce((n, d) => n + d.length, 0) / Math.max(docs.length, 1);
+  const k1 = 1.2;
+  const b = 0.75;
+  return docs
+    .map((d) => {
+      const norm = 1 - b + (b * d.length) / Math.max(avg, 1);
+      let score = 0;
+      for (const t of terms) {
+        const tf = d.tf.get(t);
+        if (!tf) continue;
+        const n = df.get(t) ?? 0;
+        const idf = Math.log(1 + (docs.length - n + 0.5) / (n + 0.5));
+        score += (idf * tf * (k1 + 1)) / (tf + k1 * norm);
+      }
+      return { id: d.id, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((x, y) => y.score - x.score || x.id.localeCompare(y.id))
+    .map((x) => x.id);
 }

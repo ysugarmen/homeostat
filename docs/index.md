@@ -21,6 +21,7 @@ It turns accepted code-review feedback into short, scored rules and team documen
 - [The agents](guide/agents.md): the daily run, the review queue, sync, deep dive, bootstrap and seed, the digest, and model runtimes
 - [Using it from your tools](guide/clients.md): the Claude Code plugin, MCP, and exports
 - [Dashboard](guide/dashboard.md)
+- [Measuring selection](guide/eval.md): `homeostat eval`, cases for the rules each session should get
 
 ## Trust
 

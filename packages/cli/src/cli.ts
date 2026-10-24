@@ -23,6 +23,7 @@ import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
 import { type DigestOptions, runDigest } from "./digest.ts";
 import { type ConvertDocsOptions, runConvertDocs } from "./docs.ts";
 import { runDoctor } from "./doctor.ts";
+import { runEval } from "./eval-command.ts";
 import { runEvents } from "./events-command.ts";
 import { type ExportOptions, runExport } from "./export.ts";
 import { type FlagOptions, runFlag } from "./flag.ts";
@@ -443,6 +444,22 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--json", "print JSON")
     .action((opts) => {
       exitCode = runMetrics(opts, io);
+    });
+
+  program
+    .command("eval")
+    .description(
+      "Score rule selection against the KB's cases in eval/selection.yaml: hits, MRR, nDCG, recall.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--file <file>", "cases file (default: <kb>/eval/selection.yaml)")
+    .option(
+      "--min <floor...>",
+      "fail below a floor over all cases, e.g. hit@5=0.8 mrr=0.5 served=0.9",
+    )
+    .option("--json", "print JSON")
+    .action((opts) => {
+      exitCode = runEval(opts, io);
     });
 
   program

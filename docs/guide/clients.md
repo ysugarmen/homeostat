@@ -10,9 +10,11 @@ claude plugin install homeostat@homeostat
 Set the plugin's `kb_dir` to your local clone of the KB repo. Then:
 
 - **At session start**, the hook adds the accepted rules for the files you are touching, within `distribution.tokenBudget` and grouped by kind. In a multi-repo KB these are the session's own repo's rules plus the shared ones. The order is:
-  1. rules scoped to those files
-  2. general rules that name one of them
+  1. rules scoped to those files, and general rules that name one of them outright
+  2. general rules that name a file next to one of them
   3. other general rules
+
+  Within each group the rule about the very file comes first: rankings by scope (the narrowest folder first), by the words of the file paths in the rule's text, and by the files the rule names are merged by reciprocal rank, with the score breaking ties. `homeostat eval` measures this on your own cases ([Measuring selection](eval.md)).
 
   Next come the document sections that name your files. Last is a short lookup guide: how many more rules apply (by topic) and how many documents cover the code (by area), deliberately without titles; which tool to call (`context`, `search`, `docs` then `read`, `explain`); the moments to look things up (a bug report, writing or changing a test, new code or making parts fit, a why or what's-left question, a commit); and the credit line `> From Homeostat (<rule-id or area/topic#section>)` to put above a part of the reply that used them. Listing titles up front made agents pick from the list instead of searching; a count and a named moment make the first call a search. On a very small `tokenBudget` the guide shrinks to its counts and one line.
 - **On every message**, the hook adds a one-line reminder of those moments and the credit line (under 80 tokens), plus any rules that are new since the session started.
@@ -70,4 +72,4 @@ How export behaves:
 
 ## Terminal
 
-`homeostat search`, `explain`, `list`, `status` and `events` read the KB. Add `--json` for agents.
+`homeostat search`, `explain`, `list`, `status` and `events` read the KB. Add `--json` for agents. `homeostat eval` checks that sessions and search serve the rules you expect ([Measuring selection](eval.md)).
