@@ -76,7 +76,7 @@ The KB is a git repo: `homeostat.yaml` at the root, rules under `knowledge/<area
 | --- | --- |
 | Identity | `id`, `title` (≤80 chars), `area`, `scope` (path globs), `topic` in a topic file |
 | Lifecycle | `status`: candidate → accepted → disputed → retired; `approvedBy`, `flags` |
-| Provenance | `source.type` (pr-feedback, manual, agent-handoff, deep-dive), `url`, `author`, `changedCode`, `created`, `lastConfirmed` |
+| Provenance | `source.type` (pr-feedback, manual, agent-handoff, deep-dive), `url`, `author`, `changedCode`, `alsoFrom` (later lessons folded in), `created`, `lastConfirmed` |
 | Kind | optional `kind` (convention, anti-pattern, migration, legacy, tech-debt, practice, review-lesson, decision); `adopted: false` marks a rejected decision |
 | Cached | `score`, `tokens` (recomputed by `validate --fix`) |
 | Body | `## Rule` ≤60 words, `## Why` ≤100 words, optional `## Example` |
@@ -99,6 +99,13 @@ Knowledge enters by four paths. All of them reach `main` only through the daily 
 4. If a document's scope covers the commented file, ask for at most one section patch (replace or append) with `source=curator` provenance.
 5. Build the entry, compute its score, and validate it against the whole KB. Risky-content findings keep a draft as a flagged candidate; any other error drops it.
 6. File the lesson under the repo the PR came from and the developer whose PR it was, and score it with the rest of their lessons. A suggested new topic sends it to a reviewer, filed under `general`.
+
+**Update before add (consolidation).** Before deciding a new lesson, from a review or by hand, the daily run asks whether it refines or repeats a rule it already has, so the same lesson in other words does not land as a sibling rule (decision rules adapted from [Hindsight](https://github.com/vectorize-io/hindsight), MIT):
+
+1. **Candidates, without a model** (`mergeCandidates`): accepted rules in the same repo or core, and lessons waiting in open review PRs, whose scope overlaps and whose title, rule words or code names overlap (a code name counts 1/√n when n rules name it). At most three, closest first. Guards (`distinctFacts`, shared with `sameLesson` and so with the deep dive) drop a pair outright when each states a number or version the other lacks (v1/v2, 101/102) or they name look-alike code (`useFoo`/`useFooBar`, `ledger-sync`/`ledger-sink`; inflections like `withRetry`/`withRetries` are the same).
+2. **One model call per lesson with candidates** (`Consolidator`; none without). Structured answer: `reason` first, then `create`, `update <id>` with the whole rewritten title, rule and why, or `duplicate <id>`, and optionally `contradicts <id>`. The prompt says to prefer update over a near-duplicate, match on the specific thing and facet rather than the topic, answer create when a number, negation, named entity or condition differs, never derive values, keep everything still true in an update, and let a rule confirmed after the lesson was written (`newer`) stand. Unusable answers (an id not among the candidates, an update over the word limits) count as no answer; an update or create whose rule text equals a candidate's is a duplicate.
+3. **Applied:** an update becomes a change to the rule itself (same id, area, scope, owner, first `source`, example kept; new title, rule and why; `lastConfirmed` today; the lesson's URL appended to `alsoFrom`), scored on the lesson's own evidence (its source and originator) and the rewritten text, so it lands in the daily PR (marked `Update:` with the reason) or the review PR. A duplicate is declined and reconfirms the rule, as before. A lesson that updates or repeats one waiting in review waits with it. A contradiction is never folded in: the lesson counts as conflicting and goes to a reviewer. A rule gets at most one update per run, and is not reconfirmed in the same run.
+4. **Fallback:** with no answer, past `agents.curator.consolidateCalls` (30), on a model error, or with `--no-reviews`, the word-overlap `sameLesson` check decides duplicates as before.
 
 **By hand.** `homeostat learn` writes a lesson to the clone's git-ignored `.homeostat/pending/`, where it applies to that developer's sessions at once. Inputs: flags, prompts or a review-comment URL. The URL route fetches the comment and detects whether code changed after it. `learn --doc <area>/<topic> --section <id>` patches one document section. `/homeostat:learn` drafts from a session and asks before writing.
 
@@ -155,7 +162,7 @@ A long session gets only the rules that are new since its start, on the next pro
    - penalties: open flags, conflicts, a vague title
 3. decides each lesson:
    - merge at `accept` (70) or more, `coreAccept` (80) for `core` or a `**` scope
-   - decline below 35, or on a validation error, or as a duplicate (which reconfirms the original)
+   - decline below 35, or on a validation error, or as a duplicate (which reconfirms the original); a lesson that refines a rule becomes an update of that rule (see Capture, consolidation)
    - otherwise review, and always for risky content, conflicts, documents and areas outside `scoring.autoMerge`
    - a flag merges at once (the rule becomes `disputed`) and a reviewer resolves it, in a dispute PR (below)
 4. opens **one daily PR** per developer with the merged lessons and reconfirmations, every decision and its score breakdown in the body, validates the whole KB, and squash-merges it. Its commits carry `[skip ci]`, since the branch is deleted before a pipeline could start; the squash commit has its own message, so the base branch still runs CI. If the host refuses the merge (branch protection, a failing check), the PR stays open with a plain commit that lets its pipeline run, and its lessons count as review
@@ -172,7 +179,7 @@ All thresholds and weights are in `scoring.confidence`. `--dry-run` decides and 
 
 ## Maintenance and ownership
 
-**Deep dive** (weekly) merges near-duplicate rules into the higher-scoring one, asks the model about contradictions with the week's new rules, and retires rules unconfirmed for `staleAfterDays` (180). It notes document coverage gaps and stale sections, but never edits documents.
+**Deep dive** (weekly) merges near-duplicate rules into the higher-scoring one (with the same number and look-alike-name guards as the daily run; since the daily run updates rules instead of adding siblings, it finds fewer), asks the model about contradictions with the week's new rules, and retires rules unconfirmed for `staleAfterDays` (180). It notes document coverage gaps and stale sections, but never edits documents.
 
 **Ownership.** `homeostat codeowners` generates CODEOWNERS. Each area goes to its owning team's handle (or its members), and seniors own the config and core. Reads stay org-wide: any session gets any team's rule whose scope matches its files.
 

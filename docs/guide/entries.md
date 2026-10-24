@@ -59,6 +59,7 @@ Partner APIs time out often; the helper adds backoff and the request-id header o
 | `score` | Computed from the source; `validate --fix` keeps it current |
 | `owner` | The member who answers for it |
 | `source` | `type` (`pr-feedback`, `manual`, `agent-handoff`, `deep-dive`), `url` (required for pr-feedback), `author`, `changedCode` (did the code change after the comment?) |
+| `alsoFrom` | Optional: URLs of later lessons the daily run folded into this rule instead of adding a sibling. `source` stays the first origin; the curator treats these threads as already known |
 | `created`, `lastConfirmed` | ISO dates; the deep dive retires rules not confirmed for `staleAfterDays` |
 | `approvedBy` | Optional: who accepted it. Merging is the approval, so nobody needs to set it by hand |
 | `kind` | Optional: `convention`, `anti-pattern`, `review-lesson`, `migration`, `legacy`, `tech-debt`, `practice`, `decision`. Sessions group rules by kind under one line of guidance each |
