@@ -12,13 +12,15 @@ import {
   isMultiRepo,
   logEvent,
   memberFromGit,
+  PROMPT_GUIDE,
   pruneEvents,
   readKbFiles,
   readKbView,
   renderContext,
-  renderIndex,
   repoNames,
+  restCounts,
   selectEntries,
+  sessionGuide,
   validate,
   visibleTo,
 } from "@homeostat/core";
@@ -30,9 +32,11 @@ import { touchedPaths, uncommitted } from "./touched.ts";
 
 /** Claude Code's limit on SessionStart `additionalContext`. */
 const MAX_CONTEXT_CHARS = 10_000;
-/** Room kept for team documents when the KB has any, and for the index of the other rules. */
+/** Room kept for document sections when the KB has any, and for the lookup guide with its counts. */
 const DOC_RESERVE = 2_500;
-const INDEX_RESERVE = 1_500;
+const GUIDE_RESERVE = 1_500;
+/** Tokens kept for the guide's lines counting the rules and documents not given in full. */
+const COUNT_TOKENS = 40;
 
 export interface HookInput {
   session_id?: string;
@@ -107,8 +111,14 @@ async function selectForSession(
     config,
     member,
   );
-  // Rules first, but never all of the room: the documents and the index of the rest keep theirs.
+  // Rules first, but never all of the room: the document sections and the guide keep theirs.
   const docRoom = visibleDocs.length ? DOC_RESERVE : 0;
+  // The lookup guide comes out of the token budget too: in full when it leaves the rules at least
+  // half, else its compact form. Its count lines are not known yet; COUNT_TOKENS covers them.
+  const budget = config.distribution.tokenBudget;
+  const guideCost = (compact: boolean) =>
+    countTokens(sessionGuide({ rules: new Map(), docs: new Map(), compact })) + COUNT_TOKENS;
+  const compactGuide = budget - guideCost(false) < budget / 2;
   const selection = selectEntries(
     visibleTo(
       inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
@@ -117,9 +127,12 @@ async function selectForSession(
     ),
     {
       paths,
-      // A fifth of the budget is left for the index of rules that do not fit in full.
-      tokenBudget: Math.floor(config.distribution.tokenBudget * 0.8),
-      maxChars: MAX_CONTEXT_CHARS - INDEX_RESERVE - docRoom,
+      // At most four fifths, as before the guide existed, so large budgets keep their rules.
+      tokenBudget: Math.max(
+        0,
+        Math.min(Math.floor(budget * 0.8), budget - guideCost(compactGuide)),
+      ),
+      maxChars: MAX_CONTEXT_CHARS - GUIDE_RESERVE - docRoom,
     },
   );
   note({
@@ -131,18 +144,15 @@ async function selectForSession(
   });
 
   const rules = renderContext(selection);
-  // The index fits in what the rules left of the token budget, and of the character limit.
-  let indexChars = MAX_CONTEXT_CHARS - rules.length - 2 - docRoom;
-  let index = renderIndex(selection.rest, indexChars);
-  while (index && countTokens(`${rules}\n\n${index}`) > config.distribution.tokenBudget) {
-    indexChars = Math.floor(indexChars * 0.8);
-    index = renderIndex(selection.rest, indexChars);
-  }
+  // What was not given in full is counted, not listed, with how and when to look it up.
   const documents = docContext(visibleDocs, paths, {
     tokenBudget: config.distribution.docTokenBudget,
-    maxChars: MAX_CONTEXT_CHARS - rules.length - index.length - 4,
-    readHint:
-      'Read a section with the homeostat MCP tool `read` ({"doc": "<area>/<topic>", "section": "<id>"}) before changing code it describes.',
+    maxChars: MAX_CONTEXT_CHARS - rules.length - GUIDE_RESERVE - 4,
+  });
+  const guide = sessionGuide({
+    rules: restCounts(selection.rest),
+    docs: documents.byArea,
+    compact: compactGuide,
   });
   if (documents.listed.length) {
     logEvent(kbRoot, {
@@ -174,7 +184,12 @@ async function selectForSession(
     isMultiRepo(config) && !repo
       ? `# Homeostat\n\nThis checkout is not one of the knowledge base's repos (${repoNames(config).join(", ")}), so only the team's shared rules apply here.`
       : "";
-  const context = [rules, index, documents.text, header, unplaced].filter(Boolean).join("\n\n");
+  const join = (docs: string) =>
+    [rules, docs, guide, header, unplaced].filter(Boolean).join("\n\n");
+  // The guide is sized by its counts; on the rare KB where it outgrows its reserve, the document
+  // sections give way rather than Claude Code cutting the end of the context.
+  const context =
+    join(documents.text).length <= MAX_CONTEXT_CHARS ? join(documents.text) : join("");
   note({ chars: context.length });
   if (!context) return;
   io.stdout(
@@ -294,7 +309,9 @@ function viewKey(kbRoot: string): string {
  * Every message the developer sends (UserPromptSubmit). Sessions can run for days, so this keeps
  * them current: it starts a background sync at most every few hours, and when the KB view has
  * changed since the session last looked, it adds only the rules this session has not seen yet,
- * plus any decisions on the developer's own lessons. Most messages change nothing and print nothing.
+ * plus any decisions on the developer's own lessons. Every message also gets a one-line reminder of
+ * when to look things up and how to credit it: repeating it each turn is what keeps agents
+ * searching (see guide.ts). It is a fixed string, so the common path reads no KB files.
  */
 async function prompt(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
@@ -303,15 +320,33 @@ async function prompt(input: HookInput, io: Io) {
   if (syncDue(kbRoot, io.now?.() ?? new Date(), SYNC_EVERY_HOURS)) {
     io.background?.(["sync", "--dir", kbRoot, "--quiet"]);
   }
-  const state = readState(kbRoot, input.session_id);
+  let updates = "";
+  try {
+    updates = promptUpdates(input.session_id, io, cwd, kbRoot);
+  } finally {
+    // The reminder goes out even when looking for updates failed.
+    io.stdout(
+      `${JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "UserPromptSubmit",
+          additionalContext: [updates, PROMPT_GUIDE].filter(Boolean).join("\n\n"),
+        },
+      })}\n`,
+    );
+  }
+}
+
+/** The rules and notices this session has not seen yet, as text; "" when nothing changed. */
+function promptUpdates(session: string, io: Io, cwd: string, kbRoot: string): string {
+  const state = readState(kbRoot, session);
   const view = viewKey(kbRoot);
   const news = takeNotices(kbRoot);
-  if (view === state.view && news.length === 0) return;
+  if (view === state.view && news.length === 0) return "";
 
   const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files, {
     checks: false,
   });
-  if (!config) return;
+  if (!config) return "";
   const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
   const seen = new Set(state.injected ?? []);
   const repo = repoHere(cwd, config);
@@ -328,17 +363,17 @@ async function prompt(input: HookInput, io: Io) {
     },
   );
   const fresh = selection.items.filter((i) => !seen.has(i.entry.frontmatter.id));
-  writeState(kbRoot, input.session_id, {
+  writeState(kbRoot, session, {
     ...state,
     injected: [...seen, ...fresh.map((i) => i.entry.frontmatter.id)],
     view,
   });
-  if (fresh.length === 0 && news.length === 0) return;
+  if (fresh.length === 0 && news.length === 0) return "";
   if (fresh.length) {
     logEvent(kbRoot, {
       ts: (io.now?.() ?? new Date()).toISOString(),
       type: "injection",
-      session: input.session_id,
+      session,
       source: "update",
       cwd,
       ...(repo ? { repo } : {}),
@@ -358,14 +393,7 @@ async function prompt(input: HookInput, io: Io) {
         ]
       : []),
   ];
-  io.stdout(
-    `${JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "UserPromptSubmit",
-        additionalContext: parts.join("\n\n"),
-      },
-    })}\n`,
-  );
+  return parts.join("\n\n");
 }
 
 /** How often a long session checks for a new daily run. */

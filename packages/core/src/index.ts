@@ -212,6 +212,14 @@ export {
 } from "./files.ts";
 export { applyFixes } from "./fix.ts";
 export { type Flag, flagEntry } from "./flag.ts";
+export {
+  CREDIT_LABEL,
+  PROMPT_GUIDE,
+  parseCredits,
+  RETRIEVAL_TOOLS,
+  sessionGuide,
+  TRIGGER_MOMENTS,
+} from "./guide.ts";
 export { codeownersHandle, loginKey, memberForLogin, memberFromGit } from "./handles.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export {
@@ -285,7 +293,15 @@ export {
   sourceSchema,
 } from "./schema.ts";
 export { type ScoreContext, type ScoreReason, type ScoreResult, score } from "./score.ts";
-export { type SearchHit, type SearchOptions, searchEntries, tokenize } from "./search.ts";
+export {
+  type SearchHit,
+  type SearchOptions,
+  type SectionHit,
+  searchEntries,
+  searchSections,
+  snippet,
+  tokenize,
+} from "./search.ts";
 export { findEmails, redactSecrets, type SecretFinding, scanSecrets } from "./secrets.ts";
 export { type SectionUsage, sectionUsage } from "./section-usage.ts";
 export {
@@ -313,7 +329,7 @@ export {
   fileRefs,
   KIND_GUIDANCE,
   renderContext,
-  renderIndex,
+  restCounts,
   type SelectedEntry,
   type Selection,
   type SelectOptions,

@@ -27,7 +27,7 @@ export interface Selection {
   items: SelectedEntry[];
   /** Ids that applied but did not fit the budget even as a bare Rule. */
   dropped: string[];
-  /** Those entries, best first: renderIndex lists them, so the agent knows they exist. */
+  /** Those entries, best first: the session is told how many there are, by topic. */
   rest: Entry[];
   /** Tokens of the rendered context. */
   tokens: number;
@@ -194,34 +194,15 @@ export function selectEntries(entries: readonly Entry[], opts: SelectOptions): S
 }
 
 /**
- * The rules that did not fit, as one compact list by topic (or area): titles and ids, so the
- * agent knows they exist and fetches any with `explain`. Cut to `maxChars`.
+ * The rules that did not fit, counted by topic (or area), most first. Sessions are told how many
+ * there are and how to look them up, never their titles: a list of titles is picked from instead
+ * of searched (see guide.ts).
  */
-export function renderIndex(rest: readonly Entry[], maxChars: number): string {
-  if (rest.length === 0 || maxChars < 200) return "";
-  const head =
-    "## More team rules\nThese apply here too but are not shown in full: call the homeostat `explain` tool with an id for the rule and why, or `context` with the files you are changing.";
-  const groups = new Map<string, Entry[]>();
+export function restCounts(rest: readonly Entry[]): Map<string, number> {
+  const groups = new Map<string, number>();
   for (const e of rest) {
     const key = e.frontmatter.topic ?? e.frontmatter.area;
-    groups.set(key, [...(groups.get(key) ?? []), e]);
+    groups.set(key, (groups.get(key) ?? 0) + 1);
   }
-  // Every topic and its count first, so none goes unseen; then titles while they fit.
-  const summary = `- By topic: ${[...groups]
-    .map(([g, es]) => `**${g}** (${es.length})`)
-    .join(", ")}. Find them with \`search\` or \`context\`.`;
-  let out = `${head}\n${summary}`;
-  if (out.length > maxChars) return "";
-  for (const [group, entries] of groups) {
-    const parts: string[] = [];
-    for (const e of entries) {
-      const item = `${e.frontmatter.title} (\`${e.frontmatter.id}\`)`;
-      if (`${out}\n- **${group}**: ${[...parts, item].join("; ")}`.length > maxChars) break;
-      parts.push(item);
-    }
-    if (parts.length === 0) break;
-    out += `\n- **${group}**: ${parts.join("; ")}`;
-    if (parts.length < entries.length) break;
-  }
-  return out;
+  return new Map([...groups].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
 }

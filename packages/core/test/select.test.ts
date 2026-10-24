@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { type Entry, formatEntry, parseEntry } from "../src/entry.ts";
 import type { Frontmatter } from "../src/schema.ts";
-import { CONTEXT_HEADER, renderContext, renderIndex, selectEntries } from "../src/select.ts";
+import { CONTEXT_HEADER, renderContext, restCounts, selectEntries } from "../src/select.ts";
 import { countTokens } from "../src/tokens.ts";
 import { validFrontmatter, words } from "./helpers.ts";
 
@@ -92,13 +92,11 @@ describe("selectEntries", () => {
     ]);
   });
 
-  test("rules that do not fit are left for the index, which lists them by topic", () => {
+  test("rules that do not fit are left over, and counted by topic", () => {
     const sel = selectEntries(kb, { paths: ["services/api/handler.ts"], tokenBudget: 60 });
     expect(sel.rest.map((e) => e.frontmatter.id)).toEqual(sel.dropped);
-    const index = renderIndex(sel.rest, 2000);
-    expect(index).toContain("## More team rules");
-    for (const id of sel.dropped) expect(index).toContain(`(\`${id}\`)`);
-    expect(renderIndex(sel.rest, 100)).toBe("");
+    const counted = [...restCounts(sel.rest).values()].reduce((a, b) => a + b, 0);
+    expect(counted).toBe(sel.dropped.length);
   });
 
   test("dotfiles match", () => {
@@ -176,20 +174,16 @@ describe("character cap", () => {
   });
 });
 
-describe("renderIndex", () => {
+describe("restCounts", () => {
   const many = Array.from({ length: 40 }, (_, i) =>
     entry(`rule-${i}`, { topic: `topic-${i % 8}`, title: `A fairly long rule title number ${i}` }),
   );
 
-  test("names every topic with its count even when titles do not fit", () => {
-    const index = renderIndex(many, 900);
-    expect(index.length).toBeLessThanOrEqual(900);
-    for (let t = 0; t < 8; t++) expect(index).toContain(`**topic-${t}** (5)`);
-    expect(index).not.toContain("number 39");
-  });
-
-  test("adds titles when there is room", () => {
-    const index = renderIndex(many, 20_000);
-    for (const e of many) expect(index).toContain(`(\`${e.frontmatter.id}\`)`);
+  test("counts every topic, most first, and names no rule", () => {
+    const counts = restCounts([...many, entry("extra", { topic: "topic-3" })]);
+    expect([...counts.keys()][0]).toBe("topic-3");
+    expect(counts.get("topic-3")).toBe(6);
+    expect(counts.get("topic-0")).toBe(5);
+    expect(counts.size).toBe(8);
   });
 });
