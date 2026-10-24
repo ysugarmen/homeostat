@@ -8,13 +8,13 @@ Homeostat's agents run in your KB repo's CI (or on one shared box with `homeosta
 
 1. **Collects** their pending lessons, which their sessions pushed to `candidates/<member>`, and drafts lessons from review comments on their own merged PRs (below).
 2. **Scores** each lesson for confidence, 0–100: its source, the role of whoever vouches for it (junior less, senior and lead more), whether it is specific, and its flags and conflicts.
-3. **Decides** each one: merge at 70 or above (80 for `core`), decline below 35 or as a duplicate, and a reviewer for anything in between. Risky content, conflicts, document patches and areas outside `scoring.autoMerge` always go to a reviewer.
+3. **Decides** each one: merge at 70 or above (80 for `core`), decline below 35 or as a duplicate, and a reviewer for anything in between. A new lesson that only refines a rule the KB already has becomes an **update** of that rule instead ([below](#consolidate)). Risky content, conflicts, document patches and areas outside `scoring.autoMerge` always go to a reviewer.
 4. **Opens one daily PR** with the merged lessons, each decision explained in the body, and merges it. Its commits are marked `[skip ci]`, since the branch is gone before a pipeline could start; the merge commit on the base branch is not, so the base branch is still validated.
 5. **Opens one review PR** for the middle band, after every developer's daily PR has merged, so it starts level with the base branch, and requests the area's owners as reviewers (on Bitbucket the token needs `read:workspace` to find them by nickname). Merging it accepts them; closing it declines them. Reviewers can do that on the host, or with `homeostat review` (`list`, `show`, `merge`, `close --reason`), which works the same on GitHub and Bitbucket and is what `/homeostat:review` uses.
 6. **Opens one dispute PR per flagged rule.** A flag takes the rule out of sessions at once; the PR proposes a fix drafted from the flags (a renamed helper, a moved file), keeping the parts nobody disputed. Merging puts it back in force; closing retires the rule.
 7. **Records** the decisions on the `homeostat/state` branch. Developers' sessions pick them up and tell them, and the dashboard's Automation page shows them.
 
-`--dry-run` prints every decision and writes nothing. `--no-reviews` skips the model and decides pending lessons only; dispute PRs then propose retiring the rule. Weights and thresholds: `scoring.confidence` ([config](config.md)). If Slack is set up, the run posts the review queue each morning and repeats lessons waiting more than 2 days.
+`--dry-run` prints every decision, including each update-or-add answer, and writes nothing. `--no-reviews` skips the model and decides pending lessons only; dispute PRs then propose retiring the rule. Weights and thresholds: `scoring.confidence` ([config](config.md)). If Slack is set up, the run posts the review queue each morning and repeats lessons waiting more than 2 days.
 
 Protect the base branch and let only the daily run's token bypass it (`init` prints how). If the host refuses the merge, the daily PR stays open for a reviewer, with a commit that lets its pipeline run.
 
@@ -35,6 +35,16 @@ it does three things (threads whose lesson is still waiting in an open review PR
 
 It never reads source code. It skips PRs marked `homeostat:skip`, members with `optOut`, and anything in `sources.exclude`. `homeostat curate --show-prompts` prints every prompt and sends nothing.
 
+### Update before add {#consolidate}
+
+The same lesson often comes back in other words ("Parse DB URLs by last '@'" and, a week later, "Parse the DATABASE_URL by last '@', not urlsplit"). Before adding a new lesson, the daily run:
+
+1. **Finds candidates without a model:** the up to three rules (in force in the same repo or core, or waiting in an open review PR) whose words or code overlap the lesson's most. Code that many rules name counts for less. Two rules are never candidates when each has a number or version the other lacks (v1 and v2, 101 and 102), or they name look-alike code (`useFoo` and `useFooBar`).
+2. **Asks the model once**, only for a lesson with candidates, with secrets redacted: `update` a rule (the whole rule rewritten to keep everything still true and add the new detail, with a reason), `duplicate` (nothing new), or `create`. It must answer create when a number, negation, named entity or condition differs, and never folds in a contradiction.
+3. **Applies the answer.** An update changes the rule in place (its section in a topic file): same id, owner and first source, the new title and text, confirmed today, and the lesson's review link added under `alsoFrom` so the thread is not drafted again. It is scored like any lesson, on the lesson's own source and author, and lands in the daily PR, shown as `Update:` with the reason, or in the review PR. A duplicate is declined and reconfirms the rule. A contradiction goes to a reviewer.
+
+At most `agents.curator.consolidateCalls` (30) calls per run, each a few thousand characters; past that, on a model error, or with `--no-reviews`, the older word-overlap duplicate check decides. Every call is logged as a `model-call` event.
+
 ### On developers' machines
 
 Nothing is scheduled there. The Claude Code plugin's hooks run `homeostat sync` in the background: when a session starts, on a prompt at most every 3 hours (sessions often stay open for days), and when a session stops with new lessons. A sync pulls the team KB, clears lessons the daily run has decided, and pushes new ones. Its fetches and push give up after 2 minutes (`HOMEOSTAT_GIT_TIMEOUT_MS`), and over ssh within about 20 seconds of a dead connection, so a sleeping laptop or a dropped network never leaves one hanging. `homeostat learn` lessons apply to the author's own sessions at once and reach the team the next morning.
@@ -42,7 +52,7 @@ Nothing is scheduled there. The Claude Code plugin's hooks run `homeostat sync` 
 ## Deep dive (weekly)
 
 `homeostat deep-dive`:
-- merges near-duplicate rules into the stronger one
+- merges near-duplicate rules into the stronger one (fewer now that the daily run updates rules instead of adding siblings; pairs with different numbers or look-alike code names are never merged)
 - asks the model whether this week's rules contradict older ones, and marks them
 - retires rules nobody has confirmed in `staleAfterDays`
 - notes document coverage gaps and stale sections

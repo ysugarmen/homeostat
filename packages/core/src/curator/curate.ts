@@ -93,8 +93,13 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
   if (!sources)
     throw new CurateError("homeostat.yaml has no sources section; the curator needs one");
 
+  // A rule's own source, and the later lessons folded into it, are already in the KB.
   const known = new Set(
-    kb.entries.flatMap(({ entry }) => commentKeyOf(entry.frontmatter.source.url) ?? []),
+    kb.entries.flatMap(({ entry }) =>
+      [entry.frontmatter.source.url, ...(entry.frontmatter.alsoFrom ?? [])].flatMap(
+        (u) => commentKeyOf(u) ?? [],
+      ),
+    ),
   );
   const waiting = new Set((input.waiting ?? []).flatMap((u) => commentKeyOf(u) ?? []));
   const ids = new Set(kb.entries.map(({ entry }) => entry.frontmatter.id));

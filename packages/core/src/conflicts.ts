@@ -170,6 +170,110 @@ export function codeReferences(text: string): Set<string> {
   return new Set(found.map((s) => s.replace(/`/g, "").toLowerCase()));
 }
 
+// The guards below are adapted from vectorize-io/hindsight (entity_resolver.py), MIT.
+
+/**
+ * The standalone numbers and versions a text states, normalised: `v2` → 2, `101`, `3.10` (kept
+ * apart from 3.1), `4.0` → 4. Digits inside a word (`utf8`, `s3`) are part of a name, not a number.
+ */
+export function numbersIn(text: string): Set<string> {
+  const found = new Set<string>();
+  for (const m of text.matchAll(/(?<![\w.])v?(\d+(?:\.\d+)*)(?!\w|\.\d)/gi)) {
+    const parts = (m[1] ?? "").split(".");
+    parts[0] = parts[0]?.replace(/^0+(?=\d)/, "") ?? "";
+    if (parts.length === 2 && /^0+$/.test(parts[1] ?? "")) parts.pop();
+    found.add(parts.join("."));
+  }
+  return found;
+}
+
+/**
+ * Code names a text uses, lowercased: calls, camelCase, snake_case and single-word code spans
+ * (`withRetry()` → withretry, `DATABASE_URL` → database_url, `ledger-sync`). Hyphenated prose
+ * (hand-rolled, request-id) counts only inside a code span.
+ */
+export function identifiersIn(text: string): Set<string> {
+  const found = new Set<string>();
+  const add = (s: string) => found.add(s.replace(/\(\)$/, "").toLowerCase());
+  for (const m of text.matchAll(/`([A-Za-z_$][\w$.-]*)(?:\(\))?`/g)) if (m[1]) add(m[1]);
+  const plain = text.replace(/`/g, " ");
+  const code =
+    /[A-Za-z_$][\w$]*(?=\()|\b[a-z][a-z0-9]*[A-Z][\w$]*|\b[A-Z][a-z0-9]+[A-Z][\w$]*|\b[A-Za-z][A-Za-z0-9]*_[\w]+/g;
+  for (const m of plain.matchAll(code)) add(m[0]);
+  return found;
+}
+
+/** The words of an identifier: `useFooBar` → use, foo, bar; `ledger-sync` → ledger, sync. */
+const nameParts = (id: string, original: string) =>
+  (
+    original
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .toLowerCase()
+      .match(/[a-z0-9]+/g) ?? [id]
+  ).filter(Boolean);
+
+/** The same word, inflected: retry/retries, call/calls/called. Not foo/fooBar. */
+const sameStem = (a: string, b: string) => {
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (long.startsWith(short)) return /^(s|es|d|ed|ing)$/.test(long.slice(short.length));
+  let n = 0;
+  while (n < short.length && short[n] === long[n]) n++;
+  // retry/retries: all but the last letter shared, at most two letters longer.
+  return n >= 3 && n >= short.length - 1 && long.length - short.length <= 2;
+};
+
+/**
+ * Two code names that look alike but name different things: one is the other plus a suffix
+ * (`useFoo` and `useFooBar`), or they differ in exactly one word (`ledger-sync` and `ledger-sink`).
+ * Plurals and other inflections of one word (`withRetry`, `withRetries`) are the same name.
+ */
+function lookalikeNames(a: string, b: string): [string, string] | undefined {
+  const originals = (text: string) => {
+    const map = new Map<string, string>();
+    for (const m of text.replace(/`/g, " ").matchAll(/[A-Za-z_$][\w$-]*/g)) {
+      map.set(m[0].toLowerCase(), m[0]);
+    }
+    return map;
+  };
+  const ia = identifiersIn(a);
+  const ib = identifiersIn(b);
+  const oa = originals(a);
+  const ob = originals(b);
+  for (const x of ia) {
+    if (ib.has(x)) continue;
+    for (const y of ib) {
+      if (ia.has(y)) continue;
+      const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+      if (long.startsWith(short) && !sameStem(short, long)) return [x, y];
+      const px = nameParts(x, oa.get(x) ?? x);
+      const py = nameParts(y, ob.get(y) ?? y);
+      if (px.length < 2 || px.length !== py.length) continue;
+      const differ = px.flatMap((p, i) => (sameStem(p, py[i] ?? "") ? [] : [i]));
+      if (differ.length === 1) return [x, y];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Why two rules state different facts however alike their words are, or undefined. Each has a
+ * number or version the other lacks (v1 and v2, port 101 and 102), or they name look-alike code
+ * (`useFoo` and `useFooBar`). Such pairs are never treated as one rule: not as duplicates by the
+ * daily run or the deep dive, and not as candidates to merge.
+ */
+export function distinctFacts(a: Entry, b: Entry): string | undefined {
+  const text = (e: Entry) => `${e.frontmatter.title}\n${e.sections.rule ?? ""}`;
+  const na = numbersIn(text(a));
+  const nb = numbersIn(text(b));
+  const onlyA = [...na].filter((n) => !nb.has(n));
+  const onlyB = [...nb].filter((n) => !na.has(n));
+  if (onlyA.length && onlyB.length) return `different numbers (${onlyA[0]} and ${onlyB[0]})`;
+  const names = lookalikeNames(text(a), text(b));
+  if (names) return `different names (${names[0]} and ${names[1]})`;
+  return undefined;
+}
+
 /**
  * Whether two rules teach the same lesson, for the daily run: near-identical titles, similar titles
  * with the same reason, or the same code named in both (two people rarely word a lesson alike, but
@@ -178,6 +282,7 @@ export function codeReferences(text: string): Set<string> {
  */
 export function sameLesson(a: Entry, b: Entry): boolean {
   if (!scopesOverlap(a.frontmatter.scope, b.frontmatter.scope)) return false;
+  if (distinctFacts(a, b)) return false;
   const titles = titleSimilarity(a.frontmatter.title, b.frontmatter.title);
   if (titles >= TITLE_SIMILARITY) return true;
   // A mostly similar title for the same reason, though each names its own example.

@@ -1,5 +1,7 @@
 import { resolve } from "node:path";
 import {
+  applyUpdate,
+  ClaudeConsolidator,
   ClaudeDocPatcher,
   ClaudeDrafter,
   ClaudeRuleFixer,
@@ -24,8 +26,10 @@ import {
   lessonHash,
   logEvent,
   loginKey,
+  mergeCandidates,
   type OpenPullRequest,
   overlayPending,
+  type PoolRule,
   parseDoc,
   parseEntry,
   REVIEW_REMINDER_DAYS,
@@ -35,6 +39,7 @@ import {
   resolveDispute,
   STATE_BRANCH,
   sameLesson,
+  type Verdict,
   validate,
 } from "@homeostat/core";
 import { askerFor } from "./agents.ts";
@@ -88,6 +93,12 @@ interface Lesson {
   carriedBy?: string;
   /** Filed under general: the topic the drafter would add for it. */
   suggestedTopic?: string;
+  /** The model's answer on whether this new lesson updates, repeats or adds to existing rules. */
+  verdict?: Verdict;
+  /** A new lesson turned into an update of the rule it refines: its own text, as evidence. */
+  update?: { lesson: Entry; lessonId: string; reason: string };
+  /** Waits with this lesson, which is in an open review PR. */
+  twin?: string;
 }
 
 const repoRef = (ref: string): RepoRef => {
@@ -334,10 +345,72 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     }
   }
 
-  // 2. Decide each lesson.
   // Lessons are compared within their repo, or with shared rules; never across two repos.
   const inForce = kb.entries.filter((e) => e.entry.frontmatter.status === "accepted");
   const near = (a: string, b: string) => comparable(a, b, config);
+
+  // 2a. Consolidate: a new lesson that refines a rule in force updates that rule, and one that
+  // repeats it reconfirms it, instead of landing as a sibling. Candidates come from word and code
+  // overlap (no model); one model call per lesson that has any decides. --no-reviews skips it.
+  const consolidator = opts.noReviews
+    ? undefined
+    : (io.consolidator ?? new ClaudeConsolidator(askerFor(config, "curator", io, root, stats)));
+  let budget = config.agents.curator.consolidateCalls;
+  let unchecked = 0;
+  // Rules another lesson of this run changes (a developer's edit or flag, or an earlier update).
+  const claimed = new Set(lessons.filter((l) => l.kind !== "new").map((l) => l.path));
+  for (const l of lessons) {
+    if (l.kind !== "new" || !consolidator) continue;
+    const entry = parseEntry(l.text).entry;
+    if (!entry) continue;
+    const pool: PoolRule[] = [
+      ...inForce.filter((e) => near(e.path, l.path) && !claimed.has(e.path)),
+      ...inReview.filter((r) => near(r.path, l.path)).map((r) => ({ ...r, waiting: true })),
+    ];
+    const candidates = mergeCandidates(entry, pool);
+    if (!candidates.length) continue;
+    if (budget <= 0) {
+      unchecked++;
+      continue;
+    }
+    budget--;
+    let verdict: Verdict | null;
+    try {
+      verdict = await consolidator.decide(entry, candidates);
+    } catch (e) {
+      // Without the model the run still decides, by word overlap, as before.
+      io.stdout(`  could not check ${l.id} against existing rules: ${(e as Error).message}\n`);
+      budget = 0;
+      continue;
+    }
+    if (!verdict) continue;
+    l.verdict = verdict;
+    const target = verdict.action === "create" ? undefined : verdict.id;
+    io.stdout(
+      `  ${l.id}: ${verdict.action}${target ? ` ${target}` : ""} (${verdict.reason})${verdict.action === "create" && verdict.contradicts ? `; contradicts ${verdict.contradicts}` : ""}\n`,
+    );
+    const found = candidates.find((c) => c.entry.frontmatter.id === target);
+    if (!found) continue;
+    if (found.waiting) {
+      l.twin = target;
+      continue;
+    }
+    if (verdict.action !== "update") continue;
+    l.update = { lesson: entry, lessonId: l.id, reason: verdict.reason };
+    l.kind = "update";
+    l.path = found.path;
+    l.id = found.entry.frontmatter.id;
+    l.title = verdict.rule.title;
+    l.text = applyUpdate(found.entry, verdict.rule, entry, today, config);
+    claimed.add(found.path);
+  }
+  if (unchecked) {
+    io.stdout(
+      `  ${unchecked} more lesson(s) not checked against existing rules: agents.curator.consolidateCalls reached; word overlap decided them\n`,
+    );
+  }
+
+  // 2. Decide each lesson.
   // New lessons that teach the same thing, from anyone in this run, are decided together.
   const fresh = lessons.flatMap((l) => {
     const entry = l.kind === "new" ? parseEntry(l.text).entry : undefined;
@@ -357,14 +430,20 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     decide(l, files, config, peers, groups.get(l)?.length ?? 1);
   }
   for (const { l, entry } of fresh) {
-    const twin = inReview.find(
-      (r) =>
-        r.entry.frontmatter.id === entry.frontmatter.id ||
-        (near(r.path, l.path) && sameLesson(r.entry, entry)),
-    )?.entry;
+    // The model's answer, when it gave one, says whether a waiting rule is the same; else words do.
+    const twin =
+      l.twin ??
+      inReview.find(
+        (r) =>
+          r.entry.frontmatter.id === entry.frontmatter.id ||
+          (!l.verdict && near(r.path, l.path) && sameLesson(r.entry, entry)),
+      )?.entry.frontmatter.id;
     if (!twin || l.decision === "declined") continue;
     l.decision = "review";
-    l.reason = `the same lesson as ${twin.frontmatter.id}, which is waiting in review: decide them together`;
+    l.reason =
+      l.verdict?.action === "update"
+        ? `refines ${twin}, which is waiting in review: decide them together (${l.verdict.reason})`
+        : `the same lesson as ${twin}, which is waiting in review: decide them together`;
   }
   // If any copy of a lesson repeats a rule already in force, every copy reconfirms that rule.
   for (const [l, group] of groups) {
@@ -482,6 +561,9 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       `reviews read with no lesson:\n${skipped.map((s) => `  ${s.url}: ${s.reason}\n`).join("")}`,
     );
   }
+  const updating = new Set(
+    lessons.filter((l) => l.update && l.decision !== "declined").map((l) => l.id),
+  );
   const byMember = new Map<string, Lesson[]>();
   for (const l of lessons) byMember.set(l.member, [...(byMember.get(l.member) ?? []), l]);
   const later: (() => Promise<void>)[] = [];
@@ -527,7 +609,10 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
 
     const reconfirm = declined
       .flatMap((l) =>
-        l.duplicateOf ? [reconfirmChange(files, kb.entries, l.duplicateOf, today)] : [],
+        // A rule this run updates is confirmed by its update; a reconfirmation would undo it.
+        l.duplicateOf && !updating.has(l.duplicateOf)
+          ? [reconfirmChange(files, kb.entries, l.duplicateOf, today)]
+          : [],
       )
       .filter((c): c is FileChange => c !== undefined);
     const changes = [
@@ -621,7 +706,10 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   for (const l of lessons) {
     const parsed = l.kind === "doc" ? undefined : parseEntry(l.text).entry;
     const rule = parsed?.sections.rule;
-    const source = l.kind === "doc" ? "doc" : parsed?.frontmatter.source.type;
+    const source =
+      l.kind === "doc"
+        ? "doc"
+        : (l.update?.lesson.frontmatter.source.type ?? parsed?.frontmatter.source.type);
     report.lessons.push({
       member: l.member,
       id: l.id,
@@ -768,6 +856,7 @@ function decide(
   }
   const entry = parseEntry(l.text).entry as Entry | undefined;
   // An update or flag to a rule in a topic file replaces its section, not adds a second copy.
+  // An update drafted from a lesson is validated as rewritten.
   const issues = validate(overlayPending(files, { [l.path]: l.text })).issues.filter(
     (i) => i.file === l.path && i.severity === "error",
   );
@@ -777,23 +866,36 @@ function decide(
     return;
   }
   const fm = entry.frontmatter;
+  const verdict = l.verdict;
+  // The model's answer, when there is one, decides duplicates; without it, word overlap does.
   const dupOf =
-    l.kind === "new"
-      ? inForce.find((x) => x.frontmatter.id !== fm.id && sameLesson(x, entry))?.frontmatter.id
-      : undefined;
+    l.kind !== "new" || l.twin
+      ? undefined
+      : verdict
+        ? verdict.action === "duplicate"
+          ? verdict.id
+          : undefined
+        : inForce.find((x) => x.frontmatter.id !== fm.id && sameLesson(x, entry))?.frontmatter.id;
+  const contradicts = verdict?.action === "create" ? verdict.contradicts : undefined;
+  const conflicts = [...(fm.conflictsWith ?? []), ...(contradicts ? [contradicts] : [])];
+  // An update is scored on the lesson's own evidence (its source and who it came from) and on the
+  // rewritten rule's text; the rule keeps its first source.
+  const scored = l.update
+    ? { ...entry, frontmatter: { ...fm, source: l.update.lesson.frontmatter.source } }
+    : entry;
   const c = confidence({
-    entry,
+    entry: scored,
     config,
     originator: l.originator,
     occurrences,
     risks: issues.filter((i) => i.code.startsWith("risk.")).map((i) => i.message),
     errors: issues.filter((i) => !i.code.startsWith("risk.")).map((i) => i.message),
     ...(dupOf ? { duplicateOf: dupOf } : {}),
-    ...(fm.conflictsWith?.length ? { conflictsWith: fm.conflictsWith } : {}),
+    ...(conflicts.length ? { conflictsWith: conflicts } : {}),
   });
   l.confidence = c;
   l.decision = c.decision;
-  l.reason = c.reason;
+  l.reason = l.update ? `updates ${l.id}: ${l.update.reason}; ${c.reason}` : c.reason;
   if (dupOf) l.duplicateOf = dupOf;
 }
 
@@ -868,7 +970,8 @@ function prBody(member: string, today: string, list: Lesson[], kind: "daily" | "
   const rows = list.map((l) => {
     const why = l.confidence ? `${l.reason}<br>${explainConfidence(l.confidence)}` : l.reason;
     const src = l.url ? `[review](${l.url})` : l.origin === "pending" ? "written by hand" : "";
-    return `| ${l.decision} | ${l.title} (\`${l.id}\`) | ${l.confidence?.score ?? ""} | ${src} | ${why} |`;
+    const lesson = l.update ? `Update: ${l.title} (\`${l.id}\`)` : `${l.title} (\`${l.id}\`)`;
+    return `| ${l.decision} | ${lesson} | ${l.confidence?.score ?? ""} | ${src} | ${why} |`;
   });
   return [
     kind === "daily"
