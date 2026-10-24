@@ -6,7 +6,7 @@ You need Node 22.18 or later and a git repo for the knowledge base (KB). It can 
 
 ```sh
 git clone git@github.com:your-org/team-kb.git && cd team-kb   # or git@bitbucket.org:your-workspace/team-kb.git
-npx --yes homeostat@0.3.1 init --member your-id --handle @your-user
+npx --yes homeostat@0.3.2 init --member your-id --handle @your-user
 ```
 
 A handle is your GitHub login or, on Bitbucket, your Bitbucket nickname (Personal settings > Account). Bitbucket nicknames often hold spaces and accents; write them as they are, quoted in YAML: `handle: "@Ana Ruiz"`. Case does not matter.
@@ -58,8 +58,8 @@ Member areas are then written `api/integrations`. To group rules into a few file
 Then generate CODEOWNERS, so each area's owners review its changes (on Bitbucket it goes in `.bitbucket/CODEOWNERS`, where Bitbucket reads it):
 
 ```sh
-npx --yes homeostat@0.3.1 codeowners
-npx --yes homeostat@0.3.1 validate
+npx --yes homeostat@0.3.2 codeowners
+npx --yes homeostat@0.3.2 validate
 ```
 
 ## 3. Build a first base
@@ -67,7 +67,7 @@ npx --yes homeostat@0.3.1 validate
 With your code repos checked out next to the KB:
 
 ```sh
-npx --yes homeostat@0.3.1 bootstrap --dry-run
+npx --yes homeostat@0.3.2 bootstrap --dry-run
 ```
 
 It lists every file it would read from each repo (existing docs, schemas and migrations, charts and pipelines) and what the model calls would cost. Run it without `--dry-run` to import the docs and draft the rest; you get one PR per repo to correct and merge ([details](bootstrap.md)).
@@ -75,7 +75,7 @@ It lists every file it would read from each repo (existing docs, schemas and mig
 ## 4. Write a first rule
 
 ```sh
-npx --yes homeostat@0.3.1 learn --area integrations \
+npx --yes homeostat@0.3.2 learn --area integrations \
   --title "Use the shared retry helper for partner calls" \
   --rule "Wrap every outbound partner call in withRetry() from @acme/http-client." \
   --why "Hand-rolled retries skipped the request-id header partners ask for."
