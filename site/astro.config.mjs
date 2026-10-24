@@ -4,7 +4,7 @@ import { defineConfig } from "astro/config";
 const REPO = "https://github.com/ysugarmen/homeostat";
 
 export default defineConfig({
-  site: "https://homeostat.pages.dev",
+  site: "https://homeostat-site.sugaryoni3.workers.dev",
   integrations: [
     starlight({
       title: "Homeostat",
