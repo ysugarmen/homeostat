@@ -42,6 +42,20 @@ const weightsSchema = z.strictObject(
 /** The Claude model the agents draft with; any model id the Messages API accepts. */
 export const DEFAULT_AGENT_MODEL = "claude-opus-5-5";
 
+/**
+ * The model that judges the daily run's drafts. A model grading its own output agrees with
+ * itself, so the default is a different model from the drafter's: the current Sonnet, or Opus
+ * when the drafter already runs on Sonnet (see `judgeModelFor`).
+ */
+export const DEFAULT_JUDGE_MODEL = "claude-sonnet-5-5";
+
+/** The judge's model: `agents.curator.judgeModel`, else a default that differs from the drafter's. */
+export function judgeModelFor(config: Config): string {
+  const { judgeModel, model } = config.agents.curator;
+  if (judgeModel) return judgeModel;
+  return model === DEFAULT_JUDGE_MODEL ? DEFAULT_AGENT_MODEL : DEFAULT_JUDGE_MODEL;
+}
+
 const agentSchema = (schedule: string, lookbackHours: number) =>
   z.strictObject({
     enabled: z.boolean().default(true),
@@ -222,6 +236,8 @@ export const configSchema = z.strictObject({
               vagueTitle: z.int().default(15),
               conflict: z.int().default(25),
               flag: z.int().default(20),
+              /** Subtracted when the judge finds a drafted rule says what its thread did not. */
+              judge: z.int().default(30),
             })
             .prefault({}),
         })
@@ -254,12 +270,31 @@ export const configSchema = z.strictObject({
            * rule already in force. Past it, lessons fall back to the word-overlap duplicate check.
            */
           consolidateCalls: z.int().min(0).default(30),
+          /**
+           * Most model calls per daily run that judge a confident drafted rule against its review
+           * thread before it merges with no person; 0 turns the judge off. Past the cap, drafts
+           * that would merge go to a reviewer instead.
+           */
+          judgeCalls: z.int().min(0).default(30),
+          /** The judge's model; by default a different one from `model` (see `judgeModelFor`). */
+          judgeModel: z.string().min(1).optional(),
+          judgeEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
+          /**
+           * Most model calls per daily run that rewrite a document section citing a rule the run
+           * retires; 0 turns them off (the sections are listed instead).
+           */
+          retractCalls: z.int().min(0).default(10),
         })
         .prefault({}),
       deepDive: agentSchema("0 7 * * 1", 7 * 24)
         .extend({
           /** Accepted entries not confirmed for this long are retired. */
           staleAfterDays: z.int().positive().default(180),
+          /**
+           * Most model calls per deep dive that rewrite a document section citing a rule it
+           * retires as stale; 0 turns them off (the sections are listed instead).
+           */
+          retractCalls: z.int().min(0).default(10),
         })
         .prefault({}),
       /** Session handoff notes, asked for by the plugin's Stop hook. Runs in sessions, not on a schedule. */

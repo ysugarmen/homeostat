@@ -5,8 +5,10 @@ import type {
   Consolidator,
   DocPatcher,
   Drafter,
+  DraftJudge,
   Merger,
   Provider,
+  Retractor,
   RuleFixer,
   Seeder,
   TopicProposer,
@@ -66,6 +68,8 @@ export interface Io {
   judge?: ConflictJudge;
   fixer?: RuleFixer;
   consolidator?: Consolidator;
+  draftJudge?: DraftJudge;
+  retractor?: Retractor;
   topicProposer?: TopicProposer;
 }
 

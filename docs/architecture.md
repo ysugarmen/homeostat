@@ -94,7 +94,7 @@ Knowledge enters by four paths. All of them reach `main` only through the daily 
 **From reviews** (part of `homeostat daily`; `homeostat curate` runs the same pipeline on its own):
 
 1. List PRs merged in the KB's code repos (`repos`, or `sources.repos` in a KB without repo folders) within `lookbackHours` (26). Skip PRs marked `homeostat:skip`, excluded repos, and authors who opted out.
-2. Group review comments into threads. Keep a thread only if a team member wrote it, a commit followed it, it isn't in an excluded path, and it isn't already cited by a rule or document section, on the base branch or in an open review PR.
+2. Group review comments into threads (the KB repo is never read as a code repo, even if listed: its PRs are Homeostat's own output). Keep a thread only if a team member wrote it, a commit followed it, it isn't in an excluded path, and it isn't already cited by a rule or document section, on the base branch or in an open review PR.
 3. Redact secrets from the thread, then ask the model for one rule (structured output: keep, title, rule, why, area, and topic from the repo's list, or a suggested new one).
 4. If a document's scope covers the commented file, ask for at most one section patch (replace or append) with `source=curator` provenance.
 5. Build the entry, compute its score, and validate it against the whole KB. Risky-content findings keep a draft as a flagged candidate; any other error drops it.
@@ -128,7 +128,7 @@ Every change passes `homeostat validate`, which CI runs on each KB pull request.
 | Risky content | piped shell, unlisted domains, credential handling, disabling security checks, injection phrasing, destructive commands, hidden text | error until `riskReviewedBy` |
 | Provenance | a pr-feedback URL outside the KB's code repos | error |
 | Topic files | a topic missing from the config, duplicate ids, unsorted sections | error or warning |
-| Documents | duplicate headings or ids, repeated dates, wrapped or unclosed fences, conflict markers, sections over 400 words | error or warning |
+| Documents | duplicate headings or ids, repeated dates, wrapped or unclosed fences, conflict markers, sections over 400 words; documents citing each other as evidence in a loop (a section's provenance `url` naming a KB document, its own included) | error or warning |
 | Conflicts | duplicate ids, near-duplicates, declared contradictions | error or warning |
 
 **Merge is approval.** A rule is accepted by being merged, by the daily run past the confidence threshold or by a reviewer merging a review PR. Nobody edits `status` or `approvedBy` by hand.
@@ -165,10 +165,11 @@ A long session gets only the rules that are new since its start, on the next pro
    - decline below 35, or on a validation error, or as a duplicate (which reconfirms the original); a lesson that refines a rule becomes an update of that rule (see Capture, consolidation)
    - otherwise review, and always for risky content, conflicts, documents and areas outside `scoring.autoMerge`
    - a flag merges at once (the rule becomes `disputed`) and a reviewer resolves it, in a dispute PR (below)
+   - **the judge**: a rule drafted from a review that would merge with no person is first checked against its redacted thread (and, for an update, the rule it rewrites) by a second model, `agents.curator.judgeModel` (default `claude-sonnet-5-5`, or `claude-opus-5-5` when the drafter runs on Sonnet; same runtime). Structured answer `{ok, problems: [{trap, evidence}]}` over four traps: `invented-detail` (a value, name, path, number or reason not in the thread), `wider-scope`, `overgeneralised` (a one-off made "always"/"never"), `contradicts-thread`. A pass costs one call; a failure is re-asked twice and kept only on a majority of answers (adapted from vectorize-io/hindsight's eval judge, MIT; there a trap hit is the side re-asked). A kept failure loses `scoring.confidence.penalty.judge` (30) and goes to review with the evidence in the PR body; a majority naming `contradicts-thread` declines it. It fails closed: an error, no usable answer, or past `agents.curator.judgeCalls` (30) sends the draft to review; `0` turns it off. The middle band is not judged (a person reads it anyway), nor are hand-written lessons (no thread)
 4. opens **one daily PR** per developer with the merged lessons and reconfirmations, every decision and its score breakdown in the body, validates the whole KB, and squash-merges it. Its commits carry `[skip ci]`, since the branch is deleted before a pipeline could start; the squash commit has its own message, so the base branch still runs CI. If the host refuses the merge (branch protection, a failing check), the PR stays open with a plain commit that lets its pipeline run, and its lessons count as review
 5. after every developer's daily PR has merged, opens one **review PR** per developer for the middle band, so it starts level with the base branch, and requests reviewers: `team.reviewers` when set (also mentioned in the morning Slack notice), else the area's owning team, else members with that area, else seniors and leads
 6. opens one **dispute PR** (`homeostat/review-dispute-<id>-<date>`) per disputed rule, with a fix the model drafts from the flags, or the rule retired when no fix can be drafted. Merging puts the fixed rule back in force; closing retires the rule
-7. settles review PRs from earlier runs: merged by a reviewer means merged, closed means declined (for a dispute PR, the rule is retired through the next daily PR)
+7. settles review PRs from earlier runs: merged by a reviewer means merged, closed means declined (for a dispute PR, the rule is retired through the next daily PR, and the document sections citing it get retraction patches in that run's review PR; see Maintenance)
 8. writes decisions, heartbeats and the run report to `homeostat/state`, and posts the review queue to Slack, repeating lessons that have waited more than 2 days
 
 All thresholds and weights are in `scoring.confidence`. `--dry-run` decides and prints without writing anything.
@@ -179,7 +180,9 @@ All thresholds and weights are in `scoring.confidence`. `--dry-run` decides and 
 
 ## Maintenance and ownership
 
-**Deep dive** (weekly) merges near-duplicate rules into the higher-scoring one (with the same number and look-alike-name guards as the daily run; since the daily run updates rules instead of adding siblings, it finds fewer), asks the model about contradictions with the week's new rules, and retires rules unconfirmed for `staleAfterDays` (180). It notes document coverage gaps and stale sections, but never edits documents.
+**Deep dive** (weekly) merges near-duplicate rules into the higher-scoring one (with the same number and look-alike-name guards as the daily run; since the daily run updates rules instead of adding siblings, it finds fewer), asks the model about contradictions with the week's new rules, and retires rules unconfirmed for `staleAfterDays` (180). It notes document coverage gaps and stale sections. The only document edits it makes are retractions, in its own PR, which a person merges.
+
+**Retractions** (adapted from vectorize-io/hindsight's `retractions.py`, MIT). When a run retires a rule (the deep dive for staleness; the daily run when a dispute PR is closed), `findCitations` finds the document sections grounded on it: the rule's id in the text as a whole token (a one-word id only as `(id)`, `` `id` `` or `[id]`), or the rule's review thread (`source.url`, `alsoFrom`) as the section's provenance `url`. No text-similarity match: a section on the same subject may rest on evidence the run cannot see, and a wrong deletion is worse than a stale sentence. One model call per citing section (`Retractor`, secrets redacted; the rules in force that the section also cites are sent as still supported) returns the section with only the retired claims removed, or `change: false`, which leaves it. A rewrite goes through `applySectionPatch` and is kept only when it validates, drops the citation, adds no words (beyond two or three joining ones) and is not empty; provenance becomes `source=curator|deep-dive`, `note="retracted <id>"`, dropping a `url` that was the retired rule's thread. Everything else, and every citation past `retractCalls` (10 per run, per agent) or without a model, is listed for a person. Deep-dive patches go in the deep-dive PR. The daily run's retirement still merges in the daily PR (a reviewer decided it by closing the dispute), so its patches go in that run's review PR: documents never merge without a person. A rule merged into another as a duplicate is not retracted; its citations are listed.
 
 **Ownership.** `homeostat codeowners` generates CODEOWNERS. Each area goes to its owning team's handle (or its members), and seniors own the config and core. Reads stay org-wide: any session gets any team's rule whose scope matches its files.
 
@@ -242,7 +245,8 @@ The main threat is knowledge poisoning: one merged rule reaches every developer'
 
 - the risky-content linter
 - the auto-merge gates
-- the provenance check
+- the provenance check, the KB repo never read as a code repo, and no document-to-document evidence loops
+- the judge: a second model checks every drafted rule that would merge unread against its thread, and fails closed
 - agent-written entries capped at score 0 and labelled
 - MCP writes off by default
 - a session header that says rules never override the user or safety

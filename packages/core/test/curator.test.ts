@@ -274,6 +274,28 @@ describe("curate", () => {
     expect(result.skipped.map((s) => s.reason)).toContain("already in the knowledge base");
   });
 
+  test("the KB repo listed as a code repo is never read: its PRs are Homeostat's own output", async () => {
+    const files = kbFiles();
+    files["homeostat.yaml"] = (files["homeostat.yaml"] ?? "").replace(
+      "kbRepo: acme/team-kb",
+      "kbRepo: acme/integrations-api",
+    );
+    const drafter = new FakeDrafter();
+    const result = await run(drafter, files);
+    expect(drafter.seen).toEqual([]);
+    expect(result.skipped).toEqual([
+      {
+        url: "acme/integrations-api",
+        reason: "the knowledge base's own repo is never read as a code repo",
+      },
+    ]);
+  });
+
+  test("each drafted entry carries its redacted thread, for the judge", async () => {
+    const result = await run(new FakeDrafter());
+    expect(result.entries[0]?.thread?.root.id).toBe(33);
+  });
+
   test("a thread the model declines produces no entry", async () => {
     const result = await run(new FakeDrafter(null));
     expect(result.entries).toEqual([]);

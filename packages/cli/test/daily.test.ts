@@ -7,11 +7,14 @@ import type {
   DocPatcher,
   Draft,
   Drafter,
+  DraftJudge,
+  JudgeVerdict,
   NewPullRequest,
   OpenPullRequest,
   Provider,
   PullRequest,
   RepoRef,
+  Retractor,
   ReviewThread,
   RuleCandidate,
   Verdict,
@@ -186,6 +189,33 @@ class FakeConsolidator implements Consolidator {
   }
 }
 
+const PASS: JudgeVerdict = { ok: true, problems: [] };
+const INVENTED: JudgeVerdict = {
+  ok: false,
+  problems: [
+    { trap: "invented-detail", evidence: '"var(--color-*)" widens the one token the thread named' },
+  ],
+};
+const CONTRADICTS: JudgeVerdict = {
+  ok: false,
+  problems: [{ trap: "contradicts-thread", evidence: "the thread asked for tokens, not hex" }],
+};
+
+/** The draft judge: answers in turn, the last one repeating; an Error is thrown. */
+class FakeJudge implements DraftJudge {
+  calls: string[] = [];
+  answers: (JudgeVerdict | null | Error)[];
+  constructor(...answers: (JudgeVerdict | null | Error)[]) {
+    this.answers = answers.length ? answers : [PASS];
+  }
+  async judge(input: { draft: { title: string } }): Promise<JudgeVerdict | null> {
+    const a = this.answers[Math.min(this.calls.length, this.answers.length - 1)];
+    this.calls.push(input.draft.title);
+    if (a instanceof Error) throw a;
+    return a ?? null;
+  }
+}
+
 async function run(args: string[], extra: Partial<Io> = {}) {
   let stdout = "";
   const code = await runCli(["node", "homeostat", ...args], {
@@ -197,6 +227,7 @@ async function run(args: string[], extra: Partial<Io> = {}) {
     background: () => {},
     drafter: new FakeDrafter(),
     consolidator: new FakeConsolidator(),
+    draftJudge: new FakeJudge(),
     ...extra,
   });
   return { code, stdout };
@@ -876,6 +907,251 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(stdout).toContain("asked @sam to review");
     expect(stdout).toContain(
       "could not request @dana (Review cannot be requested from pull request author.)",
+    );
+  });
+});
+
+/** Sets one `agents.curator` key in the team's config and pushes it. */
+function setCurator(t: ReturnType<typeof team>, key: string) {
+  const config = join(t.ci, "homeostat.yaml");
+  writeFileSync(
+    config,
+    readFileSync(config, "utf8").replace(
+      `curator: { enabled: true, schedule: "0 6 * * *" }`,
+      `curator: { enabled: true, schedule: "0 6 * * *", ${key} }`,
+    ),
+  );
+  t.g(t.ci, "commit", "-qam", key);
+  t.g(t.ci, "push", "-q", "origin", "main");
+}
+
+describe("homeostat daily: the judge on confident drafts", { timeout: 30_000 }, () => {
+  test("a confident draft the judge passes merges, after one call", async () => {
+    const t = team();
+    const provider = new FakeProvider();
+    const draftJudge = new FakeJudge(PASS);
+    const { stdout } = await run(["daily", "--dir", t.ci], { provider, draftJudge });
+    expect(draftJudge.calls).toEqual(["Use colour tokens instead of hex values"]);
+    expect(stdout).toContain("judge use-colour-tokens-instead-of-hex-values: ok (passed)");
+    expect(stdout).toContain("lee: 1 merged, 0 to review");
+    expect(provider.merged).toHaveLength(1);
+  });
+
+  test("a failure kept by the majority goes to review, the problems in the PR body, confidence lowered", async () => {
+    const t = team();
+    const provider = new FakeProvider();
+    const draftJudge = new FakeJudge(INVENTED, INVENTED, PASS);
+    const { stdout } = await run(["daily", "--dir", t.ci], { provider, draftJudge });
+    expect(draftJudge.calls).toHaveLength(3);
+    expect(stdout).toContain("lee: 0 merged, 1 to review");
+    expect(provider.merged).toEqual([]);
+    const [review] = provider.opened;
+    expect(review?.pr.sourceBranch).toBe("homeostat/review-lee-2026-10-16");
+    expect(review?.pr.body).toContain("The judge (a second model) found claims");
+    expect(review?.pr.body).toContain(
+      '- `use-colour-tokens-instead-of-hex-values` (2/3 failed):\n  - invented-detail: "var(--color-*)" widens',
+    );
+    expect(review?.pr.body).toContain("-30 the judge found claims its thread does not make");
+    const decided = JSON.parse(t.g(t.origin, "show", "homeostat/state:decisions/lee.json")).decided;
+    expect(decided[0]).toMatchObject({ decision: "review", confidence: 82 - 30 });
+  });
+
+  test("a failure that flips when re-asked is not kept: the draft merges", async () => {
+    const t = team();
+    const provider = new FakeProvider();
+    const draftJudge = new FakeJudge(INVENTED, PASS, PASS);
+    const { stdout } = await run(["daily", "--dir", t.ci], { provider, draftJudge });
+    expect(draftJudge.calls).toHaveLength(3);
+    expect(stdout).toContain("judge use-colour-tokens-instead-of-hex-values: ok (1/3 failed)");
+    expect(stdout).toContain("lee: 1 merged");
+  });
+
+  test("a draft a majority finds contradicts its own thread is declined", async () => {
+    const t = team();
+    const provider = new FakeProvider();
+    const { stdout } = await run(["daily", "--dir", t.ci], {
+      provider,
+      draftJudge: new FakeJudge(CONTRADICTS),
+    });
+    expect(stdout).toContain("lee: 0 merged, 0 to review, 1 declined");
+    expect(stdout).toContain("the judge found it contradicts its own review thread");
+  });
+
+  test("past agents.curator.judgeCalls a confident draft goes to a reviewer; 0 turns the judge off", async () => {
+    const t = team();
+    setCurator(t, "judgeCalls: 1");
+    // Two review comments on Lee's PR, each a confident lesson.
+    class TwoThreads extends FakeProvider {
+      override async listReviewComments() {
+        const [first] = await super.listReviewComments();
+        if (!first) return [];
+        return [
+          first,
+          {
+            ...first,
+            id: 9002,
+            body: "Use var(--space-2) instead of pixel margins; they ignore density settings.",
+            url: "https://github.com/acme/web-app/pull/120#discussion_r9002",
+            line: 9,
+          },
+        ];
+      }
+    }
+    const drafter: Drafter = {
+      draft: async (thread: ReviewThread) =>
+        thread.root.id === 9002
+          ? {
+              title: "Use spacing tokens instead of pixel margins",
+              rule: "Set margins in apps/web styles with var(--space-*) tokens, never pixel values.",
+              why: "Pixel margins ignore the density settings.",
+              area: "frontend",
+            }
+          : COLOUR_DRAFT,
+    };
+    const draftJudge = new FakeJudge(PASS);
+    const { stdout } = await run(["daily", "--dir", t.ci], {
+      provider: new TwoThreads(),
+      drafter,
+      draftJudge,
+    });
+    expect(draftJudge.calls).toHaveLength(1);
+    expect(stdout).toContain("lee: 1 merged, 1 to review");
+    expect(stdout).toContain(
+      "not judged (agents.curator.judgeCalls reached), so a person reads it",
+    );
+
+    const off = team();
+    setCurator(off, "judgeCalls: 0");
+    const never = new FakeJudge(new Error("not asked"));
+    const offRun = await run(["daily", "--dir", off.ci], {
+      provider: new FakeProvider(),
+      draftJudge: never,
+    });
+    expect(never.calls).toEqual([]);
+    expect(offRun.stdout).toContain("lee: 1 merged");
+  });
+
+  test("a judge that cannot be reached sends the draft to a person, not through", async () => {
+    const t = team();
+    const { stdout } = await run(["daily", "--dir", t.ci], {
+      provider: new FakeProvider(),
+      draftJudge: new FakeJudge(new Error("Claude API error 529")),
+    });
+    expect(stdout).toContain("lee: 0 merged, 1 to review");
+    expect(stdout).toContain("not judged (the judge could not be reached: Claude API error 529)");
+  });
+
+  test("--dry-run prints each verdict and writes nothing; --no-reviews never asks", async () => {
+    const t = team();
+    const provider = new FakeProvider();
+    const { stdout } = await run(["daily", "--dir", t.ci, "--dry-run"], {
+      provider,
+      draftJudge: new FakeJudge(INVENTED),
+    });
+    expect(stdout).toContain(
+      'judge use-colour-tokens-instead-of-hex-values: failed (3/3 failed): invented-detail: "var(--color-*)" widens',
+    );
+    expect(stdout).toContain("dry run");
+    expect(provider.opened).toEqual([]);
+
+    await leeLearns(t.lee);
+    const never = new FakeJudge(new Error("not asked"));
+    await run(["daily", "--dir", t.ci, "--no-reviews", "--dry-run"], {
+      provider,
+      draftJudge: never,
+    });
+    expect(never.calls).toEqual([]);
+  });
+});
+
+describe("homeostat daily: retiring a rule retracts the documents citing it", {
+  timeout: 30_000,
+}, () => {
+  const DOC = "knowledge/integrations/docs/partner-calls.md";
+  const RULE = "knowledge/integrations/outbound-http-retry-helper.md";
+
+  /** Retracts the cited sentence from #http-client; nothing in #timeouts rests on the rule. */
+  class FakeRetractor implements Retractor {
+    asked: string[] = [];
+    async retract(i: { section: { id: string; body: string } }) {
+      this.asked.push(i.section.id);
+      if (i.section.id !== "http-client") return { change: false, body: "", reason: "" };
+      return {
+        change: true,
+        body: i.section.body.replace(
+          " Never hand-roll a retry loop (outbound-http-retry-helper).",
+          "",
+        ),
+        reason: "the ban on hand-rolled loops came from the retired rule",
+      };
+    }
+  }
+
+  test("a closed dispute retires the rule; the citing section gets a patch in the review PR, the other none", async () => {
+    const t = team();
+    // The document cites the rule by id in both sections.
+    const doc = join(t.ci, DOC);
+    writeFileSync(
+      doc,
+      readFileSync(doc, "utf8")
+        .replace(
+          "that partner support asks for.",
+          "that partner support asks for. Never hand-roll a retry loop (outbound-http-retry-helper).",
+        )
+        .replace(
+          "confirm synchronously.",
+          "confirm synchronously. Its retries follow outbound-http-retry-helper.",
+        ),
+    );
+    t.g(t.ci, "commit", "-qam", "cite the rule");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    await run([
+      "flag",
+      "outbound-http-retry-helper",
+      "--dir",
+      t.ci,
+      "--by",
+      "lee",
+      "--reason",
+      "withRetry is gone",
+      "--branch",
+      "main",
+      "--push",
+    ]);
+    t.g(t.ci, "reset", "-q", "--hard", "origin/main");
+    const provider = new FakeProvider();
+    const retractor = new FakeRetractor();
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider, retractor });
+    expect(retractor.asked).toEqual([]);
+
+    // A reviewer closes the dispute PR: the next run retires the rule and retracts its claims.
+    provider.open = [];
+    const next = await run(["daily", "--dir", t.ci], {
+      provider,
+      retractor,
+      drafter: new FakeDrafter(null),
+      now: () => new Date("2026-10-17T06:00:00Z"),
+    });
+    expect(retractor.asked).toEqual(["http-client", "timeouts"]);
+    expect(next.stdout).toContain(
+      `retraction: ${DOC}#timeouts cites the retired outbound-http-retry-helper; nothing in it rests on the rule`,
+    );
+    expect(t.g(t.origin, "show", `homeostat/daily-lee-2026-10-17:${RULE}`)).toContain(
+      "status: retired",
+    );
+    // The document never merges on its own: it waits in the review PR with the retirement noted.
+    expect(() => t.g(t.origin, "show", `homeostat/daily-lee-2026-10-17:${DOC}`)).not.toThrow();
+    const daily = t.g(t.origin, "show", `homeostat/daily-lee-2026-10-17:${DOC}`);
+    expect(daily).toContain("Never hand-roll a retry loop");
+    const patched = t.g(t.origin, "show", `homeostat/review-lee-2026-10-17:${DOC}`);
+    expect(patched).not.toContain("Never hand-roll a retry loop");
+    expect(patched).toContain('note="retracted outbound-http-retry-helper"');
+    expect(patched).toContain("Its retries follow outbound-http-retry-helper.");
+    const review = provider.opened.find(
+      (o) => o.pr.sourceBranch === "homeostat/review-lee-2026-10-17",
+    );
+    expect(review?.pr.body).toContain(
+      "#http-client no longer states the retired outbound-http-retry-helper",
     );
   });
 });

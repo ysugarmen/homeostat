@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import {
   ClaudeConflictJudge,
   ClaudeMerger,
+  ClaudeRetractor,
   ClaudeUnavailableError,
   type DeepDiveChange,
   DeepDiveError,
@@ -31,7 +32,7 @@ function prBody(changes: DeepDiveChange[], notes: string[]): string {
     c.actions.map((a) => `| ${c.id} | ${a.action} | ${a.note} |`),
   );
   return [
-    "The weekly homeostat deep dive: near-duplicates merged, contradictions marked disputed, stale entries retired.",
+    "The weekly homeostat deep dive: near-duplicates merged, contradictions marked disputed, stale entries retired, and document sections that cited a retired rule rewritten without its claims (check those against what you know).",
     "",
     "| Entry | Action | Detail |",
     "| --- | --- | --- |",
@@ -56,12 +57,14 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
     const useLlm = opts.llm !== false;
     const merger = useLlm ? (io.merger ?? new ClaudeMerger(ask)) : undefined;
     const judge = useLlm ? (io.judge ?? new ClaudeConflictJudge(ask)) : undefined;
+    const retractor = useLlm ? (io.retractor ?? new ClaudeRetractor(ask)) : undefined;
 
     const { changes, notes } = await deepDive({
       files,
       today,
       ...(merger ? { merger } : {}),
       ...(judge ? { judge } : {}),
+      ...(retractor ? { retractor } : {}),
     });
     for (const c of changes) {
       for (const a of c.actions) io.stdout(`${c.path}: ${a.action} (${a.note})\n`);

@@ -1,7 +1,7 @@
 import { CORE_AREA, checkEntry } from "./check.ts";
 import { CONFIG_FILE, type Config, parseConfig } from "./config.ts";
 import { detectConflicts } from "./conflicts.ts";
-import { type Doc, isDocPath, parseDoc } from "./doc.ts";
+import { citationLoops, type Doc, isDocPath, parseDoc } from "./doc.ts";
 import { type Entry, parseEntry } from "./entry.ts";
 import { error, hasErrors, type Issue } from "./issues.ts";
 import { areasOf, locate, repoNames } from "./layout.ts";
@@ -90,6 +90,16 @@ export function validate(files: KbFiles, opts: { checks?: boolean } = {}): Valid
   }
   if (!full)
     return { ok: !hasErrors(issues), issues, entries, docs, ...(config ? { config } : {}) };
+
+  for (const loop of citationLoops(docs)) {
+    issues.push(
+      error(
+        "doc.provenance.loop",
+        `documents cite each other as evidence in a loop (${[...loop, loop[0]].join(" → ")}); point a section's provenance url at the review thread, PR or person it came from, not at a document`,
+        { file: loop[0] ?? "" },
+      ),
+    );
+  }
 
   const pathOf = new Map<string, string[]>();
   for (const { path, file, entry } of entries) {

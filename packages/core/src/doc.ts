@@ -292,3 +292,43 @@ export function formatDoc(doc: Doc): string {
 /** `knowledge/<area>/docs/…`, or `knowledge/<repo>/<area>/docs/…` in a multi-repo KB. */
 export const isDocPath = (path: string) =>
   /^knowledge\/(?:[^/]+\/)?[^/]+\/docs\/[^/]+\.md$/.test(path);
+
+/**
+ * The KB document a provenance URL points at, as a KB path: a relative path or a link to the
+ * file on the git host. Undefined for anything else (a review comment, a PR).
+ */
+export const citedDocument = (url: string | undefined): string | undefined =>
+  url ? /(?:^|\/)(knowledge\/(?:[^\s#?/]+\/){1,2}docs\/[^\s#?/]+\.md)/.exec(url)?.[1] : undefined;
+
+/**
+ * Documents whose sections cite each other as evidence in a loop (a section citing its own
+ * document included), each loop once as its paths in order. Evidence must end somewhere outside
+ * the KB: a review thread, a person, a scan; a loop means no claim in it is grounded at all.
+ */
+export function citationLoops(docs: readonly { path: string; doc: Doc }[]): string[][] {
+  const edges = new Map<string, Set<string>>();
+  const known = new Set(docs.map((d) => d.path));
+  for (const { path, doc } of docs) {
+    for (const s of doc.sections) {
+      const to = citedDocument(s.provenance?.url);
+      if (to && known.has(to)) edges.set(path, new Set([...(edges.get(path) ?? []), to]));
+    }
+  }
+  const loops: string[][] = [];
+  const seen = new Set<string>();
+  const walk = (path: string, trail: string[]) => {
+    const at = trail.indexOf(path);
+    if (at >= 0) {
+      const loop = trail.slice(at);
+      const key = [...loop].sort().join("|");
+      if (!seen.has(key)) {
+        seen.add(key);
+        loops.push(loop);
+      }
+      return;
+    }
+    for (const next of edges.get(path) ?? []) walk(next, [...trail, path]);
+  };
+  for (const path of [...edges.keys()].sort()) walk(path, []);
+  return loops;
+}
