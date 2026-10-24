@@ -4,6 +4,7 @@ import {
   bedrockAsker,
   type Config,
   claudeCodeAsker,
+  judgeModelFor,
   logEvent,
   vertexAsker,
 } from "@homeostat/core";
@@ -12,16 +13,22 @@ import type { Io } from "./cli.ts";
 /**
  * The Claude runtime configured for `agent` in homeostat.yaml. Each call is logged as a
  * `model-call` event with its size, runtime and model, never its content (security plan T5).
+ * `judge` is the daily run's draft judge: the curator's runtime with its own model and effort
+ * (`agents.curator.judgeModel`, a different model from the drafter's by default), so it is not
+ * the model grading its own output. On `claude-code` the model is passed through `--model`.
  */
 export function askerFor(
   config: Config,
-  agent: "curator" | "deepDive",
+  agent: "curator" | "deepDive" | "judge",
   io: Io,
   kbRoot: string,
   /** Counts every call, its size and failures across the run, for the run report's timing. */
   stats?: { calls: number; chars: number; failed: number },
 ): Asker {
-  const { model, effort } = config.agents[agent];
+  const { model, effort } =
+    agent === "judge"
+      ? { model: judgeModelFor(config), effort: config.agents.curator.judgeEffort }
+      : config.agents[agent];
   const runtime = config.agents.runtime;
   const ask = {
     api: () => apiAsker({ model, effort, env: { ...io.env } }),

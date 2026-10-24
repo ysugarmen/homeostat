@@ -4,6 +4,8 @@ import {
   ClaudeConsolidator,
   ClaudeDocPatcher,
   ClaudeDrafter,
+  ClaudeDraftJudge,
+  ClaudeRetractor,
   ClaudeRuleFixer,
   type Confidence,
   type Config,
@@ -22,6 +24,8 @@ import {
   flagEntry,
   HEARTBEAT_PATH,
   isDocPath,
+  judgeDraft,
+  judgeModelFor,
   kbSnapshot,
   lessonHash,
   logEvent,
@@ -34,9 +38,12 @@ import {
   parseEntry,
   REVIEW_REMINDER_DAYS,
   type RepoRef,
+  type ReviewThread,
   type RunReport,
   readKbFiles,
   resolveDispute,
+  retiredRule,
+  retractCitations,
   STATE_BRANCH,
   sameLesson,
   type Verdict,
@@ -95,8 +102,15 @@ interface Lesson {
   suggestedTopic?: string;
   /** The model's answer on whether this new lesson updates, repeats or adds to existing rules. */
   verdict?: Verdict;
-  /** A new lesson turned into an update of the rule it refines: its own text, as evidence. */
-  update?: { lesson: Entry; lessonId: string; reason: string };
+  /**
+   * A new lesson turned into an update of the rule it refines: its own text, as evidence, and the
+   * rule it rewrites.
+   */
+  update?: { lesson: Entry; lessonId: string; reason: string; base: Entry };
+  /** The redacted review thread a drafted lesson came from, for the judge. */
+  thread?: ReviewThread;
+  /** The judge's kept failure: what the rule says that its thread does not. */
+  judged?: { problems: string[]; contradicts: boolean; tally: string };
   /** Waits with this lesson, which is in an open review PR. */
   twin?: string;
 }
@@ -301,6 +315,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
         originator: e.frontmatter.source.author,
         ...(e.frontmatter.source.url ? { url: e.frontmatter.source.url } : {}),
         ...(e.suggestedTopic ? { suggestedTopic: e.suggestedTopic } : {}),
+        ...(e.thread ? { thread: e.thread } : {}),
         decision: "review",
         reason: "",
       });
@@ -396,7 +411,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       continue;
     }
     if (verdict.action !== "update") continue;
-    l.update = { lesson: entry, lessonId: l.id, reason: verdict.reason };
+    l.update = { lesson: entry, lessonId: l.id, reason: verdict.reason, base: found.entry };
     l.kind = "update";
     l.path = found.path;
     l.id = found.entry.frontmatter.id;
@@ -463,6 +478,85 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     l.reason = `the same lesson as ${winner.id} in this run, which carries it (${winner.decision})`;
   }
 
+  // 2b. Judge: a drafted rule about to merge with no person is checked against its review thread
+  // by a second model first (see core's curator/judge.ts). Only these: the middle band already
+  // goes to a person, and lessons written by hand have no thread to hold them to.
+  const judgeCalls = config.agents.curator.judgeCalls;
+  const judge =
+    opts.noReviews || judgeCalls === 0
+      ? undefined
+      : (io.draftJudge ?? new ClaudeDraftJudge(askerFor(config, "judge", io, root, stats)));
+  if (judge && !io.draftJudge && judgeModelFor(config) === config.agents.curator.model) {
+    io.stdout(
+      `  the judge runs on the drafter's own model (${config.agents.curator.model}), which tends to agree with itself; set agents.curator.judgeModel to another\n`,
+    );
+  }
+  let judgeBudget = judgeCalls;
+  let judgeDown: string | undefined;
+  for (const l of lessons) {
+    if (!judge || l.decision !== "merged" || l.origin !== "review" || !l.thread) continue;
+    if (l.kind !== "new" && l.kind !== "update") continue;
+    const entry = parseEntry(l.text).entry;
+    if (!entry) continue;
+    const unjudged = (why: string) => {
+      l.decision = "review";
+      l.reason = `${l.reason}; not judged (${why}), so a person reads it`;
+    };
+    if (judgeDown) {
+      unjudged(judgeDown);
+      continue;
+    }
+    if (judgeBudget <= 0) {
+      unjudged("agents.curator.judgeCalls reached");
+      continue;
+    }
+    const base = l.update?.base;
+    let judged: Awaited<ReturnType<typeof judgeDraft>>;
+    try {
+      judged = await judgeDraft(judge, {
+        thread: l.thread,
+        draft: {
+          title: entry.frontmatter.title,
+          rule: entry.sections.rule ?? "",
+          why: entry.sections.why ?? "",
+          scope: entry.frontmatter.scope,
+        },
+        ...(base
+          ? {
+              updates: {
+                title: base.frontmatter.title,
+                rule: base.sections.rule ?? "",
+                why: base.sections.why ?? "",
+              },
+            }
+          : {}),
+      });
+    } catch (e) {
+      judgeDown = `the judge could not be reached: ${(e as Error).message}`;
+      unjudged(judgeDown);
+      continue;
+    }
+    judgeBudget -= judged?.calls ?? 1;
+    if (!judged) {
+      io.stdout(`  judge ${l.id}: no usable answer\n`);
+      unjudged("the judge gave no usable answer");
+      continue;
+    }
+    const problems = judged.verdict.problems.map((p) => `${p.trap}: ${p.evidence}`);
+    io.stdout(
+      `  judge ${l.id}: ${judged.verdict.ok ? "ok" : "failed"} (${judged.tally})${problems.length ? `: ${problems.join("; ")}` : ""}\n`,
+    );
+    if (judged.verdict.ok) continue;
+    l.judged = { problems, contradicts: judged.contradicts, tally: judged.tally };
+    decide(
+      l,
+      files,
+      config,
+      inForce.filter((e) => near(e.path, l.path)).map((e) => e.entry),
+      groups.get(l)?.length ?? 1,
+    );
+  }
+
   // Flags on one rule from several developers go in as one change, or the second PR conflicts.
   const flagged = new Map<string, Lesson[]>();
   for (const l of lessons.filter((x) => x.kind === "flag")) {
@@ -514,6 +608,62 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       reason: "retired: a reviewer closed its dispute PR",
     });
   }
+  // Documents that still state what a retired rule said: one-section patches, for a reviewer
+  // (documents never merge on their own), in the review PR of the developer the retirement is
+  // filed under. The retirement itself stays in the daily PR: a reviewer already decided it.
+  const retiredNow = lessons.flatMap((l) => {
+    if (l.kind !== "retire") return [];
+    const entry = parseEntry(onBase(l.path) ?? "").entry;
+    return entry ? [{ l, rule: retiredRule(entry, "a reviewer closed its dispute PR") }] : [];
+  });
+  if (retiredNow.length) {
+    const retractCalls = config.agents.curator.retractCalls;
+    const view = {
+      ...files,
+      ...Object.fromEntries(lessons.filter((l) => l.kind === "doc").map((l) => [l.path, l.text])),
+    };
+    const retracted = await retractCitations({
+      files: view,
+      retired: retiredNow.map((r) => r.rule),
+      retractor:
+        opts.noReviews || retractCalls === 0
+          ? undefined
+          : (io.retractor ?? new ClaudeRetractor(askerFor(config, "curator", io, root, stats))),
+      inForce: new Map(inForce.map((e) => [e.entry.frontmatter.id, e.entry])),
+      calls: retractCalls,
+      today,
+      source: "curator",
+    });
+    for (const n of retracted.notes) io.stdout(`  retraction: ${n}\n`);
+    for (const d of retracted.docs) {
+      const why = d.sections
+        .map((s) => `#${s.id} no longer states the retired ${s.ruleId} (${s.reason})`)
+        .join("; ");
+      io.stdout(`  retraction: ${d.path}: ${why}\n`);
+      const existing = lessons.find((l) => l.kind === "doc" && l.path === d.path);
+      if (existing) {
+        existing.text = d.text;
+        existing.hash = lessonHash(d.text);
+        existing.reason = `${existing.reason}; ${why}`;
+        continue;
+      }
+      const owner = retiredNow.find((r) => r.rule.id === d.sections[0]?.ruleId)?.l.member;
+      lessons.push({
+        member: owner ?? members[0] ?? "",
+        path: d.path,
+        text: d.text,
+        hash: lessonHash(d.text),
+        id: d.path,
+        title: `Retract ${[...new Set(d.sections.map((s) => s.ruleId))].join(", ")} from ${d.sections.map((s) => `#${s.id}`).join(", ")} in ${d.path}`,
+        kind: "doc",
+        origin: "review",
+        originator: owner ?? "",
+        decision: "review",
+        reason: `${why}; document edits go to the owning team`,
+      });
+    }
+  }
+
   // --no-reviews runs without the model: a dispute PR then proposes retiring the rule.
   const fixer =
     io.fixer ??
@@ -892,6 +1042,7 @@ function decide(
     errors: issues.filter((i) => !i.code.startsWith("risk.")).map((i) => i.message),
     ...(dupOf ? { duplicateOf: dupOf } : {}),
     ...(conflicts.length ? { conflictsWith: conflicts } : {}),
+    ...(l.judged ? { judged: l.judged } : {}),
   });
   l.confidence = c;
   l.decision = c.decision;
@@ -950,6 +1101,20 @@ function reviewerLogins(config: Config, review: Lesson[], member: string): strin
   return [...handles].filter((h) => !self || loginKey(h) !== loginKey(self));
 }
 
+/** What the judge found in lessons it kept from merging, one bullet per problem. */
+function judgeFindings(list: Lesson[]): string[] {
+  const judged = list.filter((l) => l.judged);
+  if (judged.length === 0) return [];
+  return [
+    "",
+    "The judge (a second model) found claims these drafted rules make that their review threads do not; check them against the thread before merging:",
+    ...judged.flatMap((l) => [
+      `- \`${l.id}\` (${l.judged?.tally ?? ""}${l.judged?.contradicts ? "; contradicts its thread, so declined" : ""}):`,
+      ...(l.judged?.problems ?? []).map((p) => `  - ${p}`),
+    ]),
+  ];
+}
+
 /** Lessons filed under general with a suggested topic: a note to add it to homeostat.yaml. */
 function topicSuggestions(list: Lesson[]): string[] {
   const by = new Map<string, string[]>();
@@ -981,6 +1146,7 @@ function prBody(member: string, today: string, list: Lesson[], kind: "daily" | "
     "| Decision | Lesson | Confidence | Source | Why |",
     "| --- | --- | --- | --- | --- |",
     ...rows,
+    ...judgeFindings(list),
     ...topicSuggestions(list),
     "",
     "Decided by `homeostat daily`. Thresholds and weights are in `scoring.confidence` in homeostat.yaml; `homeostat flag <id>` sends any rule back for review.",
