@@ -1,6 +1,7 @@
 import {
   type Config,
   DEFAULT_AGENT_MODEL,
+  DEFAULT_JUDGE_MODEL,
   DEFAULT_WEIGHTS,
   EXPORT_TARGETS,
   type Issue,
@@ -187,7 +188,7 @@ export const SECTIONS: Section[] = [
           ["base", ["prFeedbackChangedCode", "prFeedback", "manual", "agentHandoff", "deepDive"]],
           ["roles", ["junior", "member", "senior", "lead"]],
           ["bonus", ["areaOwner", "specific", "goodTitle", "repeat", "modelRating"]],
-          ["penalty", ["vagueTitle", "conflict", "flag"]],
+          ["penalty", ["vagueTitle", "conflict", "flag", "judge"]],
         ] as const
       ).flatMap(([group, keys]) =>
         keys.map(
@@ -260,11 +261,42 @@ export const SECTIONS: Section[] = [
         kind: "number",
         help: "Model calls that decide whether a lesson updates an existing rule; 0 turns them off",
       },
+      {
+        path: ["agents", "curator", "judgeCalls"],
+        label: "Daily run: judge calls per run",
+        kind: "number",
+        help: "A second model checks drafts about to merge with no person against their review thread; 0 turns it off, past the cap they go to a reviewer",
+      },
+      {
+        path: ["agents", "curator", "judgeModel"],
+        label: "Daily run: judge model",
+        kind: "text",
+        optional: true,
+        help: `Empty: ${DEFAULT_JUDGE_MODEL}, or ${DEFAULT_AGENT_MODEL} when the drafter already runs on it`,
+      },
+      {
+        path: ["agents", "curator", "judgeEffort"],
+        label: "Daily run: judge effort",
+        kind: "select",
+        options: EFFORTS,
+      },
+      {
+        path: ["agents", "curator", "retractCalls"],
+        label: "Daily run: retraction calls per run",
+        kind: "number",
+        help: "Rewrites of document sections citing a rule the run retires; 0 lists them instead",
+      },
       ...agentFields("deepDive", "Deep dive"),
       {
         path: ["agents", "deepDive", "staleAfterDays"],
         label: "Deep dive: retire after (days unconfirmed)",
         kind: "number",
+      },
+      {
+        path: ["agents", "deepDive", "retractCalls"],
+        label: "Deep dive: retraction calls per run",
+        kind: "number",
+        help: "Rewrites of document sections citing a rule retired as stale; 0 lists them instead",
       },
       { path: ["agents", "handoff", "enabled"], label: "Handoff notes: enabled", kind: "checkbox" },
       {

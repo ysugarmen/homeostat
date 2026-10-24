@@ -5,6 +5,7 @@ import type { Config } from "./config.ts";
 import { sameLesson, scopesOverlap } from "./conflicts.ts";
 import { type Entry, formatEntry } from "./entry.ts";
 import { comparable, repoOf } from "./layout.ts";
+import { findCitations, type Retractor, retiredRule, retractCitations } from "./retract.ts";
 import type { Frontmatter } from "./schema.ts";
 import { score } from "./score.ts";
 import { countTokens } from "./tokens.ts";
@@ -32,7 +33,8 @@ export type DeepDiveAction =
   | "retired-duplicate"
   | "disputed"
   | "retired-stale"
-  | "moved-topic";
+  | "moved-topic"
+  | "retracted";
 
 export interface DeepDiveChange {
   path: string;
@@ -49,6 +51,11 @@ export interface DeepDiveInput {
   merger?: Merger;
   /** Without one, no new conflicts are raised. */
   judge?: ConflictJudge;
+  /**
+   * Rewrites document sections that cite a rule retired as stale; without one they are listed
+   * in the notes. At most `agents.deepDive.retractCalls` calls.
+   */
+  retractor?: Retractor;
 }
 
 export interface DeepDiveResult {
@@ -200,9 +207,50 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
     }
   }
 
-  const changes = [...work.values()]
+  const changes: DeepDiveChange[] = [...work.values()]
     .filter((w) => w.actions.length > 0)
     .map((w) => ({ path: w.path, id: w.fm.id, actions: w.actions, text: render(w, config) }));
+
+  // Documents that still state what a stale rule said: one-section patches in the same PR.
+  const stale = [...work.values()].filter((w) =>
+    w.actions.some((a) => a.action === "retired-stale"),
+  );
+  const retracted = await retractCitations({
+    files: input.files,
+    retired: stale.map((w) =>
+      retiredRule(w.entry, w.actions.find((a) => a.action === "retired-stale")?.note ?? "stale"),
+    ),
+    retractor: settings.retractCalls > 0 ? input.retractor : undefined,
+    inForce: new Map(accepted().map((w) => [w.fm.id, w.entry])),
+    calls: settings.retractCalls,
+    today: input.today,
+    source: "deep-dive",
+  });
+  for (const d of retracted.docs) {
+    changes.push({
+      path: d.path,
+      id: d.path,
+      text: d.text,
+      actions: d.sections.map((s) => ({
+        action: "retracted",
+        note: `#${s.id} no longer states the retired ${s.ruleId}: ${s.reason}`,
+      })),
+    });
+  }
+  notes.push(...retracted.notes);
+  // A merged duplicate lives on in the rule that absorbed it: only the citation needs updating.
+  const absorbed = [...work.values()].filter((w) =>
+    w.actions.some((a) => a.action === "retired-duplicate"),
+  );
+  for (const c of findCitations(
+    input.files,
+    absorbed.map((w) => retiredRule(w.entry, "merged")),
+  )) {
+    const keeper = [...work.values()].find((w) => w.fm.supersedes === c.rule.id)?.fm.id;
+    notes.push(
+      `${c.path}#${c.section.id} cites ${c.rule.id}, merged into ${keeper ?? "another rule"}; update the citation`,
+    );
+  }
 
   // Changed rules replace their own files, or their sections in topic files.
   const after = overlayPending(

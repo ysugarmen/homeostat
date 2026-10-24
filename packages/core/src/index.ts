@@ -66,9 +66,11 @@ export {
   type Config,
   configSchema,
   DEFAULT_AGENT_MODEL,
+  DEFAULT_JUDGE_MODEL,
   DEFAULT_WEIGHTS,
   EXPORT_TARGETS,
   isSenior,
+  judgeModelFor,
   parseConfig,
   ROLES,
   type Role,
@@ -137,6 +139,23 @@ export {
   draftPrompt,
   draftSchema,
 } from "./curator/draft.ts";
+export {
+  ClaudeDraftJudge,
+  DRAFT_JUDGE_SYSTEM,
+  type DraftJudge,
+  describeProblems,
+  draftJudgePrompt,
+  draftJudgeSchema,
+  JUDGE_CONFIRMATIONS,
+  JUDGE_TRAPS,
+  type JudgedDraft,
+  type JudgeInput,
+  type JudgeProblem,
+  type JudgeTrap,
+  type JudgeVerdict,
+  judgeDraft,
+  parseJudgeVerdict,
+} from "./curator/judge.ts";
 export { type ReviewThread, reviewThreads } from "./curator/threads.ts";
 export {
   type CommentRef,
@@ -174,6 +193,8 @@ export {
   resolveDispute,
 } from "./dispute.ts";
 export {
+  citationLoops,
+  citedDocument,
   DOC_SECTION_MAX_WORDS,
   type Doc,
   type DocFrontmatter,
@@ -298,6 +319,23 @@ export {
 } from "./migrate.ts";
 export * from "./providers/index.ts";
 export { detectRepo, remoteRepo, repoFor } from "./repo-detect.ts";
+export {
+  type Citation,
+  ClaudeRetractor,
+  citesId,
+  findCitations,
+  RETRACT_SYSTEM,
+  type RetiredRule,
+  type RetractedDoc,
+  type Retraction,
+  type RetractionInput,
+  type Retractor,
+  type RetractResult,
+  retiredRule,
+  retractCitations,
+  retractionSchema,
+  retractPrompt,
+} from "./retract.ts";
 export { RISK_ADVICE, type RiskFinding, scanRisk } from "./risk.ts";
 export {
   type Frontmatter,

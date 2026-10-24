@@ -53,6 +53,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `scoring.confidence.penalty.vagueTitle` | `15` | Subtracted for a title like "lesson1" |
 | `scoring.confidence.penalty.conflict` | `25` | Subtracted when it contradicts an accepted rule (which also sends it to a person) |
 | `scoring.confidence.penalty.flag` | `20` | Subtracted per open flag |
+| `scoring.confidence.penalty.judge` | `30` | Subtracted when the judge finds a drafted rule claims what its review thread does not (which also sends it to a person; [details](agents.md#judge)) |
 | `scoring.reviewCadence` | `weekly` | Reserved for review reminders; not used yet |
 
 ## `agents`
@@ -69,12 +70,17 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `agents.curator.effort` | `medium` | `low`, `medium`, `high`, `xhigh` or `max` |
 | `agents.curator.lookbackHours` | `26` | How far back each run reads merged PRs |
 | `agents.curator.consolidateCalls` | `30` | Most model calls per daily run that decide whether a new lesson updates, repeats or adds to the rules most like it ([details](agents.md#consolidate)). Lessons past the cap, and every lesson with `--no-reviews` or `0`, fall back to the word-overlap duplicate check |
+| `agents.curator.judgeCalls` | `30` | Most model calls per daily run that judge a drafted rule about to merge with no person against its review thread ([details](agents.md#judge)). A pass takes one call, a failure three. `0` turns the judge off; drafts past the cap go to a reviewer |
+| `agents.curator.judgeModel` | `claude-sonnet-5-5` | The judge's model. Empty means `claude-sonnet-5-5`, or `claude-opus-5-5` when `agents.curator.model` is already `claude-sonnet-5-5`, so the judge is never the drafter grading itself |
+| `agents.curator.judgeEffort` | `medium` | The judge's effort |
+| `agents.curator.retractCalls` | `10` | Most model calls per daily run that rewrite a document section citing a rule the run retires ([details](agents.md#retract)). `0` lists the sections instead |
 | `agents.deepDive.enabled` | `true` | Run the deep dive under `homeostat up` |
 | `agents.deepDive.schedule` | `0 7 * * 1` | Cron (UTC) |
 | `agents.deepDive.model` | `claude-opus-5-5` | |
 | `agents.deepDive.effort` | `medium` | |
 | `agents.deepDive.lookbackHours` | `168` | Which rules count as "this week's" for the contradiction check |
 | `agents.deepDive.staleAfterDays` | `180` | Accepted rules not confirmed for this long are retired; older document sections are flagged |
+| `agents.deepDive.retractCalls` | `10` | Most model calls per deep dive that rewrite a document section citing a rule it retires as stale ([details](agents.md#retract)). `0` lists the sections instead |
 | `agents.handoff.enabled` | `true` | Ask for a handoff note at the end of sessions with real edits |
 | `agents.handoff.minEdits` | `5` | File edits before the note is asked for |
 

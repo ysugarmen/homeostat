@@ -25,6 +25,11 @@ export interface ConfidenceInput {
   duplicateOf?: string;
   /** Accepted rules this lesson contradicts. */
   conflictsWith?: readonly string[];
+  /**
+   * The judge's kept failure (see `curator/judge.ts`): the drafted rule says what its thread did
+   * not. It never merges: a reviewer reads it, or, when it contradicts the thread, it is declined.
+   */
+  judged?: { problems: readonly string[]; contradicts: boolean };
 }
 
 export interface Confidence {
@@ -93,6 +98,7 @@ export function confidence(input: ConfidenceInput): Confidence {
   for (const f of fm.flags ?? []) add(`flagged by ${f.by}`, -c.penalty.flag);
   if (input.conflictsWith?.length)
     add(`contradicts ${input.conflictsWith.join(", ")}`, -c.penalty.conflict);
+  if (input.judged) add("the judge found claims its thread does not make", -c.penalty.judge);
 
   const score = Math.max(
     0,
@@ -116,6 +122,14 @@ export function confidence(input: ConfidenceInput): Confidence {
       reason: `duplicate of ${input.duplicateOf}, which it reconfirms`,
     };
   }
+  if (input.judged?.contradicts) {
+    return {
+      score,
+      parts,
+      decision: "declined",
+      reason: `${summary}; the judge found it contradicts its own review thread: ${input.judged.problems.join("; ")}`,
+    };
+  }
   if (input.risks?.length)
     return {
       score,
@@ -123,6 +137,14 @@ export function confidence(input: ConfidenceInput): Confidence {
       decision: "review",
       reason: `${summary}; risky content always goes to a person`,
     };
+  if (input.judged) {
+    return {
+      score,
+      parts,
+      decision: "review",
+      reason: `${summary}; the judge found claims its thread does not make: ${input.judged.problems.join("; ")}`,
+    };
+  }
   if (input.conflictsWith?.length && score >= c.decline) {
     return {
       score,
