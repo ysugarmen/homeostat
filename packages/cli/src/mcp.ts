@@ -1,11 +1,6 @@
-import {
-  logEvent,
-  memberFromGit,
-  readEvents,
-  readKbFiles,
-  readKbView,
-  validate,
-} from "@homeostat/core";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { logEvent, memberFromGit, parseConfig, readEvents, readKbView } from "@homeostat/core";
 import { type LearnInput, type McpDeps, serveStdio } from "@homeostat/mcp";
 import type { Io } from "./cli.ts";
 import { runFlag } from "./flag.ts";
@@ -35,11 +30,21 @@ async function captured(run: (io: Io) => number | Promise<number>, base: Io): Pr
  */
 export function mcpDeps(io: Io, cwd = process.cwd()): McpDeps {
   const kbRoot = findKb(io.env, cwd);
-  const member = () =>
-    memberFromGit(
-      (kbRoot ? validate(readKbFiles(kbRoot)).config?.team.members : undefined) ?? [],
-      git(cwd, "config", "user.name"),
-    );
+  // Who the caller is: from homeostat.yaml alone, not the whole KB, and once per change to it.
+  let who: { text: string; id: string } | undefined;
+  const member = () => {
+    let text = "";
+    try {
+      text = kbRoot ? readFileSync(join(kbRoot, "homeostat.yaml"), "utf8") : "";
+    } catch {
+      // No config yet: no members, so the git name decides.
+    }
+    if (who?.text !== text) {
+      const members = parseConfig(text).config?.team.members ?? [];
+      who = { text, id: memberFromGit(members, git(cwd, "config", "user.name")) };
+    }
+    return who.id;
+  };
   const quiet: Io = { ...io, ask: undefined } as Io;
 
   return {

@@ -468,3 +468,40 @@ describe("a multi-repo KB", () => {
     expect(events.find((e) => e.type === "injection")?.repo).toBe("api");
   });
 });
+
+describe("the parsed KB is reused between calls", () => {
+  test("parsed once while the files are unchanged, and again as soon as one changes", async () => {
+    let files = kbFiles();
+    let reads = 0;
+    const server = createServer({
+      readKb: () => {
+        reads++;
+        return files;
+      },
+      learn: async () => "",
+      flag: async () => "",
+      log: () => {},
+      events: () => [],
+      now: () => new Date("2026-10-14T09:00:00Z"),
+    });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "t", version: "1" });
+    await Promise.all([server.connect(b), client.connect(a)]);
+    const explain = async (id: string) =>
+      (
+        (await client.callTool({ name: "explain", arguments: { id } })) as {
+          content: { text: string }[];
+        }
+      ).content[0]?.text ?? "";
+
+    const rule = Object.keys(files).find((p) => p.includes("outbound-http-retry-helper")) ?? "";
+    expect(await explain("outbound-http-retry-helper")).toContain("retry");
+    // A new rule appears in the files between two calls: the next call sees it.
+    const copy = (files[rule] ?? "")
+      .replace("id: outbound-http-retry-helper", "id: copied-retry-rule")
+      .replace("title: Use the shared retry helper", "title: Copied retry rule for the cache test");
+    files = { ...files, [rule.replace("outbound-http-retry-helper", "copied-retry-rule")]: copy };
+    expect(await explain("copied-retry-rule")).toContain("Copied retry rule");
+    expect(reads).toBeGreaterThan(2);
+  });
+});

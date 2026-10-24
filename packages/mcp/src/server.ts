@@ -311,9 +311,38 @@ function distance(a: string, b: string): number {
   return (d[a.length] as number[])[b.length] ?? 0;
 }
 
+/** FNV-1a over every path and its text: equal for an unchanged KB, cheap next to parsing it. */
+function fingerprint(files: Readonly<Record<string, string>>): string {
+  let h = 0x811c9dc5;
+  for (const path of Object.keys(files).sort()) {
+    const text = `${path}\0${files[path] ?? ""}\0`;
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  }
+  return `${Object.keys(files).length}:${(h >>> 0).toString(16)}`;
+}
+
 /** Builds the Homeostat MCP server. Transport-agnostic: the CLI connects it to stdio. */
 export function createServer(deps: McpDeps, version = VERSION): Server {
-  const startWrites = validate(deps.readKb()).config?.security.mcpWrites === true;
+  // The KB is parsed once and reused until a file changes: a session's calls come in bursts, and
+  // parsing a few hundred rules on each was most of every call's time. Only loaded, not checked:
+  // CI validates what is on the base branch.
+  let cached: { key: string; kb: ReturnType<typeof validate> } | undefined;
+  const loadKb = () => {
+    const files = deps.readKb();
+    const key = fingerprint(files);
+    if (cached?.key !== key) cached = { key, kb: validate(files, { checks: false }) };
+    return cached.kb;
+  };
+  let repoFor: { key: string; repo: string | undefined } | undefined;
+  const sessionRepo = (
+    checkout: string,
+    config: NonNullable<ReturnType<typeof validate>["config"]>,
+  ) => {
+    const key = `${checkout}\0${JSON.stringify(config.repos ?? null)}`;
+    if (repoFor?.key !== key) repoFor = { key, repo: detectRepo(checkout, config) };
+    return repoFor.repo;
+  };
+  const startWrites = loadKb().config?.security.mcpWrites === true;
   const server = new Server(
     { name: "homeostat", version },
     { capabilities: { tools: {} }, instructions: instructions(startWrites) },
@@ -322,7 +351,7 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
   // Writes are off unless the KB enables them, and capped per session when on (security T7):
   // an agent steered by text it read must not be able to push a stream of branches.
   let writes = 0;
-  const writesOn = () => validate(deps.readKb()).config?.security.mcpWrites === true;
+  const writesOn = () => loadKb().config?.security.mcpWrites === true;
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOLS.filter((t) => writesOn() || !WRITE_TOOLS.has(t.name)).map((t) => ({
@@ -361,15 +390,16 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
       }
       const args = parsed.data as Record<string, unknown>;
 
-      const kb = validate(deps.readKb());
+      const kb = loadKb();
       const config = kb.config;
       if (!config) {
         return fail(
           "No usable knowledge base: homeostat.yaml is missing or invalid. Point Homeostat at your KB checkout with the plugin's kb_dir setting or HOMEOSTAT_DIR.",
         );
       }
-      // A multi-repo KB: the shared rules plus the session's repo; none of the other repos'.
-      const repo = deps.checkout ? detectRepo(deps.checkout(), config) : undefined;
+      // A multi-repo KB: the shared rules plus the session's repo; none of the other repos'. The
+      // session's folder and remote don't change, so the answer is kept while the repos do too.
+      const repo = deps.checkout ? sessionRepo(deps.checkout(), config) : undefined;
       const entries = visibleTo(
         inRepo(kb.entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
         config,
