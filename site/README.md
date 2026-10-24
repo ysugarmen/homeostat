@@ -25,11 +25,11 @@ Create > Import a repository), pick the repository and set:
 
 | Setting | Value |
 | --- | --- |
-| Project name | `homeostat` |
+| Project name | `homeostat-site` (the `name` in `wrangler.jsonc`) |
 | Build command | `cd site && pnpm install --frozen-lockfile && pnpm build` |
 | Deploy command | `cd site && npx wrangler deploy` |
 
-The site is then at `homeostat.<your-subdomain>.workers.dev`; add a custom domain under the Worker's
+The site is then at `homeostat-site.<your-subdomain>.workers.dev`; add a custom domain under the Worker's
 Settings > Domains & Routes.
 
 ## Or on Cloudflare Pages
