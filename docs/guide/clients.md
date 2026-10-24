@@ -14,7 +14,8 @@ Set the plugin's `kb_dir` to your local clone of the KB repo. Then:
   2. general rules that name one of them
   3. other general rules
 
-  Rules that do not fit are listed by topic with their counts, then by title, so the agent can fetch any of them with `explain`. Last comes an index of the team documents that cover those files (every document by title, then section ids while they fit), with the sections that name your files.
+  Next come the document sections that name your files. Last is a short lookup guide: how many more rules apply (by topic) and how many documents cover the code (by area), deliberately without titles; which tool to call (`context`, `search`, `docs` then `read`, `explain`); the moments to look things up (a bug report, writing or changing a test, new code or making parts fit, a why or what's-left question, a commit); and the credit line `> From Homeostat (<rule-id or area/topic#section>)` to put above a part of the reply that used them. Listing titles up front made agents pick from the list instead of searching; a count and a named moment make the first call a search. On a very small `tokenBudget` the guide shrinks to its counts and one line.
+- **On every message**, the hook adds a one-line reminder of those moments and the credit line (under 80 tokens), plus any rules that are new since the session started.
 - **At the end of a session with real edits**, the agent is asked once for a handoff note: what to do next time, and what was tried and rejected. The note is saved as a pending lesson: it applies to your sessions at once, and the next daily run decides it for the team.
 - **Skills:**
   - `/homeostat:learn` captures a rule or a document section from the session or a review comment.
@@ -28,12 +29,14 @@ Set the plugin's `kb_dir` to your local clone of the KB repo. Then:
 | Tool | What it does |
 | --- | --- |
 | `context` | The rules for given files, best first, within a budget |
-| `search` | Keyword search over accepted rules (and rejected decisions, shown as context) |
+| `search` | Keyword search over accepted rules and document sections (rejected decisions shown as context): up to 10 hits by default, each with a one-line snippet and the id to open |
 | `explain` | Why a rule exists: source, score breakdown, owner, conflicts |
 | `docs` | The team's documents and their sections, for an area or a file |
-| `read` | One document, or one section, with its source |
+| `read` | One section (`doc` and `section`, or `area/topic#section`), or a whole document, each section once, with its source |
 | `report` | KB health over recent days |
 | `learn`, `flag` | Only when `security.mcpWrites` is on; capped per session |
+
+Each tool's description names the moment to call it, and the server's instructions carry the same moments and the credit line. Tools are annotated (`readOnlyHint` on the reads, `destructiveHint` on `flag`, nothing open-world), so clients can auto-approve the reads. Arguments the tool does not take are dropped, JSON sent as a string is parsed, and an expected miss (no match, an unknown rule id, document or section) is a normal answer that says what exists, not a tool error.
 
 Claude Desktop, Cursor and others:
 

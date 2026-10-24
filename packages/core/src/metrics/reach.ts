@@ -70,7 +70,16 @@ export function reach(snap: MetricsSnapshot): Reach {
   const teamByDay: ({ day: string } & UsageDay)[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = day(new Date(snap.now.getTime() - i * DAY));
-    const sum: UsageDay = { sessions: 0, injections: 0, rules: 0, mcpCalls: 0, docReads: 0 };
+    const sum: UsageDay = {
+      sessions: 0,
+      injections: 0,
+      rules: 0,
+      mcpCalls: 0,
+      docReads: 0,
+      turns: 0,
+      retrievedTurns: 0,
+      creditedTurns: 0,
+    };
     for (const h of sharing) {
       const u = h.usage?.[d];
       if (!u) continue;
@@ -79,6 +88,9 @@ export function reach(snap: MetricsSnapshot): Reach {
       sum.rules += u.rules;
       sum.mcpCalls += u.mcpCalls;
       sum.docReads += u.docReads;
+      sum.turns = (sum.turns ?? 0) + (u.turns ?? 0);
+      sum.retrievedTurns = (sum.retrievedTurns ?? 0) + (u.retrievedTurns ?? 0);
+      sum.creditedTurns = (sum.creditedTurns ?? 0) + (u.creditedTurns ?? 0);
     }
     teamByDay.push({ day: d, ...sum });
   }

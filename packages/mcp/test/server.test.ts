@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { TRIGGER_MOMENTS } from "@homeostat/core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, test } from "vitest";
@@ -82,10 +83,24 @@ describe("tool list", () => {
     expect(TOOLS).toHaveLength(8);
   });
 
-  test("the server tells agents when to use it", async () => {
+  test("the server tells agents when to use it, and how to credit it", async () => {
     const { client } = await connect();
-    expect(client.getInstructions()).toContain("call context with the files you will touch");
-    expect(client.getInstructions()).toContain("save it with learn");
+    const instructions = client.getInstructions() ?? "";
+    expect(instructions).toContain("call context with the files you will touch");
+    expect(instructions).toContain("save it with learn");
+    for (const moment of TRIGGER_MOMENTS) expect(instructions).toContain(moment);
+    expect(instructions).toContain("> From Homeostat (");
+  });
+
+  test("tools carry annotations: reads are read-only, flag is destructive, none open-world", async () => {
+    const { client } = await connect();
+    const { tools } = await client.listTools();
+    const by = new Map(tools.map((t) => [t.name, t.annotations]));
+    for (const name of ["context", "search", "explain", "report", "docs", "read"]) {
+      expect(by.get(name)).toMatchObject({ readOnlyHint: true, openWorldHint: false });
+    }
+    expect(by.get("flag")).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(by.get("learn")).toMatchObject({ readOnlyHint: false });
   });
 
   test("with MCP writes off, the instructions point to the learn skill, not a hidden tool", async () => {
@@ -103,11 +118,44 @@ describe("tools", () => {
     expect(r.text.split("\n")[0]).toContain("outbound-http-retry-helper");
   });
 
+  test("search covers document sections too, each hit with a snippet and an id to open", async () => {
+    const { call } = await connect();
+    const r = await call("search", { query: "partner timeout seconds" });
+    expect(r.text).toContain("- integrations/partner-calls#timeouts (document section): Timeouts");
+    expect(r.text).toContain("Partner calls time out after 10 seconds");
+    expect(r.text).toContain("> From Homeostat (<id>)");
+  });
+
+  test("search returns up to ten hits by default", async () => {
+    const files = kbFiles();
+    for (let i = 0; i < 14; i++) {
+      files[`knowledge/core/retry-rule-${i}.md`] = (
+        files["knowledge/integrations/outbound-http-retry-helper.md"] ?? ""
+      )
+        .replace("id: outbound-http-retry-helper", `id: retry-rule-${i}`)
+        .replace("area: integrations", "area: core");
+    }
+    const server = createServer({
+      readKb: () => files,
+      learn: async () => "",
+      flag: async () => "",
+      log: () => {},
+      now: () => new Date("2026-10-14T09:00:00Z"),
+    });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "t", version: "1" });
+    await Promise.all([server.connect(b), client.connect(a)]);
+    const r = (await client.callTool({ name: "search", arguments: { query: "retry" } })) as {
+      content: { text: string }[];
+    };
+    expect(r.content[0]?.text.match(/^- /gm)).toHaveLength(10);
+  });
+
   test("search says plainly when nothing matches", async () => {
     const { call } = await connect();
-    expect((await call("search", { query: "kubernetes" })).text).toContain(
-      'No accepted rules match "kubernetes"',
-    );
+    const r = await call("search", { query: "kubernetes" });
+    expect(r.isError).toBe(false);
+    expect(r.text).toContain('No team rules or document sections match "kubernetes"');
   });
 
   test("context returns the rules for the files, like the session-start hook, and logs it", async () => {
@@ -136,7 +184,7 @@ describe("tools", () => {
   test("explain on a wrong id suggests the closest", async () => {
     const { call } = await connect();
     const r = await call("explain", { id: "retry-helper" });
-    expect(r.isError).toBe(true);
+    expect(r.isError).toBe(false); // an expected miss is an answer, not a tool error
     expect(r.text).toContain("Closest: outbound-http-retry-helper");
   });
 
@@ -198,6 +246,19 @@ describe("desire paths (3.2)", () => {
     expect((await call("context", { file: "services/integrations/x.ts" })).text).toContain(
       "outbound-http-retry-helper",
     );
+  });
+
+  test("unknown arguments are dropped and JSON sent as a string is parsed", async () => {
+    const { call } = await connect();
+    const r = await call("context", {
+      paths: '["services/integrations/partner.ts"]',
+      explanation: "I am about to edit the partner client",
+    });
+    expect(r.isError).toBe(false);
+    expect(r.text).toContain("outbound-http-retry-helper");
+    const s = await call("search", { query: "retry", limit: "1", reasoning: "x" });
+    expect(s.isError).toBe(false);
+    expect(s.text.match(/^- /gm)).toHaveLength(1);
   });
 
   test("an unknown tool is logged and answered with the real tools and the closest one", async () => {
@@ -264,8 +325,8 @@ describe("security (T7)", () => {
     expect((await outsider.call("context", { paths: files })).text).not.toContain(
       "outbound-http-retry-helper",
     );
-    expect((await outsider.call("explain", { id: "outbound-http-retry-helper" })).isError).toBe(
-      true,
+    expect((await outsider.call("explain", { id: "outbound-http-retry-helper" })).text).toContain(
+      "No rule with id",
     );
     const member = await connect({ security, member: "dana" });
     expect((await member.call("context", { paths: files })).text).toContain(
@@ -315,6 +376,27 @@ describe("documents (K6)", () => {
     expect(
       (await call("read", { doc: "integrations/partner-calls", section: "x" })).text,
     ).toContain("Sections: http-client, timeouts");
+  });
+
+  test("read takes area/topic#section, as search hits and credits write it", async () => {
+    const { call } = await connect();
+    const r = await call("read", { doc: "integrations/partner-calls#timeouts" });
+    expect(r.text).toContain("## Timeouts {#timeouts}");
+    expect(r.text).not.toContain("withRetry");
+  });
+
+  test("a missing document or section is an answer, not a tool error", async () => {
+    const { call } = await connect();
+    expect((await call("read", { doc: "core/nope" })).isError).toBe(false);
+    expect((await call("read", { doc: "integrations/partner-calls", section: "x" })).isError).toBe(
+      false,
+    );
+  });
+
+  test("a section's text comes back once", async () => {
+    const { call } = await connect();
+    const r = await call("read", { doc: "integrations/partner-calls" });
+    expect(r.text.split("Partner calls time out").length).toBe(2);
   });
 
   test("a team-only area's documents are hidden from other members", async () => {

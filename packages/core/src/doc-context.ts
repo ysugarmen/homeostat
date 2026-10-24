@@ -8,9 +8,12 @@ export interface ContextDoc {
 }
 
 export interface DocContext {
+  /** The sections that name a touched path, in full; empty when none does or none fits. */
   text: string;
-  /** The documents listed in the index, by `<area>/<topic>`. */
+  /** The documents covering the session, by `<area>/<topic>`: the session is told their count. */
   listed: string[];
+  /** Those documents counted by area, most first. */
+  byArea: Map<string, number>;
   /** The sections included in full. */
   sections: { doc: string; id: string }[];
 }
@@ -39,15 +42,18 @@ function needles(path: string): string[] {
   return [path, ...(dir ? [dir] : []), ...(stem.length >= 4 ? [stem] : [])];
 }
 
+const DOC_HEAD = "# Team document sections for your files (homeostat)";
+
 /**
- * What a session gets of the documents: a short index of those covering the touched paths (plus
- * org-wide ones), and the full text of the sections that name a touched path, best first, within
- * the budget. Documents are too big to inject whole; agents read the rest on demand (Phase K, K6).
+ * What a session gets of the documents: the full text of the sections that name a touched path,
+ * best first, within the budget, and a count of the documents covering the touched paths (plus
+ * org-wide ones). Documents are not listed by title: agents find the rest with `search` or
+ * `docs` and open them with `read` (see guide.ts for why a list suppresses searching).
  */
 export function docContext(
   docs: readonly ContextDoc[],
   paths: readonly string[],
-  opts: { tokenBudget: number; maxChars: number; readHint: string },
+  opts: { tokenBudget: number; maxChars: number },
 ): DocContext {
   const relevant = docs.filter(({ doc }) => {
     const scope = doc.frontmatter.scope;
@@ -55,38 +61,19 @@ export function docContext(
       scope.some((g) => GLOBAL.has(g)) || paths.some((p) => scope.some((g) => globMatch(p, g)))
     );
   });
-  if (relevant.length === 0) return { text: "", listed: [], sections: [] };
+  const byArea = new Map<string, number>();
+  for (const { doc } of relevant) {
+    byArea.set(doc.frontmatter.area, (byArea.get(doc.frontmatter.area) ?? 0) + 1);
+  }
+  const sorted = new Map([...byArea].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
+  const listed = relevant.map((d) => docRef(d.path));
+  if (relevant.length === 0) return { text: "", listed, byArea: sorted, sections: [] };
 
   const fits = (text: string) =>
     text.length <= opts.maxChars && countTokens(text) <= opts.tokenBudget;
-  // Every document by title first (as many as fit), then section ids for each while they fit:
-  // one long document must not push the others out of the index.
-  const head = [
-    "# Team documents (homeostat)",
-    `Reference documents for the code in this session. ${opts.readHint}`,
-  ].join("\n");
-  const line = (d: ContextDoc, ids: boolean) => {
-    const base = `- ${d.doc.frontmatter.title} (${docRef(d.path)})`;
-    const list = d.doc.sections.filter((s) => s.id).map((s) => s.id);
-    return ids && list.length > 0 ? `${base}: ${list.join(", ")}` : base;
-  };
-  const listed: ContextDoc[] = [];
-  const lines: string[] = [];
-  for (const d of relevant) {
-    if (!fits([head, ...lines, line(d, false)].join("\n"))) break;
-    listed.push(d);
-    lines.push(line(d, false));
-  }
-  for (const [i, d] of listed.entries()) {
-    const full = line(d, true);
-    if (fits([head, ...lines.with(i, full)].join("\n"))) lines[i] = full;
-  }
-  const index = [head, ...lines].join("\n");
-  if (listed.length === 0) return { text: "", listed: [], sections: [] };
-
   // Touched paths share folders, so the same needle repeats; each is searched for once.
   const wanted = [...new Set(paths.flatMap(needles))];
-  const scored = listed
+  const scored = relevant
     .flatMap(({ path, doc }) =>
       doc.sections.map((s) => ({
         doc: docRef(path),
@@ -97,7 +84,7 @@ export function docContext(
     .filter((x) => x.hits > 0 && x.s.id)
     .sort((a, b) => b.hits - a.hits || a.doc.localeCompare(b.doc));
 
-  let text = index;
+  let text = DOC_HEAD;
   const sections: DocContext["sections"] = [];
   for (const { doc, s } of scored) {
     const next = `${text}\n\n## ${s.heading} (${doc}#${s.id})\n${s.body}`;
@@ -105,5 +92,5 @@ export function docContext(
     text = next;
     sections.push({ doc, id: s.id });
   }
-  return { text, listed: listed.map((d) => docRef(d.path)), sections };
+  return { text: sections.length ? text : "", listed, byArea: sorted, sections };
 }

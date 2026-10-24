@@ -35,7 +35,7 @@ async function run(args: string[], extra: Partial<Io> = {}) {
 }
 
 describe("documents reach agents (K6)", () => {
-  test("a session touching an area is told which document covers it, and gets the sections that name its files", async () => {
+  test("a session touching an area is told how many documents cover it, and gets the sections that name its files", async () => {
     const dir = kb();
     const cwd = codeRepo("services/integrations/partner.ts");
     const { stdout } = await run(["hook", "session-start"], {
@@ -43,12 +43,12 @@ describe("documents reach agents (K6)", () => {
       stdin: async () => JSON.stringify({ session_id: "s1", cwd }),
     });
     const context: string = JSON.parse(stdout).hookSpecificOutput.additionalContext;
-    expect(context).toContain("# Team documents (homeostat)");
-    expect(context).toContain(
-      "- Partner API calls (integrations/partner-calls): http-client, timeouts",
-    );
-    expect(context).toContain('homeostat MCP tool `read` ({"doc": "<area>/<topic>"');
+    expect(context).toContain("# Team document sections for your files (homeostat)");
     expect(context).toContain("## Timeouts (integrations/partner-calls#timeouts)");
+    // Counted, not listed: titles up front are picked from instead of searched.
+    expect(context).toMatch(/1 team document covers? this code \(integrations 1\)/);
+    expect(context).not.toContain("Partner API calls (");
+    expect(context).toContain("`read`");
     const [e] = readEvents(dir, { types: ["doc-injection"] });
     expect(e).toMatchObject({
       docs: ["integrations/partner-calls"],
@@ -66,7 +66,7 @@ describe("documents reach agents (K6)", () => {
       env: { HOMEOSTAT_DIR: dir },
       stdin: async () => JSON.stringify({ session_id: "s2", cwd }),
     });
-    expect(stdout).not.toContain("Team documents");
+    expect(stdout).not.toContain("Team document");
   });
 
   test("export writes each tool's scoped document file and lists them in AGENTS.md", async () => {

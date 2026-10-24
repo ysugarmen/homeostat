@@ -123,7 +123,7 @@ Every change passes `homeostat validate`, which CI runs on each KB pull request.
 | --- | --- | --- |
 | Schema | frontmatter shape, word limits, ids, dates, unknown keys | error |
 | Config cross-checks | unknown areas, members, owners; one owning team per area | error |
-| Secret scanner | cloud, git-host, Slack and AI keys, JWTs, private keys, credentialed URLs, passwords, high-entropy strings | error |
+| Secret scanner | about 35 token formats (cloud, code-host and package-registry tokens, AI, payment, messaging and commerce keys, webhooks), JWTs, private keys, credentialed and database URLs, passwords, Luhn-checked card numbers, high-entropy strings | error |
 | Emails | personal data in rule text | warning |
 | Risky content | piped shell, unlisted domains, credential handling, disabling security checks, injection phrasing, destructive commands, hidden text | error until `riskReviewedBy` |
 | Provenance | a pr-feedback URL outside the KB's code repos | error |
@@ -192,23 +192,28 @@ Agents never read the stored files. They get a rendered view: no frontmatter, on
 1. Find the KB from the plugin's `kb_dir` setting, then `$HOMEOSTAT_DIR`, then the current repo.
 2. Collect touched paths from `git status` and recent commits.
 3. Select accepted rules for the session's repo (found from the checkout's `origin` remote, else its folder name) plus the shared ones, minus rejected decisions and other teams' team-only areas. Rank them in tiers: rules scoped to the touched files, then global rules that name a touched file, then global rules that name no file, then those naming other files; by score within a tier.
-4. Fit them into 80% of `distribution.tokenBudget` (2,000), within 10,000 characters overall, with room kept for the documents. Each rule goes in whole, else rule-only, else to the list of the rest: every remaining topic with its count, then titles while they fit, for the agent to fetch with `explain` or `context`.
+4. Fit them into `distribution.tokenBudget` (2,000) less the lookup guide, at most 80% of it, within 10,000 characters overall, with room kept for the documents. Each rule goes in whole, else rule-only, else to the rest, which is counted by topic.
 5. Group by kind under one guidance line each, and add the context header (rules never override the user or safety).
-6. Add a documents index (every document by title, then section ids while they fit) and the sections that name a touched path, within `docTokenBudget` (1,000).
-7. Log an `injection` event.
+6. Add the document sections that name a touched path, within `docTokenBudget` (1,000).
+7. End with the lookup guide: the rest counted by topic and the covering documents by area, never by title; the tools (`context`, `search`, `docs` then `read`, `explain`); the moments to look things up (a bug report, a test, new code or making parts fit, a why or what's-left question, a commit); and the credit line `> From Homeostat (<id>)`. A budget too small for it gets a compact form.
+8. Log an `injection` event.
+
+Why counts and moments, not titles: measured on real Claude Code sessions by vectorize-io/hindsight, listing page titles up front made agents open only listed pages and never search; a count plus "search, then read" brought searches back, repeating a short guide every prompt doubled them, and naming concrete moments raised them again, far more than describing a category. So **every prompt** (UserPromptSubmit) also gets a one-line reminder, under 80 tokens, alongside any rules new since the session started.
+
+**Usage per turn** (Stop hook): the hook reads the session transcript Claude Code names in `transcript_path` and logs one `turn-usage` event per user turn: the Homeostat MCP tools called (names), whether any of them retrieved knowledge, and the rule and section ids credited with `> From Homeostat (…)`, filtered to ids that exist in the KB. It re-reads the previous turn each time, because the Stop hook can fire before the turn's last reply is flushed to the file (it also reads `last_assistant_message` for the current turn), and replaces that turn's event rather than adding a second one. Ids and counts only, never prompt or reply text; any failure is swallowed; `HOMEOSTAT_NO_TURN_USAGE=1` turns it off. `homeostat metrics` and the Performance page report the share of turns that looked something up and that credited it, the distinct rules and sections credited, and accepted rules served but never credited; the opt-in heartbeat counts carry turns as numbers only.
 
 **MCP server** (`homeostat mcp`, stdio) re-reads the KB on every call:
 
 | Tool | Purpose |
 | --- | --- |
 | `context` | rules for given files, within a budget |
-| `search` | keyword search, local, no model call; rejected decisions shown as context |
+| `search` | keyword search over rules and document sections, local, no model call; 10 hits with snippets by default; rejected decisions shown as context |
 | `explain` | source, score breakdown, owner, conflicts |
-| `docs`, `read` | list documents; read one, or one section, with its source |
+| `docs`, `read` | list documents; read one section (also as `area/topic#section`) or a whole document, each section once, with its source |
 | `report` | KB health over recent days |
 | `learn`, `flag` | off unless `security.mcpWrites`; then at most `mcpWriteLimit` (5) per session |
 
-Guessed tool names (`get_rules`, `remember`, `open`, …) resolve through an alias table and are logged as desire paths.
+Descriptions and the server instructions name the moments to call each tool and the credit line. Tools carry MCP annotations (reads `readOnlyHint`, `flag` `destructiveHint`, none open-world). Guessed tool names (`get_rules`, `remember`, `open`, …) resolve through an alias table and are logged as desire paths; unknown arguments are dropped and JSON sent as strings is parsed. Expected misses are normal results, not errors.
 
 **Exports** (`homeostat export`) write each tool's native, path-scoped format into a code repo:
 
@@ -261,7 +266,7 @@ The default model is `claude-opus-5-5` at `medium` effort, configurable per agen
 
 **Scheduling.** `init` writes the CI jobs: validate on every PR, the daily run (`homeostat daily`), the deep dive weekly, and a weekly read-only digest (GitHub Actions or Bitbucket Pipelines). `homeostat up` is the alternative for one shared box or the Docker image. It runs the same agents and the digest on their cron schedules, and serves the dashboard.
 
-**Event log.** SQLite through `node:sqlite` at `.homeostat/events.db`, local to each machine. It records injections (with the hook's wall time and size), MCP calls (with their time) and desire paths, captures, flags, agent runs, model calls, document reads, syncs and auto-merges. It feeds `homeostat events`, `status`, `metrics`, the dashboard and the digest.
+**Event log.** SQLite through `node:sqlite` at `.homeostat/events.db`, local to each machine. It records injections (with the hook's wall time and size), MCP calls (with their time) and desire paths, captures, flags, agent runs, model calls, document reads, syncs, auto-merges, and per-turn usage (`turn-usage`: Homeostat tools called and ids credited, one event per turn). It feeds `homeostat events`, `status`, `metrics`, the dashboard and the digest.
 
 **Dashboard.** Server-rendered HTML with inline SVG charts, no framework. Pages: overview and agent liveness, automation (daily runs, review queue, developer sync), performance (decisions, calibration, review latency, reach, runtime), entries, members, coverage, impact, documents (section use and decay), desire paths, events, and settings forms for every config key (a test enforces that).
 

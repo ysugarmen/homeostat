@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { logEvent } from "@homeostat/core";
+import { logEvent, logTurnUsage } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -122,6 +122,24 @@ describe("homeostat metrics", () => {
       entries: [{ id: "redact-before-logging", form: "full" }],
       dropped: [],
     });
+    logTurnUsage(kb, {
+      ts: "2026-10-21T09:05:00Z",
+      session: "s1",
+      turn: 1,
+      calls: ["search"],
+      retrieved: true,
+      credited: true,
+      credits: ["redact-before-logging"],
+    });
+    logTurnUsage(kb, {
+      ts: "2026-10-21T09:10:00Z",
+      session: "s1",
+      turn: 2,
+      calls: [],
+      retrieved: false,
+      credited: false,
+      credits: [],
+    });
     const { code, stdout } = await run(["--dir", kb, "--json"]);
     expect(code).toBe(0);
     const r = JSON.parse(stdout);
@@ -132,8 +150,17 @@ describe("homeostat metrics", () => {
       "latency",
       "reach",
       "runtime",
+      "usage",
       "healthTrend",
     ]);
+    expect(r.usage).toMatchObject({
+      turns: 2,
+      retrievedShare: 0.5,
+      creditedShare: 0.5,
+      creditedAfterRetrieval: 1,
+      distinctRules: 1,
+      neverCredited: [],
+    });
     expect(r.window).toMatchObject({ days: 30, runs: 30, runsOnRecord: 1 });
     expect(r.decisions.current).toMatchObject({ merged: 1, review: 1, declined: 1, duplicates: 1 });
     expect(r.calibration.bands[8]).toMatchObject({ merged: 1 });
@@ -149,6 +176,7 @@ describe("homeostat metrics", () => {
       "Calibration",
       "Decisions and health",
       "Reach",
+      "Use",
       "Runtime",
       "Review latency",
     ])

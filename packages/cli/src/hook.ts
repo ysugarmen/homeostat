@@ -2,23 +2,30 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   AGENT_ENV,
+  addCredits,
   CONFIG_FILE,
   CORE_AREA,
   type Config,
   countTokens,
   detectRepo,
   docContext,
+  docRef,
   inRepo,
   isMultiRepo,
   logEvent,
+  logTurnUsage,
   memberFromGit,
+  PROMPT_GUIDE,
   pruneEvents,
   readKbFiles,
   readKbView,
+  readLinesFrom,
   renderContext,
-  renderIndex,
   repoNames,
+  restCounts,
   selectEntries,
+  sessionGuide,
+  summarizeTurns,
   validate,
   visibleTo,
 } from "@homeostat/core";
@@ -30,9 +37,11 @@ import { touchedPaths, uncommitted } from "./touched.ts";
 
 /** Claude Code's limit on SessionStart `additionalContext`. */
 const MAX_CONTEXT_CHARS = 10_000;
-/** Room kept for team documents when the KB has any, and for the index of the other rules. */
+/** Room kept for document sections when the KB has any, and for the lookup guide with its counts. */
 const DOC_RESERVE = 2_500;
-const INDEX_RESERVE = 1_500;
+const GUIDE_RESERVE = 1_500;
+/** Tokens kept for the guide's lines counting the rules and documents not given in full. */
+const COUNT_TOKENS = 40;
 
 export interface HookInput {
   session_id?: string;
@@ -40,6 +49,8 @@ export interface HookInput {
   source?: string;
   transcript_path?: string;
   trigger?: string;
+  /** Stop: the current turn's final reply, which the transcript file may not hold yet. */
+  last_assistant_message?: string;
 }
 
 /** The KB checkout: the plugin's kb_dir option, then $HOMEOSTAT_DIR, then the session dir itself. */
@@ -107,8 +118,14 @@ async function selectForSession(
     config,
     member,
   );
-  // Rules first, but never all of the room: the documents and the index of the rest keep theirs.
+  // Rules first, but never all of the room: the document sections and the guide keep theirs.
   const docRoom = visibleDocs.length ? DOC_RESERVE : 0;
+  // The lookup guide comes out of the token budget too: in full when it leaves the rules at least
+  // half, else its compact form. Its count lines are not known yet; COUNT_TOKENS covers them.
+  const budget = config.distribution.tokenBudget;
+  const guideCost = (compact: boolean) =>
+    countTokens(sessionGuide({ rules: new Map(), docs: new Map(), compact })) + COUNT_TOKENS;
+  const compactGuide = budget - guideCost(false) < budget / 2;
   const selection = selectEntries(
     visibleTo(
       inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
@@ -117,9 +134,12 @@ async function selectForSession(
     ),
     {
       paths,
-      // A fifth of the budget is left for the index of rules that do not fit in full.
-      tokenBudget: Math.floor(config.distribution.tokenBudget * 0.8),
-      maxChars: MAX_CONTEXT_CHARS - INDEX_RESERVE - docRoom,
+      // At most four fifths, as before the guide existed, so large budgets keep their rules.
+      tokenBudget: Math.max(
+        0,
+        Math.min(Math.floor(budget * 0.8), budget - guideCost(compactGuide)),
+      ),
+      maxChars: MAX_CONTEXT_CHARS - GUIDE_RESERVE - docRoom,
     },
   );
   note({
@@ -131,18 +151,15 @@ async function selectForSession(
   });
 
   const rules = renderContext(selection);
-  // The index fits in what the rules left of the token budget, and of the character limit.
-  let indexChars = MAX_CONTEXT_CHARS - rules.length - 2 - docRoom;
-  let index = renderIndex(selection.rest, indexChars);
-  while (index && countTokens(`${rules}\n\n${index}`) > config.distribution.tokenBudget) {
-    indexChars = Math.floor(indexChars * 0.8);
-    index = renderIndex(selection.rest, indexChars);
-  }
+  // What was not given in full is counted, not listed, with how and when to look it up.
   const documents = docContext(visibleDocs, paths, {
     tokenBudget: config.distribution.docTokenBudget,
-    maxChars: MAX_CONTEXT_CHARS - rules.length - index.length - 4,
-    readHint:
-      'Read a section with the homeostat MCP tool `read` ({"doc": "<area>/<topic>", "section": "<id>"}) before changing code it describes.',
+    maxChars: MAX_CONTEXT_CHARS - rules.length - GUIDE_RESERVE - 4,
+  });
+  const guide = sessionGuide({
+    rules: restCounts(selection.rest),
+    docs: documents.byArea,
+    compact: compactGuide,
   });
   if (documents.listed.length) {
     logEvent(kbRoot, {
@@ -174,7 +191,12 @@ async function selectForSession(
     isMultiRepo(config) && !repo
       ? `# Homeostat\n\nThis checkout is not one of the knowledge base's repos (${repoNames(config).join(", ")}), so only the team's shared rules apply here.`
       : "";
-  const context = [rules, index, documents.text, header, unplaced].filter(Boolean).join("\n\n");
+  const join = (docs: string) =>
+    [rules, docs, guide, header, unplaced].filter(Boolean).join("\n\n");
+  // The guide is sized by its counts; on the rare KB where it outgrows its reserve, the document
+  // sections give way rather than Claude Code cutting the end of the context.
+  const context =
+    join(documents.text).length <= MAX_CONTEXT_CHARS ? join(documents.text) : join("");
   note({ chars: context.length });
   if (!context) return;
   io.stdout(
@@ -213,6 +235,8 @@ interface HandoffState {
   view?: string;
   /** Files already changed when the session started, so the Stop hook counts only its own. */
   dirtyAtStart?: string[];
+  /** Where the last logged turn starts in the transcript, and its number, for `turn-usage`. */
+  usage?: { offset: number; turn: number };
 }
 
 const statePath = (kbRoot: string, session: string) =>
@@ -248,6 +272,64 @@ ${homeostatCommand()} learn --dir "${kbRoot}" --source agent-handoff --author ${
 Areas: ${areas}. Then reply with one line saying the note was saved; the daily run decides it for the team.`;
 }
 
+/**
+ * One `turn-usage` event per user turn: the Homeostat tools called, whether they retrieved, and
+ * the ids credited. Reads the transcript from the turn it logged last, so each Stop re-checks the
+ * previous turn (the Stop hook can fire before a reply is flushed to the file, which undercounted
+ * credits 2.4x in vectorize-io/hindsight's measurements) and logs the new ones; the event store
+ * keeps one event per turn. Ids are kept only when they name a rule or section in the KB.
+ */
+function logTurns(input: HookInput, io: Io, kbRoot: string) {
+  const session = input.session_id;
+  if (!session || !input.transcript_path || io.env?.HOMEOSTAT_NO_TURN_USAGE) return;
+  const state = readState(kbRoot, session);
+  const cursor = state.usage ?? { offset: 0, turn: 0 };
+  const { lines, from } = readLinesFrom(input.transcript_path, cursor.offset);
+  const restart = from !== cursor.offset;
+  const turns = summarizeTurns(lines, restart || cursor.turn === 0 ? 1 : cursor.turn);
+  const last = turns.at(-1);
+  if (!last) return;
+  // The reply Claude Code hands the hook directly is the current turn's, even if the file lags.
+  if (typeof input.last_assistant_message === "string") {
+    addCredits(last, input.last_assistant_message);
+  }
+  const known = turns.some((t) => t.credits.length) ? creditable(kbRoot) : new Set<string>();
+  const now = (io.now?.() ?? new Date()).toISOString();
+  for (const t of turns) {
+    const credits = t.credits.filter((id) => known.has(id));
+    const other = t.otherCredits + t.credits.length - credits.length;
+    logTurnUsage(kbRoot, {
+      ts: t.at ?? now,
+      session,
+      turn: t.turn,
+      calls: t.calls,
+      retrieved: t.retrieved,
+      credited: t.creditLines > 0,
+      credits,
+      ...(other ? { otherCredits: other } : {}),
+    });
+  }
+  writeState(kbRoot, session, {
+    ...readState(kbRoot, session),
+    usage: { offset: last.offset, turn: last.turn },
+  });
+}
+
+/** Every id a credit can name: rule ids, `area/topic` documents and `area/topic#section`. */
+function creditable(kbRoot: string): Set<string> {
+  const { entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files, {
+    checks: false,
+  });
+  const ids = new Set<string>();
+  for (const e of entries) ids.add(e.entry.frontmatter.id.toLowerCase());
+  for (const d of docs) {
+    const ref = docRef(d.path).toLowerCase();
+    ids.add(ref);
+    for (const s of d.doc.sections) if (s.id) ids.add(`${ref}#${s.id.toLowerCase()}`);
+  }
+  return ids;
+}
+
 async function stop(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
   const kbRoot = findKb(io.env, cwd);
@@ -255,6 +337,11 @@ async function stop(input: HookInput, io: Io) {
   // Lessons written during this reply go up now, not at the next session.
   if (pendingFingerprint(kbRoot) !== readSyncState(kbRoot).pushed) {
     io.background?.(["sync", "--dir", kbRoot, "--quiet", "--push-only"]);
+  }
+  try {
+    logTurns(input, io, kbRoot);
+  } catch {
+    // Usage counts are a by-product: they never stop a session or the handoff below.
   }
   const { config } = validate(readKbFiles(kbRoot), { checks: false });
   if (!config?.agents.handoff.enabled) return;
@@ -294,7 +381,9 @@ function viewKey(kbRoot: string): string {
  * Every message the developer sends (UserPromptSubmit). Sessions can run for days, so this keeps
  * them current: it starts a background sync at most every few hours, and when the KB view has
  * changed since the session last looked, it adds only the rules this session has not seen yet,
- * plus any decisions on the developer's own lessons. Most messages change nothing and print nothing.
+ * plus any decisions on the developer's own lessons. Every message also gets a one-line reminder of
+ * when to look things up and how to credit it: repeating it each turn is what keeps agents
+ * searching (see guide.ts). It is a fixed string, so the common path reads no KB files.
  */
 async function prompt(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
@@ -303,15 +392,33 @@ async function prompt(input: HookInput, io: Io) {
   if (syncDue(kbRoot, io.now?.() ?? new Date(), SYNC_EVERY_HOURS)) {
     io.background?.(["sync", "--dir", kbRoot, "--quiet"]);
   }
-  const state = readState(kbRoot, input.session_id);
+  let updates = "";
+  try {
+    updates = promptUpdates(input.session_id, io, cwd, kbRoot);
+  } finally {
+    // The reminder goes out even when looking for updates failed.
+    io.stdout(
+      `${JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "UserPromptSubmit",
+          additionalContext: [updates, PROMPT_GUIDE].filter(Boolean).join("\n\n"),
+        },
+      })}\n`,
+    );
+  }
+}
+
+/** The rules and notices this session has not seen yet, as text; "" when nothing changed. */
+function promptUpdates(session: string, io: Io, cwd: string, kbRoot: string): string {
+  const state = readState(kbRoot, session);
   const view = viewKey(kbRoot);
   const news = takeNotices(kbRoot);
-  if (view === state.view && news.length === 0) return;
+  if (view === state.view && news.length === 0) return "";
 
   const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files, {
     checks: false,
   });
-  if (!config) return;
+  if (!config) return "";
   const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
   const seen = new Set(state.injected ?? []);
   const repo = repoHere(cwd, config);
@@ -328,17 +435,17 @@ async function prompt(input: HookInput, io: Io) {
     },
   );
   const fresh = selection.items.filter((i) => !seen.has(i.entry.frontmatter.id));
-  writeState(kbRoot, input.session_id, {
+  writeState(kbRoot, session, {
     ...state,
     injected: [...seen, ...fresh.map((i) => i.entry.frontmatter.id)],
     view,
   });
-  if (fresh.length === 0 && news.length === 0) return;
+  if (fresh.length === 0 && news.length === 0) return "";
   if (fresh.length) {
     logEvent(kbRoot, {
       ts: (io.now?.() ?? new Date()).toISOString(),
       type: "injection",
-      session: input.session_id,
+      session,
       source: "update",
       cwd,
       ...(repo ? { repo } : {}),
@@ -358,14 +465,7 @@ async function prompt(input: HookInput, io: Io) {
         ]
       : []),
   ];
-  io.stdout(
-    `${JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "UserPromptSubmit",
-        additionalContext: parts.join("\n\n"),
-      },
-    })}\n`,
-  );
+  return parts.join("\n\n");
 }
 
 /** How often a long session checks for a new daily run. */

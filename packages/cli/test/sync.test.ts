@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { lessonHash, readEvents } from "@homeostat/core";
+import { countTokens, lessonHash, readEvents } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -215,7 +215,11 @@ describe("homeostat sync (automation, step 2)", () => {
     expect(next.context).toContain("# Team knowledge updated (homeostat)");
     expect(next.context).toContain("use-the-shared-button-component");
     expect(next.context).not.toContain("redact-before-logging"); // already given at start
-    expect((await session(t.lee, "long", "prompt")).stdout).toBe("");
+    // Later messages get only the one-line reminder, never the rules again.
+    const quiet = await session(t.lee, "long", "prompt");
+    expect(quiet.context).not.toContain("Team knowledge updated");
+    expect(quiet.context).toContain("From Homeostat");
+    expect(countTokens(quiet.context)).toBeLessThan(80);
     // The start was timed; the prompt-time update is not a session start, so it carries no time.
     const injections = readEvents(t.lee, { types: ["injection"] });
     expect(injections.find((e) => e.source === "startup")?.ms).toBeGreaterThanOrEqual(0);
@@ -237,12 +241,16 @@ describe("homeostat sync (automation, step 2)", () => {
     expect(today.sessions).toBe(1);
     expect(today.injections).toBeGreaterThanOrEqual(1);
     expect(Object.keys(today).sort()).toEqual([
+      "creditedTurns",
       "docReads",
       "injections",
       "mcpCalls",
+      "retrievedTurns",
       "rules",
       "sessions",
+      "turns",
     ]);
+    expect(Object.values(today).every((v) => typeof v === "number")).toBe(true);
     expect(JSON.stringify(heartbeat.usage)).not.toContain("u1");
     // The same through the config, so the choice is visible in the KB.
     const t2 = team();

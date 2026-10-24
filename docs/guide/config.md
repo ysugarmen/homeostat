@@ -84,7 +84,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | --- | --- | --- |
 | `distribution.exports` | all four | Which tools `homeostat export` writes for: `claude`, `cursor`, `agents-md`, `copilot` |
 | `distribution.tokenBudget` | `2000` | Tokens of rules per session |
-| `distribution.docTokenBudget` | `1000` | Tokens of document index and sections per session, on top of the rules |
+| `distribution.docTokenBudget` | `1000` | Tokens of document sections per session, on top of the rules |
 
 ## `notifications`
 

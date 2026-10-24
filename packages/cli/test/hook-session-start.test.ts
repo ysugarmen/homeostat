@@ -115,6 +115,37 @@ describe("homeostat hook session-start", () => {
     expect(countTokens(contextOf(stdout))).toBeLessThanOrEqual(150);
   });
 
+  test("rules that do not fit are counted by area, never listed, under a lookup guide", async () => {
+    const kbDir = kb();
+    const config = join(kbDir, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("tokenBudget: 2000", "tokenBudget: 500"),
+    );
+    const cwd = codeRepo([
+      "services/integrations/queue/worker.ts",
+      "apps/web/src/App.tsx",
+      "packages/ui/Button.tsx",
+    ]);
+    const { stdout } = await hook(
+      "session-start",
+      { session_id: "s1", cwd },
+      { HOMEOSTAT_DIR: kbDir },
+    );
+    const context = contextOf(stdout);
+    const [event] = readEvents(kbDir, { types: ["injection"] });
+    const dropped = (event?.dropped as string[] | undefined) ?? [];
+    expect(dropped.length).toBeGreaterThan(0);
+    for (const id of dropped) expect(context).not.toContain(id);
+    expect(context).toMatch(new RegExp(`${dropped.length} more team rules? apply here`));
+    // The guide: how to look things up, when, and how to credit it.
+    expect(context).toContain("# Looking things up (homeostat)");
+    expect(context).toContain("`search`");
+    expect(context).toContain("you are about to write or change a test");
+    expect(context).toContain("> From Homeostat (");
+    expect(countTokens(context)).toBeLessThanOrEqual(500);
+  });
+
   test("logs what was injected to the KB's event store", async () => {
     const kbDir = kb();
     const cwd = codeRepo(["apps/web/src/App.tsx"]);

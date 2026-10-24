@@ -168,7 +168,7 @@ export function performancePage(r: MetricsReport, opts: { shared: boolean }): st
   const team: Datum[] = re.team.byDay.map((x) => ({
     label: x.day.slice(5),
     value: x.injections,
-    title: `${x.day}: ${x.injections} injections in ${x.sessions} sessions, ${x.rules} rules, ${x.mcpCalls} MCP calls, ${x.docReads} document reads`,
+    title: `${x.day}: ${x.injections} injections in ${x.sessions} sessions, ${x.rules} rules, ${x.mcpCalls} MCP calls, ${x.docReads} document reads, ${x.turns ?? 0} turns`,
   }));
   const teamPanel = re.team.sharing
     ? `${columns(team, { title: "Team injections per day", labelled: "ends" })}<p class="muted">${re.team.sharing} of ${re.team.members} members share usage counts</p>`
@@ -176,8 +176,34 @@ export function performancePage(r: MetricsReport, opts: { shared: boolean }): st
   const localPanel = shared
     ? ""
     : re.sessions
-      ? `${areaChart(local, { title: `Sessions given rules per day, last ${w.days} days`, id: "reach", unit: "injections" })}<div class="stats" style="--cols: 3">${stat(pct(re.servedShare), "reachable rules served")}${stat(pct(re.indexOverflowShare), "starts that overflowed to the index")}${stat(pct(re.docs.pullThrough), "listed documents opened")}</div>`
+      ? `${areaChart(local, { title: `Sessions given rules per day, last ${w.days} days`, id: "reach", unit: "injections" })}<div class="stats" style="--cols: 3">${stat(pct(re.servedShare), "reachable rules served")}${stat(pct(re.indexOverflowShare), "starts that left rules out")}${stat(pct(re.docs.pullThrough), "covering documents opened")}</div>`
       : empty("No sessions recorded on this machine yet.");
+
+  // 4b. Use: whether agents look things up, and credit what they used.
+  const us = r.usage;
+  const teamTurns = re.team.byDay.reduce(
+    (a, x) => ({
+      turns: a.turns + (x.turns ?? 0),
+      retrieved: a.retrieved + (x.retrievedTurns ?? 0),
+      credited: a.credited + (x.creditedTurns ?? 0),
+    }),
+    { turns: 0, retrieved: 0, credited: 0 },
+  );
+  const share = (n: number, of: number) => (of ? pct(n / of) : "—");
+  const teamUse = teamTurns.turns
+    ? `<div class="stats" style="--cols: 3">${stat(teamTurns.turns, "team turns, last 7 days")}${stat(share(teamTurns.retrieved, teamTurns.turns), "team turns that looked things up")}${stat(share(teamTurns.credited, teamTurns.turns), "team turns that credited")}</div>`
+    : "";
+  const shown = us.neverCredited.slice(0, 12);
+  const neverList = us.neverCredited.length
+    ? `<p class="muted">Served, never credited${info(`Accepted rules a session on this machine was given in the last ${w.days} days that no reply credited. A rule that is served often and never credited may be unclear, or not needed.`)}</p><p>${shown.map((id) => `<span class="chip mono">${esc(id)}</span>`).join(" ")}${us.neverCredited.length > shown.length ? ` <span class="muted">+${us.neverCredited.length - shown.length} more</span>` : ""}</p>`
+    : "";
+  const localUse = shared
+    ? ""
+    : us.turns
+      ? `<div class="stats" style="--cols: 4">${stat(pct(us.retrievedShare), "turns that looked things up")}${stat(pct(us.creditedShare), "turns that credited")}${stat(pct(us.creditedAfterRetrieval), "credited after a lookup")}${stat(`${us.distinctRules} · ${us.distinctDocs}`, "rules · sections credited")}</div>${neverList}`
+      : empty("No turns recorded on this machine yet.");
+  const usePanel =
+    localUse || teamUse ? `${localUse}${teamUse}` : empty("No member shares usage counts.");
 
   // 5. Runtime: four cards; only the daily run's survives a shared build.
   const ss = rt.sessionStart;
@@ -274,7 +300,8 @@ export function performancePage(r: MetricsReport, opts: { shared: boolean }): st
 <div class="kpis" style="--cols: ${kpis.length}">${kpis.join("")}</div></section>
 <section class="panel span-6" aria-labelledby="calibration"><h2 id="calibration">Calibration${info(`Every decision with a confidence in the last ${w.days} days, in ten-point bands: merged by the run, sent to review and then merged or declined by a reviewer, or declined by the run. The dashed lines are the configured thresholds. The sentence covers the band just under the accept line.`)}</h2>${calibration}</section>
 <section class="panel span-6" aria-labelledby="runs"><h2 id="runs">Decisions and health${info(`Lessons decided per run, split by outcome, with the KB's health after each run as lines (accepted, stale, flagged, disputed, possible duplicates) where the run recorded it. The <a href="/automation">Automation page</a> shows the same decisions per day.`)}</h2>${runsPanel}</section>
-<section class="panel span-12" aria-labelledby="reach"><h2 id="reach">Reach${info(`Whether rules get to sessions${shared ? "" : ": this machine's sessions per day, the share of reachable rules served, the share of session starts that pushed rules to the index for lack of budget, and the share of listed document sections that were read"}. Team figures come only from members who share usage counts.`)}</h2>${localPanel}${teamPanel}</section>
+<section class="panel span-12" aria-labelledby="reach"><h2 id="reach">Reach${info(`Whether rules get to sessions${shared ? "" : ": this machine's sessions per day, the share of reachable rules served, the share of session starts that left rules out for lack of budget (they are counted for the agent to look up), and the share of documents covering the session that an agent opened"}. Team figures come only from members who share usage counts.`)}</h2>${localPanel}${teamPanel}</section>
+<section class="panel span-12" aria-labelledby="use"><h2 id="use">Use${info(`Whether agents look the knowledge up and use it, per user turn${shared ? ", from members who share usage counts" : ` on this machine over the last ${w.days} days (${us.turns} turns; previous window ${us.previous.turns})`}. A turn looked things up when it called context, search, explain, docs or read; it credited when the reply carried a "&gt; From Homeostat (…)" line. The Stop hook reads the session transcript for this and keeps only tool names and credited ids.`)}</h2>${usePanel}</section>
 <section class="panel span-12" aria-labelledby="runtime"><h2 id="runtime">Runtime${info(shared ? "What the daily run costs, as it recorded it on the state branch." : "What each step costs. The hook, MCP and sync figures come from this machine's event log; the daily run's from the state branch.")}</h2><div class="grid">${runtimeCards.join("")}</div></section>
 <section class="panel span-12" aria-labelledby="latency"><h2 id="latency">Review latency${info(`Reviews settled in the last ${w.days} days: ${l.settled}, median ${age(l.medianHours)}, 90th percentile ${age(l.p90Hours)}${l.unmeasured ? `; ${l.unmeasured} settled before times were recorded` : ""}. Below, what still waits, oldest first; over ${2} days is marked. The <a href="/automation#queue">Automation page</a> has the same queue with reasons.`)}</h2>
 <div class="stats" style="--cols: 3">${stat(l.settled, "settled")}${stat(age(l.medianHours), "median wait")}${stat(age(l.p90Hours), "p90 wait")}</div>${openTable}</section>

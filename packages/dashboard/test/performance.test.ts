@@ -117,7 +117,7 @@ function full(): MetricsSnapshot {
 describe("the Performance page", () => {
   test("renders the six panels with a tooltip on every KPI, and the calibration sentence", () => {
     const html = performancePage(metricsReport(full()), { shared: false });
-    for (const id of ["kpis", "calibration", "runs", "reach", "runtime", "latency"])
+    for (const id of ["kpis", "calibration", "runs", "reach", "use", "runtime", "latency"])
       expect(html).toContain(`aria-labelledby="${id}"`);
     expect(html.match(/class="info"/g)?.length).toBeGreaterThanOrEqual(6);
     expect(html).toContain(
@@ -143,6 +143,7 @@ describe("the Performance page", () => {
       "No MCP calls yet.",
       "No run timing recorded yet.",
       "No syncs recorded yet.",
+      "No turns recorded on this machine yet.",
       "Nothing waiting for review.",
     ])
       expect(html).toContain(text);
@@ -165,6 +166,61 @@ describe("the Performance page", () => {
       { shared: false },
     );
     expect(html).toContain("No lesson at 60 to 69 has been settled by a reviewer yet.");
+  });
+
+  test("the Use panel shows lookups, credits and rules served but never credited", () => {
+    const snap = full();
+    const turn = (n: number, rest: Record<string, unknown>) =>
+      ev(`2026-10-21T09:1${n}:00Z`, "turn-usage", {
+        session: "s1",
+        turn: n,
+        calls: [],
+        retrieved: false,
+        credited: false,
+        credits: [],
+        ...rest,
+      });
+    snap.events = [
+      ...snap.events,
+      ev("2026-10-21T09:00:30Z", "injection", {
+        session: "s1",
+        source: "update",
+        entries: [{ id: "outbound-http-retry-helper", form: "full" }],
+      }),
+      turn(1, {
+        calls: ["search"],
+        retrieved: true,
+        credited: true,
+        credits: ["redact-before-logging"],
+      }),
+      turn(2, {}),
+    ];
+    snap.heartbeats = snap.heartbeats.map((h) => ({
+      ...h,
+      usage: {
+        "2026-10-21": {
+          sessions: 2,
+          injections: 3,
+          rules: 9,
+          mcpCalls: 1,
+          docReads: 0,
+          turns: 4,
+          retrievedTurns: 2,
+          creditedTurns: 1,
+        },
+      },
+    }));
+    const html = performancePage(metricsReport(snap), { shared: false });
+    expect(html).toContain('aria-labelledby="use"');
+    expect(html).toContain("turns that looked things up");
+    expect(html).toContain('<span class="chip mono">outbound-http-retry-helper</span>');
+    expect(html).not.toContain('<span class="chip mono">redact-before-logging</span>');
+    expect(html).toContain("team turns that credited");
+    // A shared build keeps the team's counts and leaves this machine's out.
+    const shared = performancePage(metricsReport(snap), { shared: true });
+    expect(shared).toContain("team turns that looked things up");
+    expect(shared).not.toContain("credited after a lookup");
+    expect(shared).not.toContain("outbound-http-retry-helper");
   });
 
   test("a shared build leaves out what only this machine's event log can fill", () => {

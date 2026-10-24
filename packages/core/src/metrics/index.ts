@@ -4,6 +4,7 @@ import { type HealthPoint, healthTrend } from "./health-trend.ts";
 import { type ReviewLatency, reviewLatency } from "./latency.ts";
 import { type Reach, reach } from "./reach.ts";
 import { type Runtime, runtime } from "./runtime.ts";
+import { type TurnMetrics, turnMetrics } from "./turns.ts";
 import type { MetricsSnapshot } from "./types.ts";
 import { windows } from "./util.ts";
 
@@ -18,6 +19,8 @@ export interface MetricsReport {
   latency: ReviewLatency;
   reach: Reach;
   runtime: Runtime;
+  /** Whether agents look things up and credit what they used, from per-turn usage. */
+  usage: TurnMetrics;
   healthTrend: HealthPoint[];
 }
 
@@ -33,6 +36,7 @@ export function metricsReport(snap: MetricsSnapshot): MetricsReport {
     latency: reviewLatency(snap),
     reach: reach(snap),
     runtime: runtime(snap),
+    usage: turnMetrics(snap),
     healthTrend: healthTrend(snap),
   };
 }

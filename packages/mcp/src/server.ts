@@ -1,4 +1,5 @@
 import {
+  CREDIT_LABEL,
   detectRepo,
   docCovers,
   docRef,
@@ -6,11 +7,15 @@ import {
   explainEntry,
   hitLine,
   inRepo,
+  isRejectedDecision,
   type KbFiles,
   kbReport,
   renderContext,
   searchEntries,
+  searchSections,
   selectEntries,
+  snippet,
+  TRIGGER_MOMENTS,
   VERSION,
   validate,
   visibleTo,
@@ -51,9 +56,13 @@ export interface McpDeps {
 
 const WRITE_TOOLS = new Set(["learn", "flag"]);
 
-/** Mentions learn and flag only when this KB offers them, so agents never look for a hidden tool. */
+/**
+ * Names the moments to look things up (they move agents far more than a category does; see
+ * core's guide.ts) and the credit line. Mentions learn and flag only when this KB offers them, so
+ * agents never look for a hidden tool.
+ */
 const instructions = (writes: boolean) =>
-  `Homeostat holds your team's reviewed coding rules, learned from accepted code-review feedback, and its reference documents. Before changing code, call context with the files you will touch (or search for a topic) and follow the rules it returns. docs lists the team documents and read returns one section. explain says why a rule exists. ${
+  `Homeostat holds your team's reviewed coding rules, learned from accepted code-review feedback, and its reference documents. Before changing code, call context with the files you will touch, or search for a subject, and follow what it returns. Look things up first when ${TRIGGER_MOMENTS.join("; ")}. search covers rules and document sections; docs lists documents and read returns one section; explain says why a rule exists. When something you used came from here, start that part of your reply with "> ${CREDIT_LABEL} (<rule-id or area/topic#section>)". ${
     writes
       ? "When the user teaches you a team convention, save it with learn. If a rule is wrong, flag it."
       : "Saving through MCP is off for this team: when the user teaches you a team convention, use the /homeostat:learn skill or the homeostat learn command; to dispute a rule, homeostat flag <id> --reason."
@@ -65,13 +74,17 @@ type ToolResult = ReturnType<typeof text> & { isError?: boolean };
 
 const asList = (v: unknown) => (typeof v === "string" ? [v] : v);
 
+/** Search hits by default: one search should answer, so agents need fewer of them. */
+const SEARCH_LIMIT = 10;
+const CREDIT_HINT = `Credit what you use: > ${CREDIT_LABEL} (<id>).`;
+
 /** Accepts the argument spellings agents reach for, then validates. */
 const schemas = {
   search: z.object({
     query: z.string().min(1),
     area: z.string().optional(),
     path: z.string().optional(),
-    limit: z.int().min(1).max(20).optional(),
+    limit: z.int().min(1).max(30).optional(),
   }),
   context: z.object({
     paths: z.array(z.string()).min(1),
@@ -113,11 +126,41 @@ const ARG_ALIASES: Record<string, string> = {
   section_id: "section",
 };
 
+/**
+ * A JSON array or object sent as a string (`"[\"a.ts\"]"`), as some clients do, parsed back;
+ * numbers sent as strings are read as numbers. Anything else is left for validation to judge.
+ * Adapted from vectorize-io/hindsight's tolerant tool arguments (MIT).
+ */
+function coerce(value: unknown, field: z.ZodType | undefined): unknown {
+  if (typeof value !== "string" || !field) return value;
+  const inner = field instanceof z.ZodOptional ? field.unwrap() : field;
+  if (inner instanceof z.ZodArray || inner instanceof z.ZodObject) {
+    const t = value.trim();
+    if (/^[[{]/.test(t)) {
+      try {
+        return JSON.parse(t);
+      } catch {
+        return value;
+      }
+    }
+  }
+  if (inner instanceof z.ZodNumber && /^\s*-?\d+(?:\.\d+)?\s*$/.test(value)) return Number(value);
+  return value;
+}
+
+/**
+ * Accepts the spellings and shapes agents send: aliases become the real names, string-encoded
+ * JSON is parsed, and arguments the tool does not take (an agent's `explanation`, `reasoning`)
+ * are dropped rather than failing the call.
+ */
 function normalizeArgs(tool: ToolName, raw: Record<string, unknown>): Record<string, unknown> {
+  const shape = schemas[tool].shape as Record<string, z.ZodType>;
   const args: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
     const name = ARG_ALIASES[key] ?? key;
-    if (args[name] === undefined) args[name] = value;
+    // context takes `path` as a spelling of `paths`; every tool else keeps only its own fields.
+    if (!(name in shape) && !(tool === "context" && name === "path")) continue;
+    if (args[name] === undefined) args[name] = coerce(value, shape[name]);
   }
   if (tool === "context") {
     if (args.paths === undefined && typeof args.path === "string") args.paths = args.path;
@@ -128,47 +171,67 @@ function normalizeArgs(tool: ToolName, raw: Record<string, unknown>): Record<str
   return args;
 }
 
-/** The tools agents see. Descriptions stay under 200 characters (execution plan 3.1). */
-export const TOOLS: { name: ToolName; description: string }[] = [
+type Annotations = {
+  readOnlyHint: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint: boolean;
+};
+/** Reads touch nothing; Homeostat never reaches beyond the KB, so no tool is open-world. */
+const READ_ONLY: Annotations = { readOnlyHint: true, idempotentHint: true, openWorldHint: false };
+
+/**
+ * The tools agents see. Each description says when to call it, since a tool registered without
+ * its moment is mostly left alone. Under 200 characters each (execution plan 3.1).
+ */
+export const TOOLS: { name: ToolName; description: string; annotations: Annotations }[] = [
   {
     name: "context",
     description:
-      "Team rules that apply to the given files, best first, within a token budget. Call before editing code.",
+      "Team rules for the files you are about to change, best first. Call before editing, writing a test or committing.",
+    annotations: READ_ONLY,
   },
   {
     name: "search",
     description:
-      "Search the team's accepted coding rules by topic or keyword, optionally limited to an area or a file path.",
+      "Search team rules and document sections by subject; ~10 hits with snippets. Call first on a bug report, new code, a why question or before a commit.",
+    annotations: READ_ONLY,
   },
   {
     name: "explain",
     description:
       "Why a rule exists: its source review comment, score breakdown, owner, conflicts and when it was last confirmed.",
+    annotations: READ_ONLY,
   },
   {
     name: "learn",
     description:
       "Save a lesson the user taught you as a candidate team rule (title, one-paragraph rule, why). A reviewer accepts it.",
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "flag",
     description:
       "Report that a rule is wrong or outdated, with the reason. It loses score and goes back to review.",
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
   },
   {
     name: "report",
     description:
       "Knowledge base health over recent days: entries by status, new, flagged, disputed, stale, duplicates, injections.",
+    annotations: READ_ONLY,
   },
   {
     name: "docs",
     description:
-      "List the team's reference documents (architecture, contracts, migrations, domain guides) and their sections, optionally for an area or file.",
+      "List the team's reference documents (architecture, contracts, migrations, domain guides) and their section ids, optionally for an area or file.",
+    annotations: READ_ONLY,
   },
   {
     name: "read",
     description:
-      'Read a team document, or one section of it: doc is "<area>/<topic>" as listed by docs, section is a section id.',
+      'Read one section of a team document (or all of it): doc is "<area>/<topic>", section a section id, as search or docs show them.',
+    annotations: READ_ONLY,
   },
 ];
 
@@ -265,6 +328,7 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
     tools: TOOLS.filter((t) => writesOn() || !WRITE_TOOLS.has(t.name)).map((t) => ({
       name: t.name,
       description: t.description,
+      annotations: t.annotations,
       inputSchema: z.toJSONSchema(schemas[t.name]) as { type: "object" },
     })),
   }));
@@ -334,15 +398,53 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
         switch (tool) {
           case "search": {
             const a = args as z.infer<typeof schemas.search>;
-            const hits = searchEntries(entries, a.query, {
+            const limit = a.limit ?? SEARCH_LIMIT;
+            const rules = searchEntries(entries, a.query, {
               ...(a.area ? { area: a.area } : {}),
               ...(a.path ? { path: a.path } : {}),
-              limit: a.limit ?? 5,
+              limit,
             });
+            const sections = searchSections(
+              docs
+                .filter(
+                  ({ doc }) =>
+                    (!a.area || doc.frontmatter.area === a.area) &&
+                    (!a.path || docCovers(doc, a.path)),
+                )
+                .flatMap(({ path, doc }) =>
+                  doc.sections.map((s) => ({
+                    doc: docRef(path),
+                    title: doc.frontmatter.title,
+                    id: s.id,
+                    heading: s.heading,
+                    body: s.body,
+                  })),
+                ),
+              a.query,
+              { limit },
+            );
+            // Rules and sections are ranked apart, so each list's scores are scaled to its best
+            // before they are merged into one list of at most `limit`.
+            const top = (xs: { score: number }[]) => Math.max(...xs.map((x) => x.score), 1e-9);
+            const merged = [
+              ...rules.map((h) => ({
+                rank: h.score / top(rules),
+                line: isRejectedDecision(h.entry.frontmatter)
+                  ? hitLine(h.entry)
+                  : `- ${h.entry.frontmatter.id} (rule, ${h.entry.frontmatter.area}): ${h.entry.frontmatter.title}\n  ${snippet(h.entry.sections.rule ?? "", a.query, 200)}`,
+              })),
+              ...sections.map((h) => ({
+                rank: h.score / top(sections),
+                line: `- ${h.section.doc}#${h.section.id} (document section): ${h.section.heading}\n  ${snippet(h.section.body, a.query)}`,
+              })),
+            ]
+              .sort((x, y) => y.rank - x.rank)
+              .slice(0, limit);
+            // A miss is an answer, not an error: the agent carries on.
             return text(
-              hits.length
-                ? hits.map((h) => hitLine(h.entry)).join("\n")
-                : `No accepted rules match "${a.query}". The team may not have one yet; if you learn one, save it with learn.`,
+              merged.length
+                ? `${merged.map((m) => m.line).join("\n")}\n\nFull text: explain <rule id>, or read {"doc": "<area>/<topic>", "section": "<id>"}. ${CREDIT_HINT}`
+                : `No team rules or document sections match "${a.query}". The team may not have written this down yet; carry on without it.`,
             );
           }
           case "context": {
@@ -370,7 +472,8 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
               const hint = hits.length
                 ? ` Closest: ${hits.map((h) => h.entry.frontmatter.id).join(", ")}.`
                 : "";
-              return fail(`No entry with id "${a.id}".${hint}`);
+              // An expected miss: a normal answer the agent can act on, not a tool error.
+              return text(`No rule with id "${a.id}".${hint}`);
             }
             return text(explainEntry(e, config));
           }
@@ -404,21 +507,25 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
           }
           case "read": {
             const a = args as z.infer<typeof schemas.read>;
-            const ref = a.doc
+            // `area/topic#section`, as search hits and credits write it, names the section too.
+            const [docPart = a.doc, hashSection] = a.doc.split("#");
+            const wanted = a.section ?? hashSection;
+            const ref = docPart
               .replace(/^knowledge\//, "")
               .replace(/\/docs\//, "/")
               .replace(/\.md$/, "");
             const found = docs.find((d) => docRef(d.path) === ref);
+            // Misses are answers, not errors: they say what exists so the next call lands.
             if (!found) {
-              return fail(
+              return text(
                 `No document "${a.doc}". Documents: ${docs.map((d) => docRef(d.path)).join(", ") || "none"}.`,
               );
             }
             const { doc } = found;
-            const section = a.section ? doc.sections.find((s) => s.id === a.section) : undefined;
-            if (a.section && !section) {
-              return fail(
-                `No section "${a.section}" in ${ref}. Sections: ${doc.sections.map((s) => s.id).join(", ")}.`,
+            const section = wanted ? doc.sections.find((s) => s.id === wanted) : undefined;
+            if (wanted && !section) {
+              return text(
+                `No section "${wanted}" in ${ref}. Sections: ${doc.sections.map((s) => s.id).join(", ")}.`,
               );
             }
             deps.log({
@@ -433,12 +540,20 @@ export function createServer(deps: McpDeps, version = VERSION): Server {
                 : "";
             const render = (s: (typeof doc.sections)[number]) =>
               `## ${s.heading} {#${s.id}}\n${source(s)}\n${s.body}`.replace(/\n\n+/g, "\n\n");
+            if (section) return text(`# ${doc.frontmatter.title} (${ref})\n\n${render(section)}`);
+            // A whole document: each section once, as many as fit, then the ids of the rest, so
+            // nothing is cut mid-section and nothing needs reading twice.
+            let out = [`# ${doc.frontmatter.title} (${ref})`, doc.intro]
+              .filter(Boolean)
+              .join("\n\n");
+            const rest: string[] = [];
+            for (const s of doc.sections) {
+              const next = `${out}\n\n${render(s)}`;
+              if (rest.length || next.length > MAX_CHARS - 300) rest.push(s.id);
+              else out = next;
+            }
             return text(
-              section
-                ? `# ${doc.frontmatter.title} (${ref})\n\n${render(section)}`
-                : [`# ${doc.frontmatter.title} (${ref})`, doc.intro, ...doc.sections.map(render)]
-                    .filter(Boolean)
-                    .join("\n\n"),
+              rest.length ? `${out}\n\nNot shown, read by section: ${rest.join(", ")}.` : out,
             );
           }
           case "report":

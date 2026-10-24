@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { type Entry, formatEntry, parseEntry } from "../src/entry.ts";
 import type { Frontmatter } from "../src/schema.ts";
-import { searchEntries, tokenize } from "../src/search.ts";
+import { searchEntries, searchSections, snippet, tokenize } from "../src/search.ts";
 import { countTokens } from "../src/tokens.ts";
 import { validFrontmatter } from "./helpers.ts";
 
@@ -98,5 +98,39 @@ describe("searchEntries", () => {
   test("respects the limit", () => {
     expect(searchEntries(kb, "retry logging hex", { limit: 1 })).toHaveLength(1);
     expect(searchEntries(kb, "retry logging hex").length).toBeGreaterThan(1);
+  });
+});
+
+describe("searchSections", () => {
+  const section = (doc: string, id: string, heading: string, body: string) => ({
+    doc,
+    title: `Guide ${doc}`,
+    id,
+    heading,
+    body,
+  });
+  const sections = [
+    section("api/partners", "timeouts", "Timeouts", "Partner calls time out after 10 seconds."),
+    section("api/partners", "client", "The HTTP client", "Every call goes through withRetry()."),
+    section("web/ui", "tokens", "Design tokens", "Colours come from the token file."),
+    section("web/ui", "", "Untitled", "A section without an id is never a hit: it cannot be read."),
+  ];
+
+  test("ranks sections by heading, then body; a section without an id is never a hit", () => {
+    const hits = searchSections(sections, "partner timeout");
+    expect(hits[0]?.section.id).toBe("timeouts");
+    expect(searchSections(sections, "retry")[0]?.section.id).toBe("client");
+    expect(searchSections(sections, "untitled")).toEqual([]);
+  });
+});
+
+describe("snippet", () => {
+  test("picks the sentence with a query word, collapsed and cut on a word", () => {
+    const body =
+      "Intro line.\n\nThe   retry helper waits.\n<!-- homeostat: source=manual -->\nMore.";
+    expect(snippet(body, "retry")).toBe("The retry helper waits.");
+    const s = snippet(`Retry ${"word ".repeat(60)}`, "retry", 50);
+    expect(s.length).toBeLessThanOrEqual(51);
+    expect(s.endsWith("…")).toBe(true);
   });
 });

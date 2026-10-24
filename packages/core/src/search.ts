@@ -70,16 +70,31 @@ export function searchEntries(
       (!opts.path || e.frontmatter.scope.some((g) => minimatch(opts.path ?? "", g, { dot: true }))),
   );
 
-  const docs = pool.map((entry) => ({
-    entry,
-    fields: FIELDS.map(({ get, weight }) => ({ words: tokenize(get(entry)), weight })),
+  return rank(
+    pool,
+    terms,
+    FIELDS.map(({ get, weight }) => ({ get, weight })),
+  )
+    .map(({ item, score }) => ({ entry: item, score }))
+    .sort((a, b) => b.score - a.score || b.entry.frontmatter.score - a.entry.frontmatter.score)
+    .slice(0, opts.limit ?? 5);
+}
+
+/** BM25 over weighted fields; items that match no term are left out. */
+function rank<T>(
+  items: readonly T[],
+  terms: readonly string[],
+  fields: { get: (item: T) => string; weight: number }[],
+): { item: T; score: number }[] {
+  const docs = items.map((item) => ({
+    item,
+    fields: fields.map(({ get, weight }) => ({ words: tokenize(get(item)), weight })),
   }));
   const length = (d: (typeof docs)[number]) => d.fields.reduce((n, f) => n + f.words.length, 0);
   const avg = docs.reduce((n, d) => n + length(d), 0) / Math.max(docs.length, 1);
   const df = new Map(
     terms.map((t) => [t, docs.filter((d) => d.fields.some((f) => f.words.includes(t))).length]),
   );
-
   const k1 = 1.2;
   const b = 0.75;
   return docs
@@ -96,9 +111,62 @@ export function searchEntries(
         const idf = Math.log(1 + (docs.length - n + 0.5) / (n + 0.5));
         score += (idf * tf * (k1 + 1)) / (tf + k1 * norm);
       }
-      return { entry: d.entry, score };
+      return { item: d.item, score };
     })
-    .filter((h) => h.score > 0)
-    .sort((a, b) => b.score - a.score || b.entry.frontmatter.score - a.entry.frontmatter.score)
+    .filter((h) => h.score > 0);
+}
+
+/** A section of a team document, as search sees it. */
+export interface SearchableSection {
+  /** `<area>/<topic>` of its document. */
+  doc: string;
+  title: string;
+  id: string;
+  heading: string;
+  body: string;
+}
+
+export interface SectionHit {
+  section: SearchableSection;
+  score: number;
+}
+
+/** Keyword search over document sections: heading first, then the document title and body. */
+export function searchSections(
+  sections: readonly SearchableSection[],
+  query: string,
+  opts: { limit?: number } = {},
+): SectionHit[] {
+  const terms = [...new Set(tokenize(query))];
+  if (terms.length === 0) return [];
+  return rank(
+    sections.filter((s) => s.id),
+    terms,
+    [
+      { get: (s) => s.heading, weight: 3 },
+      { get: (s) => `${s.id} ${s.title}`, weight: 1.5 },
+      { get: (s) => s.body, weight: 1 },
+    ],
+  )
+    .map(({ item, score }) => ({ section: item, score }))
+    .sort((a, b) => b.score - a.score)
     .slice(0, opts.limit ?? 5);
+}
+
+/**
+ * One short line of `text` for a search hit: the first sentence that holds a query word (or the
+ * start), whitespace collapsed, cut at `max` characters on a word.
+ */
+export function snippet(text: string, query: string, max = 160): string {
+  const plain = text
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const terms = new Set(tokenize(query));
+  const sentences = plain.split(/(?<=[.!?])\s+/);
+  const best = sentences.find((s) => tokenize(s).some((w) => terms.has(w))) ?? sentences[0] ?? "";
+  if (best.length <= max) return best;
+  const cut = best.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max - 20))}…`;
 }

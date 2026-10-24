@@ -207,6 +207,7 @@ export {
   LEGACY_EVENTS,
   logEvent,
   logFailure,
+  logTurnUsage,
   pruneEvents,
   readEvents,
 } from "./events.ts";
@@ -230,6 +231,14 @@ export {
 } from "./files.ts";
 export { applyFixes } from "./fix.ts";
 export { type Flag, flagEntry } from "./flag.ts";
+export {
+  CREDIT_LABEL,
+  PROMPT_GUIDE,
+  parseCredits,
+  RETRIEVAL_TOOLS,
+  sessionGuide,
+  TRIGGER_MOMENTS,
+} from "./guide.ts";
 export { codeownersHandle, loginKey, memberForLogin, memberFromGit } from "./handles.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export {
@@ -269,6 +278,7 @@ export { type MetricsReport, metricsReport } from "./metrics/index.ts";
 export { type OpenReview, type ReviewLatency, reviewLatency } from "./metrics/latency.ts";
 export { type Reach, reach } from "./metrics/reach.ts";
 export { type Runtime, runtime } from "./metrics/runtime.ts";
+export { type TurnMetrics, turnMetrics } from "./metrics/turns.ts";
 export {
   type DailyCount as MetricsDailyCount,
   DEFAULT_WINDOW,
@@ -303,7 +313,15 @@ export {
   sourceSchema,
 } from "./schema.ts";
 export { type ScoreContext, type ScoreReason, type ScoreResult, score } from "./score.ts";
-export { type SearchHit, type SearchOptions, searchEntries, tokenize } from "./search.ts";
+export {
+  type SearchHit,
+  type SearchOptions,
+  type SectionHit,
+  searchEntries,
+  searchSections,
+  snippet,
+  tokenize,
+} from "./search.ts";
 export { findEmails, redactSecrets, type SecretFinding, scanSecrets } from "./secrets.ts";
 export { type SectionUsage, sectionUsage } from "./section-usage.ts";
 export {
@@ -331,7 +349,7 @@ export {
   fileRefs,
   KIND_GUIDANCE,
   renderContext,
-  renderIndex,
+  restCounts,
   type SelectedEntry,
   type Selection,
   type SelectOptions,
@@ -358,6 +376,13 @@ export {
   topicsFor,
   usesTopics,
 } from "./topics.ts";
+export {
+  addCredits,
+  homeostatTool,
+  readLinesFrom,
+  summarizeTurns,
+  type TurnUsage,
+} from "./turn-usage.ts";
 export {
   type KbFiles,
   type ValidatedDoc,

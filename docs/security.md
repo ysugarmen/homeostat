@@ -11,7 +11,7 @@ Teams will only connect Homeostat to their repos if they can answer four questio
 | Daily run | The KB repo's CI (or `up` on a shared box) | Merged-PR metadata, review comments, commit dates, via the git host API. **Not code.** | The comment thread, PR title, file path and line, area globs | A branch and PR on the KB repo | Git-host token (read code repos, write KB repo); Claude credential |
 | Deep dive | Same | KB entries | Entry text (merge, contradiction check) | A branch and PR on the KB repo | Same |
 | `bootstrap`, `seed` | One person's terminal, by hand | Local checkouts: docs, the file tree, key files, schema and migration files, deploy manifests; never state, env, key or secret files | Those files, cut to size and redacted, after a preview and a confirmation | One PR per repo on the KB repo | The person's git-host token; Claude credential |
-| Session-start and Stop hooks | Developer laptop, inside Claude Code | `git status`/log paths, KB files, transcript (only to count edits) | **Nothing.** They put KB rules into the session, which then goes to whatever model the developer's Claude Code uses | Local `.homeostat/events.db` (paths count, cwd, session id, rule ids); a background `homeostat sync` pulls the KB and pushes pending lessons and a heartbeat (member, KB commit, pending count, version) to `candidates/<member>` | The developer's own git credentials |
+| Session-start, prompt and Stop hooks | Developer laptop, inside Claude Code | `git status`/log paths, KB files, transcript (to count edits, and per turn the Homeostat tools called and the ids credited; no text kept) | **Nothing.** They put KB rules into the session, which then goes to whatever model the developer's Claude Code uses | Local `.homeostat/events.db` (paths count, cwd, session id, rule ids, per-turn tool names and credited ids); a background `homeostat sync` pulls the KB and pushes pending lessons and a heartbeat (member, KB commit, pending count, version) to `candidates/<member>` | The developer's own git credentials |
 | MCP server | Developer laptop (stdio) | KB files | Nothing | Local event log; `learn`/`flag` pushed to `candidates/<member>` | The developer's own git credentials |
 | Export | Laptop or code-repo CI | KB files | Nothing | Rules files in the code repo | None |
 | Dashboard | Loopback only | KB files, event log | Nothing | `homeostat.yaml` | None |
@@ -64,7 +64,7 @@ Controls:
 Review comments and sessions can contain tokens, connection strings or customer data. Without controls they would be sent to Claude by the daily run, or committed by a handoff note, and git history keeps them forever.
 
 Controls:
-1. **A built-in secret scanner** (CPU, no dependency): known token formats (cloud keys, Slack, GitHub, Anthropic, JWT, private keys, URLs with credentials) plus a high-entropy check. It runs:
+1. **A built-in secret scanner** (CPU, no dependency): known token formats (cloud keys; GitHub, GitLab, npm and PyPI tokens; AI-provider, payment, messaging and commerce keys; Slack webhooks; JWT; private keys; URLs with credentials, database URLs included), Luhn-checked card numbers, plus a high-entropy check. It runs:
    - on every review thread **before** it is sent to a model, redacting matches as `[REDACTED:kind]`
    - on every entry in `validate` (an error, so CI blocks the PR)
    - on `learn`, `flag` and handoff notes **before** they are committed (refused, with the reason)

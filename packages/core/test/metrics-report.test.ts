@@ -17,6 +17,7 @@ test("an empty snapshot gives every group, with nothing undefined turned into Na
     "latency",
     "reach",
     "runtime",
+    "usage",
     "healthTrend",
   ]);
   // No report field is legitimately null, so a null in the JSON would be a NaN or an Infinity.
