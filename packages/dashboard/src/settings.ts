@@ -254,6 +254,12 @@ export const SECTIONS: Section[] = [
         help: "global, us, eu or a region",
       },
       ...agentFields("curator", "Daily run (curator)"),
+      {
+        path: ["agents", "curator", "consolidateCalls"],
+        label: "Daily run: update-or-add checks per run",
+        kind: "number",
+        help: "Model calls that decide whether a lesson updates an existing rule; 0 turns them off",
+      },
       ...agentFields("deepDive", "Deep dive"),
       {
         path: ["agents", "deepDive", "staleAfterDays"],

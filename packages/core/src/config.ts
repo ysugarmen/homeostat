@@ -247,7 +247,15 @@ export const configSchema = z.strictObject({
           region: z.string().min(1).default("global"),
         })
         .optional(),
-      curator: agentSchema("0 6 * * *", 26).prefault({}),
+      curator: agentSchema("0 6 * * *", 26)
+        .extend({
+          /**
+           * Most model calls per daily run that decide whether a new lesson updates or repeats a
+           * rule already in force. Past it, lessons fall back to the word-overlap duplicate check.
+           */
+          consolidateCalls: z.int().min(0).default(30),
+        })
+        .prefault({}),
       deepDive: agentSchema("0 7 * * 1", 7 * 24)
         .extend({
           /** Accepted entries not confirmed for this long are retired. */

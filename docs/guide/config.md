@@ -68,6 +68,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `agents.curator.model` | `claude-opus-5-5` | Any model id the runtime accepts |
 | `agents.curator.effort` | `medium` | `low`, `medium`, `high`, `xhigh` or `max` |
 | `agents.curator.lookbackHours` | `26` | How far back each run reads merged PRs |
+| `agents.curator.consolidateCalls` | `30` | Most model calls per daily run that decide whether a new lesson updates, repeats or adds to the rules most like it ([details](agents.md#consolidate)). Lessons past the cap, and every lesson with `--no-reviews` or `0`, fall back to the word-overlap duplicate check |
 | `agents.deepDive.enabled` | `true` | Run the deep dive under `homeostat up` |
 | `agents.deepDive.schedule` | `0 7 * * 1` | Cron (UTC) |
 | `agents.deepDive.model` | `claude-opus-5-5` | |

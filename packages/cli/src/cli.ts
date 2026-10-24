@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import type {
   ConflictJudge,
+  Consolidator,
   DocPatcher,
   Drafter,
   Merger,
@@ -64,6 +65,7 @@ export interface Io {
   merger?: Merger;
   judge?: ConflictJudge;
   fixer?: RuleFixer;
+  consolidator?: Consolidator;
   topicProposer?: TopicProposer;
 }
 

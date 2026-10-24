@@ -50,6 +50,11 @@ export const frontmatterSchema = z.strictObject({
   score: z.int(),
   owner: memberId,
   source: sourceSchema,
+  /**
+   * Later lessons the daily run folded into this rule (it updated the rule instead of adding a
+   * sibling): their review-comment URLs, oldest first. `source` stays the rule's first origin.
+   */
+  alsoFrom: z.array(z.url({ protocol: /^https?$/ })).optional(),
   created: isoDate,
   lastConfirmed: isoDate,
   approvedBy: memberId.optional(),

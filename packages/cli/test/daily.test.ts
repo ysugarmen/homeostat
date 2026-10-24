@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  Consolidator,
   DocPatcher,
   Draft,
   Drafter,
@@ -12,8 +13,10 @@ import type {
   PullRequest,
   RepoRef,
   ReviewThread,
+  RuleCandidate,
+  Verdict,
 } from "@homeostat/core";
-import { formatTopicFile, parseEntry, ruleSection } from "@homeostat/core";
+import { type Entry, formatTopicFile, parseEntry, ruleSection } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -167,6 +170,22 @@ class FakeDrafter implements Drafter {
   }
 }
 
+/** Answers whether a lesson updates, repeats or adds to its candidates; null falls back. */
+class FakeConsolidator implements Consolidator {
+  calls: { lesson: string; candidates: string[] }[] = [];
+  answer: (candidates: readonly RuleCandidate[]) => Verdict | null;
+  constructor(answer: (candidates: readonly RuleCandidate[]) => Verdict | null = () => null) {
+    this.answer = answer;
+  }
+  async decide(lesson: Entry, candidates: readonly RuleCandidate[]): Promise<Verdict | null> {
+    this.calls.push({
+      lesson: lesson.frontmatter.id,
+      candidates: candidates.map((c) => c.entry.frontmatter.id),
+    });
+    return this.answer(candidates);
+  }
+}
+
 async function run(args: string[], extra: Partial<Io> = {}) {
   let stdout = "";
   const code = await runCli(["node", "homeostat", ...args], {
@@ -177,6 +196,7 @@ async function run(args: string[], extra: Partial<Io> = {}) {
     now: () => new Date("2026-10-16T06:00:00Z"),
     background: () => {},
     drafter: new FakeDrafter(),
+    consolidator: new FakeConsolidator(),
     ...extra,
   });
   return { code, stdout };
@@ -967,6 +987,178 @@ describe("homeostat daily in a topic KB", { timeout: 30_000 }, () => {
       t2.g(t2.origin, "show", `${b2?.pr.sourceBranch}:knowledge/frontend/general.md`),
     ).toContain("{#use-colour-tokens-instead-of-hex-values}");
     expect(b2?.pr.body).toContain("- `design-tokens`: `use-colour-tokens-instead-of-hex-values`");
+  });
+
+  /** Sam's review on Lee's PR teaches a refinement of the retry rule in http.md. */
+  const REFINEMENT: Draft = {
+    title: "Pass the request id through withRetry for partner calls",
+    rule: "Call withRetry() from @app/http-client for every partner call and keep the request-id header it adds.",
+    why: "On-call searches partner logs by the request id.",
+    area: "integrations",
+    topic: "http",
+  };
+  const UPDATED = {
+    title: "Use the shared retry helper for outbound HTTP calls and keep its request id",
+    rule: "Wrap every outbound HTTP call to a partner API in `withRetry()` from `@app/http-client`, and keep the request-id header it adds. Do not hand-roll retry loops or use `axios-retry` directly.",
+    why: "Partner APIs time out often. The helper adds jittered backoff, a circuit breaker and the request-id header that on-call searches logs by.",
+  };
+  const refine = (dir: string, consolidator: FakeConsolidator, extra: string[] = []) =>
+    run(["daily", "--dir", dir, ...extra], {
+      provider: new FakeProvider("services/integrations/partner.ts"),
+      drafter: new FakeDrafter(REFINEMENT),
+      patcher: { propose: async () => null },
+      consolidator,
+    });
+
+  test("a lesson that refines a rule updates its section in the daily PR, not a sibling", async () => {
+    const t = await topicTeam();
+    const consolidator = new FakeConsolidator((c) => ({
+      action: "update",
+      id: c[0]?.entry.frontmatter.id ?? "",
+      reason: "the same helper; the lesson adds the request-id header",
+      rule: UPDATED,
+    }));
+    const provider = new FakeProvider("services/integrations/partner.ts");
+    const { code, stdout } = await run(["daily", "--dir", t.ci], {
+      provider,
+      drafter: new FakeDrafter(REFINEMENT),
+      patcher: { propose: async () => null },
+      consolidator,
+    });
+    expect(code).toBe(0);
+    expect(consolidator.calls).toEqual([
+      {
+        lesson: "pass-the-request-id-through-withretry-for-partner-calls",
+        candidates: ["outbound-http-retry-helper"],
+      },
+    ]);
+    expect(stdout).toContain(
+      "merged   outbound-http-retry-helper: updates outbound-http-retry-helper: the same helper; the lesson adds the request-id header",
+    );
+    const daily = provider.opened[0];
+    expect(daily?.pr.sourceBranch).toBe("homeostat/daily-lee-2026-10-16");
+    expect(daily?.pr.body).toContain(
+      `| merged | Update: ${UPDATED.title} (\`outbound-http-retry-helper\`)`,
+    );
+    const http = t.g(t.origin, "show", `${daily?.pr.sourceBranch}:knowledge/integrations/http.md`);
+    // One section, rewritten in place: same id, owner and first source, the review recorded.
+    expect(http.match(/^## /gm)).toHaveLength(1);
+    expect(http).toContain(`## ${UPDATED.title} {#outbound-http-retry-helper}`);
+    expect(http).toContain("and keep the request-id header it adds");
+    expect(http).toContain("owner: dana");
+    expect(http).toContain("https://github.com/acme/web-app/pull/812#discussion_r33");
+    expect(http).toContain(
+      "alsoFrom:\n  - https://github.com/acme/web-app/pull/120#discussion_r9001",
+    );
+    expect(http).toContain("lastConfirmed: 2026-10-16");
+    expect(http).toContain("### Example");
+    expect(http).not.toContain("pass-the-request-id-through-withretry-for-partner-calls");
+    // The review thread is now known: the next run does not draft it again.
+    t.g(t.ci, "pull", "-q", "origin", daily?.pr.sourceBranch ?? "");
+    const next = await refine(t.ci, new FakeConsolidator(), ["--dry-run"]);
+    expect(next.stdout).toContain("no new lessons");
+  });
+
+  test("a lesson that repeats a rule is declined and reconfirms it", async () => {
+    const t = await topicTeam();
+    const consolidator = new FakeConsolidator((c) => ({
+      action: "duplicate",
+      id: c[0]?.entry.frontmatter.id ?? "",
+      reason: "says nothing the rule does not",
+    }));
+    const provider = new FakeProvider("services/integrations/partner.ts");
+    const { stdout } = await run(["daily", "--dir", t.ci], {
+      provider,
+      drafter: new FakeDrafter(REFINEMENT),
+      patcher: { propose: async () => null },
+      consolidator,
+    });
+    expect(stdout).toContain(
+      "declined pass-the-request-id-through-withretry-for-partner-calls: duplicate of outbound-http-retry-helper, which it reconfirms",
+    );
+    const branch = provider.opened[0]?.pr.sourceBranch ?? "";
+    const http = t.g(t.origin, "show", `${branch}:knowledge/integrations/http.md`);
+    expect(http).toContain("lastConfirmed: 2026-10-16");
+    expect(http.match(/^## /gm)).toHaveLength(1);
+  });
+
+  test("the model saying create adds the lesson, even where word overlap saw a duplicate", async () => {
+    const t = await topicTeam();
+    const consolidator = new FakeConsolidator(() => ({
+      action: "create",
+      reason: "the retry rule is about retries; this is about headers",
+    }));
+    const { stdout } = await refine(t.ci, consolidator, ["--dry-run"]);
+    expect(consolidator.calls).toHaveLength(1);
+    expect(stdout).toContain(
+      "pass-the-request-id-through-withretry-for-partner-calls: create (the retry rule is about retries; this is about headers)",
+    );
+    expect(stdout).not.toContain("declined pass-the-request-id");
+    expect(stdout).toContain("dry run");
+  });
+
+  test("a lesson about a look-alike helper is never a candidate: no model call, no duplicate", async () => {
+    const t = await topicTeam();
+    const consolidator = new FakeConsolidator(() => {
+      throw new Error("not asked");
+    });
+    const { stdout } = await run(["daily", "--dir", t.ci, "--dry-run"], {
+      provider: new FakeProvider("services/integrations/partner.ts"),
+      drafter: new FakeDrafter({
+        // The rule's very title, but about withRetryBudget(), not withRetry().
+        title: "Use the shared retry helper for outbound HTTP calls",
+        rule: "Wrap every outbound HTTP call to a partner API in `withRetryBudget()` from `@app/http-client`.",
+        why: "The budget stops retry storms.",
+        area: "integrations",
+        topic: "http",
+      }),
+      patcher: { propose: async () => null },
+      consolidator,
+    });
+    expect(consolidator.calls).toEqual([]);
+    expect(stdout).not.toContain("duplicate of outbound-http-retry-helper");
+    expect(stdout).toContain("merged   use-the-shared-retry-helper-for-outbound-http-calls");
+  });
+
+  test("past agents.curator.consolidateCalls, word overlap decides; --no-reviews never asks", async () => {
+    const t = await topicTeam();
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace(
+        `curator: { enabled: true, schedule: "0 6 * * *" }`,
+        `curator: { enabled: true, schedule: "0 6 * * *", consolidateCalls: 0 }`,
+      ),
+    );
+    const consolidator = new FakeConsolidator(() => {
+      throw new Error("not asked");
+    });
+    const { stdout } = await refine(t.ci, consolidator, ["--dry-run"]);
+    expect(consolidator.calls).toEqual([]);
+    expect(stdout).toContain("1 more lesson(s) not checked against existing rules");
+
+    await run([
+      "learn",
+      "--dir",
+      t.lee,
+      "--author",
+      "lee",
+      "--area",
+      "integrations",
+      "--title",
+      "Use the shared retry helper for partner calls",
+      "--rule",
+      "Wrap every partner API call in withRetry() from services/integrations/http.ts.",
+      "--why",
+      "Partner APIs time out; hand-rolled retries skipped the request-id header.",
+    ]);
+    await run(["sync", "--dir", t.lee]);
+    const offline = await run(["daily", "--dir", t.ci, "--no-reviews", "--dry-run"], {
+      provider: new FakeProvider(),
+      consolidator,
+    });
+    expect(consolidator.calls).toEqual([]);
+    expect(offline.stdout).toContain("duplicate of outbound-http-retry-helper");
   });
 
   test("a developer's flag on a rule in a topic file disputes it there, in place", async () => {
