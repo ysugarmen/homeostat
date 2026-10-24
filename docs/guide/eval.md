@@ -59,11 +59,26 @@ Otherwise it exits 0, however low the numbers: set floors once you know your bas
 
 ## The built-in fixture
 
-Homeostat's own tests run a synthetic KB of 150 rules in two repos and a shared core, with 40 cases (`packages/core/test/selection-fixture.ts`). It includes the hard kinds: a general rule naming the touched file, a broadly scoped rule whose text names the exact helper, one specific file among thirty generic ones, near-duplicate titles, and search words found only in a rule's body. Measured at a 1,600-token session budget:
+Homeostat's own tests run a synthetic KB of 150 rules in two repos and a shared core, with 40 cases (`packages/core/test/selection-fixture.ts`). It includes the hard kinds: a general rule naming the touched file, a broadly scoped rule whose text names the exact helper, one specific file among thirty generic ones, near-duplicate titles, and search words found only in a rule's body. Measured at a 1,600-token session budget, before and after session selection fused its rankings:
 
 | Surface | Hit@1 | Hit@3 | Hit@10 | MRR | nDCG@10 | served |
 | --- | --- | --- | --- | --- | --- | --- |
-| session (25 cases) | 0.200 | 0.240 | 0.720 | 0.312 | 0.373 | 0.829 |
+| session (25 cases), score order within tiers | 0.200 | 0.240 | 0.720 | 0.312 | 0.373 | 0.829 |
+| session, reciprocal rank fusion | 0.800 | 0.880 | 0.960 | 0.856 | 0.842 | 1.000 |
 | search (15 cases) | 1.000 | 1.000 | 1.000 | 1.000 | 0.992 | 1.000 |
+
+The tests hold floors under the fused numbers, so a ranking change that makes them worse fails CI. The fixture was written by the same hands as the ranking: treat it as a regression guard, and your own cases as the real measure.
+
+Tried on the same fixture and left out, because they did not improve it:
+
+| Change | Effect |
+| --- | --- |
+| Interleaving the three rankings instead of fusing them | session MRR 0.638 |
+| A recency boost from `lastConfirmed` (±10%, linear over a year) | session MRR 0.774; fused scores differ by a few percent, so the boost outweighs relevance |
+| A proof boost from the number of sources (`source` plus `alsoFrom`) | no change |
+| Keeping only the 4 to 8 rarest query words in search | search nDCG@10 0.951 to 0.969; BM25 already weighs rare words |
+| A fourth ranking by score alone | session MRR 0.766 |
+
+Packing already skipped a rule that does not fit and went on to smaller ones.
 
 The metrics are adapted from vectorize-io/hindsight, MIT.

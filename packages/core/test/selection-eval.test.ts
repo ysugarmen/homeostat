@@ -119,9 +119,10 @@ describe("the built-in selection fixture", () => {
   // drops below one has made selection worse on cases a team would care about.
   test("selection stays at or above its recorded numbers", () => {
     const { session, search } = run();
-    expect(session.mrr).toBeGreaterThanOrEqual(0.3);
-    expect(session.hit[10]).toBeGreaterThanOrEqual(0.7);
-    expect(session.served).toBeGreaterThanOrEqual(0.8);
+    expect(session.mrr).toBeGreaterThanOrEqual(0.85);
+    expect(session.hit[1]).toBeGreaterThanOrEqual(0.8);
+    expect(session.hit[10]).toBeGreaterThanOrEqual(0.95);
+    expect(session.served).toBe(1);
     expect(search.hit[1]).toBeGreaterThanOrEqual(0.9);
     expect(search.served).toBe(1);
   });
