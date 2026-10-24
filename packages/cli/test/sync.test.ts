@@ -241,12 +241,16 @@ describe("homeostat sync (automation, step 2)", () => {
     expect(today.sessions).toBe(1);
     expect(today.injections).toBeGreaterThanOrEqual(1);
     expect(Object.keys(today).sort()).toEqual([
+      "creditedTurns",
       "docReads",
       "injections",
       "mcpCalls",
+      "retrievedTurns",
       "rules",
       "sessions",
+      "turns",
     ]);
+    expect(Object.values(today).every((v) => typeof v === "number")).toBe(true);
     expect(JSON.stringify(heartbeat.usage)).not.toContain("u1");
     // The same through the config, so the choice is visible in the KB.
     const t2 = team();

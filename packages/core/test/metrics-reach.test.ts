@@ -90,6 +90,9 @@ test("injections per day, rules served against the rules reachable here, overflo
     rules: 9,
     mcpCalls: 1,
     docReads: 0,
+    turns: 0,
+    retrievedTurns: 0,
+    creditedTurns: 0,
   });
   expect(r.team.byDay[0]).toEqual({
     day: "2026-10-15",
@@ -98,6 +101,9 @@ test("injections per day, rules served against the rules reachable here, overflo
     rules: 0,
     mcpCalls: 0,
     docReads: 0,
+    turns: 0,
+    retrievedTurns: 0,
+    creditedTurns: 0,
   });
 });
 

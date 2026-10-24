@@ -33,7 +33,7 @@ const duration = (v: number | undefined) => {
 const waiting = (h: number) =>
   h < 1 ? "under 1h" : h < 48 ? `${Math.floor(h)}h` : `${Math.floor(h / 24)}d`;
 
-/** The report as text: six headings in the Performance page's order, two-space indented lines. */
+/** The report as text: seven headings in the Performance page's order, two-space indented lines. */
 export function formatMetrics(r: MetricsReport, present: boolean): string {
   const out: string[] = [];
   const h = (title: string) => out.push("", title);
@@ -110,9 +110,26 @@ export function formatMetrics(r: MetricsReport, present: boolean): string {
   line("index overflow", pct(re.indexOverflowShare));
   line(
     "documents",
-    `${re.docs.listed} listed in session indexes, ${re.docs.read} opened (${pct(re.docs.pullThrough)})`,
+    `${re.docs.listed} covering sessions, ${re.docs.read} opened (${pct(re.docs.pullThrough)})`,
   );
   line("team", `${re.team.sharing} of ${re.team.members} members share usage counts`);
+
+  h("Use");
+  const u = r.usage;
+  line("turns", `${u.turns} (previous ${u.previous.turns})`);
+  line(
+    "retrieved",
+    `${pct(u.retrievedShare)} of turns (previous ${pct(u.previous.retrievedShare)})`,
+  );
+  line("credited", `${pct(u.creditedShare)} of turns (previous ${pct(u.previous.creditedShare)})`);
+  line("credited after lookup", pct(u.creditedAfterRetrieval));
+  line("distinct credited", `${u.distinctRules} rules, ${u.distinctDocs} document sections`);
+  line(
+    "never credited",
+    u.turns
+      ? `${u.neverCredited.length} rules served but never credited${u.neverCredited.length ? `: ${u.neverCredited.slice(0, 10).join(", ")}${u.neverCredited.length > 10 ? ", …" : ""}` : ""}`
+      : "no turns recorded yet",
+  );
 
   h("Runtime");
   const cx = r.runtime.context;

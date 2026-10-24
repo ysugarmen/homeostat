@@ -46,7 +46,7 @@ Every figure is computed at read time from a snapshot: config, entries, the loca
 
 Trends: event-based figures compare the window with the 30 days before it. Run-based figures read twice `--runs` reports (60 by default) so the previous window exists; a KB with fewer runs shows no arrow.
 
-Left out on purpose: dollar cost (price tables go stale), rankings of members by usage (the dashboard does not rank people), and whether a session obeyed a rule (needs the transcript, which Homeostat never reads).
+Left out on purpose: dollar cost (price tables go stale), rankings of members by usage (the dashboard does not rank people), and whether a session obeyed a rule. (Batch A later added per-turn lookups and credits, read from the transcript by the Stop hook as tool names and ids only; see data-handling.md.)
 
 ## New data
 

@@ -74,6 +74,33 @@ export function logEvent(kbRoot: string, event: Record<string, unknown>) {
     .run(String(e.ts), String(e.type), JSON.stringify(e));
 }
 
+/**
+ * Logs one `turn-usage` event, replacing any earlier one for the same session and turn: the Stop
+ * hook re-reads the previous turn once its reply is flushed, and a turn must count once.
+ */
+export function logTurnUsage(
+  kbRoot: string,
+  event: Record<string, unknown> & { session: string; turn: number },
+) {
+  const e = { ts: new Date().toISOString(), ...event, type: "turn-usage" } as Event;
+  const d = db(kbRoot);
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare(
+      "DELETE FROM events WHERE type = 'turn-usage' AND json_extract(data, '$.session') = ? AND json_extract(data, '$.turn') = ?",
+    ).run(event.session, event.turn);
+    d.prepare("INSERT INTO events (ts, type, data) VALUES (?, ?, ?)").run(
+      String(e.ts),
+      e.type,
+      JSON.stringify(e),
+    );
+    d.exec("COMMIT");
+  } catch (err) {
+    d.exec("ROLLBACK");
+    throw err;
+  }
+}
+
 /** Deletes events older than `days`; the log is local, but it should not grow or linger. */
 export function pruneEvents(kbRoot: string, days: number, now = new Date()): number {
   if (!existsSync(join(kbRoot, EVENTS_DB))) return 0;
@@ -136,6 +163,11 @@ export function describeEvent(e: Event): string {
         const docs = (rest.docs as unknown[] | undefined) ?? [];
         const sections = (rest.sections as unknown[] | undefined) ?? [];
         return `${docs.length} document${docs.length === 1 ? "" : "s"} listed, ${sections.length} section${sections.length === 1 ? "" : "s"} included`;
+      }
+      case "turn-usage": {
+        const calls = (rest.calls as string[] | undefined) ?? [];
+        const credits = (rest.credits as string[] | undefined) ?? [];
+        return `turn ${rest.turn}: ${calls.length ? calls.join(", ") : "no Homeostat calls"}${credits.length ? `; credited ${credits.join(", ")}` : rest.credited ? "; credited" : ""}`;
       }
       case "sync-run":
         return `${rest.ms} ms${rest.ok ? "" : `, failed at ${rest.step}`}`;

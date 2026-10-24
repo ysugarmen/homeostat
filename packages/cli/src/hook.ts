@@ -2,25 +2,30 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   AGENT_ENV,
+  addCredits,
   CONFIG_FILE,
   CORE_AREA,
   type Config,
   countTokens,
   detectRepo,
   docContext,
+  docRef,
   inRepo,
   isMultiRepo,
   logEvent,
+  logTurnUsage,
   memberFromGit,
   PROMPT_GUIDE,
   pruneEvents,
   readKbFiles,
   readKbView,
+  readLinesFrom,
   renderContext,
   repoNames,
   restCounts,
   selectEntries,
   sessionGuide,
+  summarizeTurns,
   validate,
   visibleTo,
 } from "@homeostat/core";
@@ -44,6 +49,8 @@ export interface HookInput {
   source?: string;
   transcript_path?: string;
   trigger?: string;
+  /** Stop: the current turn's final reply, which the transcript file may not hold yet. */
+  last_assistant_message?: string;
 }
 
 /** The KB checkout: the plugin's kb_dir option, then $HOMEOSTAT_DIR, then the session dir itself. */
@@ -228,6 +235,8 @@ interface HandoffState {
   view?: string;
   /** Files already changed when the session started, so the Stop hook counts only its own. */
   dirtyAtStart?: string[];
+  /** Where the last logged turn starts in the transcript, and its number, for `turn-usage`. */
+  usage?: { offset: number; turn: number };
 }
 
 const statePath = (kbRoot: string, session: string) =>
@@ -263,6 +272,64 @@ ${homeostatCommand()} learn --dir "${kbRoot}" --source agent-handoff --author ${
 Areas: ${areas}. Then reply with one line saying the note was saved; the daily run decides it for the team.`;
 }
 
+/**
+ * One `turn-usage` event per user turn: the Homeostat tools called, whether they retrieved, and
+ * the ids credited. Reads the transcript from the turn it logged last, so each Stop re-checks the
+ * previous turn (the Stop hook can fire before a reply is flushed to the file, which undercounted
+ * credits 2.4x in vectorize-io/hindsight's measurements) and logs the new ones; the event store
+ * keeps one event per turn. Ids are kept only when they name a rule or section in the KB.
+ */
+function logTurns(input: HookInput, io: Io, kbRoot: string) {
+  const session = input.session_id;
+  if (!session || !input.transcript_path || io.env?.HOMEOSTAT_NO_TURN_USAGE) return;
+  const state = readState(kbRoot, session);
+  const cursor = state.usage ?? { offset: 0, turn: 0 };
+  const { lines, from } = readLinesFrom(input.transcript_path, cursor.offset);
+  const restart = from !== cursor.offset;
+  const turns = summarizeTurns(lines, restart || cursor.turn === 0 ? 1 : cursor.turn);
+  const last = turns.at(-1);
+  if (!last) return;
+  // The reply Claude Code hands the hook directly is the current turn's, even if the file lags.
+  if (typeof input.last_assistant_message === "string") {
+    addCredits(last, input.last_assistant_message);
+  }
+  const known = turns.some((t) => t.credits.length) ? creditable(kbRoot) : new Set<string>();
+  const now = (io.now?.() ?? new Date()).toISOString();
+  for (const t of turns) {
+    const credits = t.credits.filter((id) => known.has(id));
+    const other = t.otherCredits + t.credits.length - credits.length;
+    logTurnUsage(kbRoot, {
+      ts: t.at ?? now,
+      session,
+      turn: t.turn,
+      calls: t.calls,
+      retrieved: t.retrieved,
+      credited: t.creditLines > 0,
+      credits,
+      ...(other ? { otherCredits: other } : {}),
+    });
+  }
+  writeState(kbRoot, session, {
+    ...readState(kbRoot, session),
+    usage: { offset: last.offset, turn: last.turn },
+  });
+}
+
+/** Every id a credit can name: rule ids, `area/topic` documents and `area/topic#section`. */
+function creditable(kbRoot: string): Set<string> {
+  const { entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files, {
+    checks: false,
+  });
+  const ids = new Set<string>();
+  for (const e of entries) ids.add(e.entry.frontmatter.id.toLowerCase());
+  for (const d of docs) {
+    const ref = docRef(d.path).toLowerCase();
+    ids.add(ref);
+    for (const s of d.doc.sections) if (s.id) ids.add(`${ref}#${s.id.toLowerCase()}`);
+  }
+  return ids;
+}
+
 async function stop(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
   const kbRoot = findKb(io.env, cwd);
@@ -270,6 +337,11 @@ async function stop(input: HookInput, io: Io) {
   // Lessons written during this reply go up now, not at the next session.
   if (pendingFingerprint(kbRoot) !== readSyncState(kbRoot).pushed) {
     io.background?.(["sync", "--dir", kbRoot, "--quiet", "--push-only"]);
+  }
+  try {
+    logTurns(input, io, kbRoot);
+  } catch {
+    // Usage counts are a by-product: they never stop a session or the handoff below.
   }
   const { config } = validate(readKbFiles(kbRoot), { checks: false });
   if (!config?.agents.handoff.enabled) return;

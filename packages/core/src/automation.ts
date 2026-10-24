@@ -52,6 +52,10 @@ export interface UsageDay {
   rules: number;
   mcpCalls: number;
   docReads: number;
+  /** User turns recorded by the Stop hook, those that retrieved, and those that credited. */
+  turns?: number;
+  retrievedTurns?: number;
+  creditedTurns?: number;
 }
 
 export interface Heartbeat {

@@ -39,6 +39,9 @@ test("per-day counts for the last seven days, sessions distinct, nothing older, 
     rules: 3,
     mcpCalls: 1,
     docReads: 1,
+    turns: 0,
+    retrievedTurns: 0,
+    creditedTurns: 0,
   });
   expect(u["2026-10-15"]).toEqual({
     sessions: 1,
@@ -46,6 +49,9 @@ test("per-day counts for the last seven days, sessions distinct, nothing older, 
     rules: 1,
     mcpCalls: 0,
     docReads: 0,
+    turns: 0,
+    retrievedTurns: 0,
+    creditedTurns: 0,
   });
   expect(u["2026-10-16"]).toEqual({
     sessions: 0,
@@ -53,6 +59,9 @@ test("per-day counts for the last seven days, sessions distinct, nothing older, 
     rules: 0,
     mcpCalls: 0,
     docReads: 0,
+    turns: 0,
+    retrievedTurns: 0,
+    creditedTurns: 0,
   });
   expect(JSON.stringify(u)).not.toMatch(/x|partner|context/);
 });

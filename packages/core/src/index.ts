@@ -189,6 +189,7 @@ export {
   LEGACY_EVENTS,
   logEvent,
   logFailure,
+  logTurnUsage,
   pruneEvents,
   readEvents,
 } from "./events.ts";
@@ -259,6 +260,7 @@ export { type MetricsReport, metricsReport } from "./metrics/index.ts";
 export { type OpenReview, type ReviewLatency, reviewLatency } from "./metrics/latency.ts";
 export { type Reach, reach } from "./metrics/reach.ts";
 export { type Runtime, runtime } from "./metrics/runtime.ts";
+export { type TurnMetrics, turnMetrics } from "./metrics/turns.ts";
 export {
   type DailyCount as MetricsDailyCount,
   DEFAULT_WINDOW,
@@ -356,6 +358,13 @@ export {
   topicsFor,
   usesTopics,
 } from "./topics.ts";
+export {
+  addCredits,
+  homeostatTool,
+  readLinesFrom,
+  summarizeTurns,
+  type TurnUsage,
+} from "./turn-usage.ts";
 export {
   type KbFiles,
   type ValidatedDoc,
