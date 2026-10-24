@@ -298,6 +298,20 @@ export {
 } from "./migrate.ts";
 export * from "./providers/index.ts";
 export { detectRepo, remoteRepo, repoFor } from "./repo-detect.ts";
+export {
+  aggregate as aggregateRetrieval,
+  CUTOFFS,
+  hitAt,
+  mostReachGold,
+  ndcgAt,
+  precisionAt,
+  type QueryScore,
+  type RunScore,
+  recallAt,
+  reciprocalRank,
+  rPrecision,
+  scoreQuery,
+} from "./retrieval-metrics.ts";
 export { RISK_ADVICE, type RiskFinding, scanRisk } from "./risk.ts";
 export {
   type Frontmatter,
@@ -355,6 +369,21 @@ export {
   type SelectOptions,
   selectEntries,
 } from "./select.ts";
+export {
+  type CaseResult,
+  EVAL_FILE,
+  EVAL_SEARCH_LIMIT,
+  type EvalCase,
+  type EvalOptions,
+  type EvalPool,
+  type EvalReport,
+  evalCaseSchema,
+  evalFileSchema,
+  parseEvalCases,
+  runSelectionEval,
+  type Surface,
+  type SurfaceReport,
+} from "./selection-eval.ts";
 export { slugify } from "./slug.ts";
 export { readState, type StateView } from "./state.ts";
 export { countTokens } from "./tokens.ts";

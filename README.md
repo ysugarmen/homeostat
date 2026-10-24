@@ -56,6 +56,7 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat search`, `explain`, `list`, `status` | Read the KB from the terminal (`--json` for agents) |
 | `homeostat events` | The local event log, one line per event |
 | `homeostat metrics` | Performance metrics: decisions, calibration, review latency, reach and runtime (`--json` for scripts) |
+| `homeostat eval` | Score rule selection against your cases in `eval/selection.yaml`: hits, MRR, nDCG and recall at 1, 3, 5 and 10, no model call (`--json`, `--min` floors for CI) |
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |
 | `homeostat mcp` | Serve the KB to any agent over MCP (stdio) |
 | `homeostat docs convert <file...>` | Bring existing markdown documents into `knowledge/[<repo>/]<area>/docs/`, with section ids and provenance |

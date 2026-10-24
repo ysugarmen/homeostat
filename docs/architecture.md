@@ -224,6 +224,8 @@ Descriptions and the server instructions name the moments to call each tool and 
 
 `--check` fails CI when they're stale. Team-only areas and rejected decisions are never exported, and public repos need `--allow-public`.
 
+**Measuring selection** (`homeostat eval`): a team writes cases in `eval/selection.yaml` (touched `paths` or a search `task`, an optional `repo`, and the rule ids it `expect`s) and the command runs them through `selectEntries` and `searchEntries`, the code the hook and MCP use, scoring Hit, MRR, nDCG, recall and precision at 1, 3, 5 and 10, R-precision, and the share of expected rules served within the budget. No model call; it fails only on a broken case file or a `--min` floor. The metrics are adapted from vectorize-io/hindsight (MIT). The repo's tests run a synthetic 150-rule, two-repo fixture through it (see [the guide](guide/eval.md)).
+
 **Why this shape.** Measured on Claude, a lean Markdown render costs 1.0×, YAML or minified JSON 1.34×, the stored files with frontmatter 2.9×. Accuracy was identical across formats up to about 150k tokens, so selection and caching matter more than syntax.
 
 ## Security and data handling

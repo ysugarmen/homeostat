@@ -67,6 +67,30 @@ export function findKb(env: Io["env"], cwd: string): string | undefined {
 
 class HookSkip extends Error {}
 
+/**
+ * The room a session start gives rules: the token budget less the lookup guide (in full when it
+ * leaves the rules at least half, else compact), at most four fifths of it, and the characters
+ * left after the guide's and the documents' reserves. `homeostat eval` scores with the same.
+ */
+export function sessionRuleBudget(
+  config: Pick<Config, "distribution">,
+  hasDocs: boolean,
+): { tokenBudget: number; maxChars: number; compactGuide: boolean } {
+  // Rules first, but never all of the room: the document sections and the guide keep theirs.
+  const docRoom = hasDocs ? DOC_RESERVE : 0;
+  // Its count lines are not known yet; COUNT_TOKENS covers them.
+  const budget = config.distribution.tokenBudget;
+  const guideCost = (compact: boolean) =>
+    countTokens(sessionGuide({ rules: new Map(), docs: new Map(), compact })) + COUNT_TOKENS;
+  const compactGuide = budget - guideCost(false) < budget / 2;
+  return {
+    // At most four fifths, as before the guide existed, so large budgets keep their rules.
+    tokenBudget: Math.max(0, Math.min(Math.floor(budget * 0.8), budget - guideCost(compactGuide))),
+    maxChars: MAX_CONTEXT_CHARS - GUIDE_RESERVE - docRoom,
+    compactGuide,
+  };
+}
+
 async function sessionStart(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
   const kbRoot = findKb(io.env, cwd);
@@ -118,29 +142,14 @@ async function selectForSession(
     config,
     member,
   );
-  // Rules first, but never all of the room: the document sections and the guide keep theirs.
-  const docRoom = visibleDocs.length ? DOC_RESERVE : 0;
-  // The lookup guide comes out of the token budget too: in full when it leaves the rules at least
-  // half, else its compact form. Its count lines are not known yet; COUNT_TOKENS covers them.
-  const budget = config.distribution.tokenBudget;
-  const guideCost = (compact: boolean) =>
-    countTokens(sessionGuide({ rules: new Map(), docs: new Map(), compact })) + COUNT_TOKENS;
-  const compactGuide = budget - guideCost(false) < budget / 2;
+  const { tokenBudget, maxChars, compactGuide } = sessionRuleBudget(config, visibleDocs.length > 0);
   const selection = selectEntries(
     visibleTo(
       inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
       config,
       member,
     ),
-    {
-      paths,
-      // At most four fifths, as before the guide existed, so large budgets keep their rules.
-      tokenBudget: Math.max(
-        0,
-        Math.min(Math.floor(budget * 0.8), budget - guideCost(compactGuide)),
-      ),
-      maxChars: MAX_CONTEXT_CHARS - GUIDE_RESERVE - docRoom,
-    },
+    { paths, tokenBudget, maxChars },
   );
   note({
     ...(repo ? { repo } : {}),

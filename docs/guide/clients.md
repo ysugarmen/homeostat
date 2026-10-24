@@ -70,4 +70,4 @@ How export behaves:
 
 ## Terminal
 
-`homeostat search`, `explain`, `list`, `status` and `events` read the KB. Add `--json` for agents.
+`homeostat search`, `explain`, `list`, `status` and `events` read the KB. Add `--json` for agents. `homeostat eval` checks that sessions and search serve the rules you expect ([Measuring selection](eval.md)).
