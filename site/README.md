@@ -18,7 +18,21 @@ pnpm dev      # http://localhost:4321
 pnpm build    # static output in dist/
 ```
 
-## Deploying on Cloudflare Pages
+## Deploying on Cloudflare Workers
+
+`wrangler.jsonc` serves `dist/` as static assets. In the Cloudflare dashboard (Workers & Pages >
+Create > Import a repository), pick the repository and set:
+
+| Setting | Value |
+| --- | --- |
+| Project name | `homeostat` |
+| Build command | `cd site && pnpm install --frozen-lockfile && pnpm build` |
+| Deploy command | `cd site && npx wrangler deploy` |
+
+The site is then at `homeostat.<your-subdomain>.workers.dev`; add a custom domain under the Worker's
+Settings > Domains & Routes.
+
+## Or on Cloudflare Pages
 
 Connect the repository once in the Cloudflare dashboard (Workers & Pages > Create > Pages > Connect to
 Git), with:

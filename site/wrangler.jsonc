@@ -1,0 +1,10 @@
+// Cloudflare Workers: serve the built site as static assets; no server code runs.
+{
+  "name": "homeostat",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  }
+}
