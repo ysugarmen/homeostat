@@ -116,7 +116,7 @@ Every change passes `homeostat validate`, which CI runs on each KB pull request.
 | --- | --- | --- |
 | Schema | frontmatter shape, word limits, ids, dates, unknown keys | error |
 | Config cross-checks | unknown areas, members, owners; one owning team per area | error |
-| Secret scanner | cloud, git-host, Slack and AI keys, JWTs, private keys, credentialed URLs, passwords, high-entropy strings | error |
+| Secret scanner | about 35 token formats (cloud, code-host and package-registry tokens, AI, payment, messaging and commerce keys, webhooks), JWTs, private keys, credentialed and database URLs, passwords, Luhn-checked card numbers, high-entropy strings | error |
 | Emails | personal data in rule text | warning |
 | Risky content | piped shell, unlisted domains, credential handling, disabling security checks, injection phrasing, destructive commands, hidden text | error until `riskReviewedBy` |
 | Provenance | a pr-feedback URL outside the KB's code repos | error |

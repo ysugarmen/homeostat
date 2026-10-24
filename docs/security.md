@@ -64,7 +64,7 @@ Controls:
 Review comments and sessions can contain tokens, connection strings or customer data. Without controls they would be sent to Claude by the daily run, or committed by a handoff note, and git history keeps them forever.
 
 Controls:
-1. **A built-in secret scanner** (CPU, no dependency): known token formats (cloud keys, Slack, GitHub, Anthropic, JWT, private keys, URLs with credentials) plus a high-entropy check. It runs:
+1. **A built-in secret scanner** (CPU, no dependency): known token formats (cloud keys; GitHub, GitLab, npm and PyPI tokens; AI-provider, payment, messaging and commerce keys; Slack webhooks; JWT; private keys; URLs with credentials, database URLs included), Luhn-checked card numbers, plus a high-entropy check. It runs:
    - on every review thread **before** it is sent to a model, redacting matches as `[REDACTED:kind]`
    - on every entry in `validate` (an error, so CI blocks the PR)
    - on `learn`, `flag` and handoff notes **before** they are committed (refused, with the reason)
