@@ -1,4 +1,4 @@
-import { minimatch } from "minimatch";
+import { Minimatch } from "minimatch";
 import type { Entry } from "./entry.ts";
 import { isRejectedDecision, type Kind } from "./schema.ts";
 import { countTokens } from "./tokens.ts";
@@ -36,8 +36,21 @@ export interface Selection {
 const isGlobalGlob = (glob: string) => glob === "**" || glob === "**/*";
 const isGlobal = (scope: readonly string[]) => scope.some(isGlobalGlob);
 
+// Each glob compiles to a regular expression once: a session start tests every rule's scope
+// against hundreds of touched paths, and compiling per test was most of its time.
+const compiled = new Map<string, Minimatch>();
+const glob = (pattern: string) => {
+  let m = compiled.get(pattern);
+  if (!m) {
+    m = new Minimatch(pattern, { dot: true });
+    compiled.set(pattern, m);
+  }
+  return m;
+};
+/** Whether `path` matches the glob (dotfiles included), with the glob compiled once. */
+export const globMatch = (path: string, pattern: string) => glob(pattern).match(path);
 const matches = (path: string, scope: readonly string[]) =>
-  scope.some((glob) => minimatch(path, glob, { dot: true }));
+  scope.some((pattern) => glob(pattern).match(path));
 
 const CODE_FILE =
   /\b[\w-]+\.(?:py|pyi|ts|tsx|js|jsx|mjs|go|rb|java|kt|rs|sql|ya?ml|tpl|toml|json|sh|proto)\b/g;

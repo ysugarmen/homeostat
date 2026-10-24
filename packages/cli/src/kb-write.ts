@@ -2,8 +2,10 @@ import {
   type Config,
   findRule,
   foldRules,
+  isDocPath,
   isTopicFile,
   type KbFiles,
+  mergeDocText,
   mergeTopicFile,
 } from "@homeostat/core";
 import { commitFile, commitTree, git, showFile } from "./git.ts";
@@ -100,6 +102,11 @@ export function rebuildOnBase(
       const merged = mergeTopicFile(path, was, ours ?? "", theirs ?? "");
       if (merged.conflicts.length) both.push(...merged.conflicts.map((id) => `${path}#${id}`));
       else out[path] = merged.text;
+    } else if (isDocPath(path) && ours !== undefined && theirs !== undefined) {
+      // Documents merge section by section too; additions to one section are combined.
+      const merged = mergeDocText(was, ours, theirs);
+      if (merged.conflicts.length) both.push(...merged.conflicts.map((id) => `${path}#${id}`));
+      else out[path] = merged.text ?? null;
     } else {
       return { rebuilt: false, reason: `${path} changed on both sides and is not a topic file` };
     }

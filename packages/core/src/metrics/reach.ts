@@ -17,6 +17,7 @@ export interface Reach {
   servedShare?: number;
   /** Session starts that pushed rules to the index for lack of budget, over session starts. */
   indexOverflowShare?: number;
+  /** Documents in session indexes, documents an agent opened, and the share opened. */
   docs: { listed: number; read: number; pullThrough?: number };
   /** Members who share usage counts, and their last seven days summed per day. */
   team: { sharing: number; members: number; byDay: ({ day: string } & UsageDay)[] };
@@ -52,15 +53,17 @@ export function reach(snap: MetricsSnapshot): Reach {
   const starts = current.filter((e) => e.source === "startup");
   const overflow = starts.filter((e) => ((e.dropped as unknown[] | undefined) ?? []).length > 0);
 
+  // Per document: the index lists documents (`docs`), and an agent opens a document or one of
+  // its sections with `read`. The sections a session got in full are not counted as listed.
   const listed = new Set(
     snap.events
       .filter((e) => e.type === "doc-injection" && inWindow(e.ts, w.current))
-      .flatMap((e) => (e.sections as string[] | undefined) ?? []),
+      .flatMap((e) => ((e.docs as unknown[] | undefined) ?? []).flatMap((d) => str(d) ?? [])),
   );
   const read = new Set(
     snap.events
       .filter((e) => e.type === "doc-read" && inWindow(e.ts, w.current))
-      .map((e) => `${e.doc}#${e.section ?? ""}`),
+      .flatMap((e) => str(e.doc) ?? []),
   );
 
   const sharing = snap.heartbeats.filter((h) => h.usage);

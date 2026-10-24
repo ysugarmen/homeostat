@@ -110,7 +110,7 @@ export function formatMetrics(r: MetricsReport, present: boolean): string {
   line("index overflow", pct(re.indexOverflowShare));
   line(
     "documents",
-    `${re.docs.listed} sections listed, ${re.docs.read} read (${pct(re.docs.pullThrough)})`,
+    `${re.docs.listed} listed in session indexes, ${re.docs.read} opened (${pct(re.docs.pullThrough)})`,
   );
   line("team", `${re.team.sharing} of ${re.team.members} members share usage counts`);
 

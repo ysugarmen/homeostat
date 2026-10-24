@@ -177,6 +177,7 @@ export {
   docRef,
 } from "./doc-context.ts";
 export { type ConvertOptions, convertDoc } from "./doc-convert.ts";
+export { mergeDocText } from "./doc-merge.ts";
 export { applySectionPatch, changedSections, PatchError, type SectionPatch } from "./doc-patch.ts";
 export { type Entry, formatEntry, parseEntry } from "./entry.ts";
 export {

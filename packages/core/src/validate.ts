@@ -45,7 +45,11 @@ const isEntryPath = (path: string) =>
  * Validates a whole knowledge base: config, every entry, scores, and cross-entry conflicts.
  * Pure: the caller reads the files (see the CLI) and decides what to do with fixable warnings.
  */
-export function validate(files: KbFiles): ValidateResult {
+export function validate(files: KbFiles, opts: { checks?: boolean } = {}): ValidateResult {
+  // `checks: false` only loads: the config, rules and documents, with parse errors but none of the
+  // content scans, config cross-checks or conflict detection. For hot paths such as a session
+  // start, reading a base branch that CI has already validated.
+  const full = opts.checks !== false;
   const issues: Issue[] = [];
 
   let config: Config | undefined;
@@ -61,15 +65,17 @@ export function validate(files: KbFiles): ValidateResult {
   const entries: ValidatedEntry[] = [];
   for (const path of Object.keys(files).filter(isEntryPath).sort()) {
     if (isTopicFile(files[path] ?? "")) {
-      issues.push(...topicFileIssues(path, files[path] ?? "", config, entries));
+      issues.push(
+        ...topicFileIssues(path, files[path] ?? "", full ? config : undefined, entries, full),
+      );
       continue;
     }
     const parsed = parseEntry(files[path] ?? "");
     issues.push(...parsed.issues.map((i) => ({ ...i, file: path })));
-    issues.push(...contentIssues(path, files[path] ?? ""));
+    if (full) issues.push(...contentIssues(path, files[path] ?? ""));
     if (!parsed.entry) continue;
     entries.push({ path, entry: parsed.entry });
-    if (config) issues.push(...checkWithConfig(path, parsed.entry, config));
+    if (config && full) issues.push(...checkWithConfig(path, parsed.entry, config));
   }
 
   const docs: ValidatedDoc[] = [];
@@ -77,11 +83,13 @@ export function validate(files: KbFiles): ValidateResult {
     const text = files[path] ?? "";
     const parsed = parseDoc(text);
     issues.push(...parsed.issues.map((i) => ({ ...i, file: path })));
-    issues.push(...contentIssues(path, text));
+    if (full) issues.push(...contentIssues(path, text));
     if (!parsed.doc) continue;
     docs.push({ path, doc: parsed.doc });
-    if (config) issues.push(...docConfigIssues(path, parsed.doc, config));
+    if (config && full) issues.push(...docConfigIssues(path, parsed.doc, config));
   }
+  if (!full)
+    return { ok: !hasErrors(issues), issues, entries, docs, ...(config ? { config } : {}) };
 
   const pathOf = new Map<string, string[]>();
   for (const { path, file, entry } of entries) {
@@ -112,9 +120,10 @@ function topicFileIssues(
   text: string,
   config: Config | undefined,
   entries: ValidatedEntry[],
+  full = true,
 ): Issue[] {
   const parsed = parseTopicFile(path, text);
-  const issues: Issue[] = [...parsed.issues, ...contentIssues(path, text)];
+  const issues: Issue[] = [...parsed.issues, ...(full ? contentIssues(path, text) : [])];
   const repo = config?.repos ? locate(path, repoNames(config))?.repo : undefined;
   if (config && parsed.meta) {
     const topics = topicsFor(config, repo);

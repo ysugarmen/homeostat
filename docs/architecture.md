@@ -94,7 +94,7 @@ Knowledge enters by four paths. All of them reach `main` only through the daily 
 **From reviews** (part of `homeostat daily`; `homeostat curate` runs the same pipeline on its own):
 
 1. List PRs merged in the KB's code repos (`repos`, or `sources.repos` in a KB without repo folders) within `lookbackHours` (26). Skip PRs marked `homeostat:skip`, excluded repos, and authors who opted out.
-2. Group review comments into threads. Keep a thread only if a team member wrote it, a commit followed it, it isn't in an excluded path, and it isn't already cited by a rule or document section.
+2. Group review comments into threads. Keep a thread only if a team member wrote it, a commit followed it, it isn't in an excluded path, and it isn't already cited by a rule or document section, on the base branch or in an open review PR.
 3. Redact secrets from the thread, then ask the model for one rule (structured output: keep, title, rule, why, area, and topic from the repo's list, or a suggested new one).
 4. If a document's scope covers the commented file, ask for at most one section patch (replace or append) with `source=curator` provenance.
 5. Build the entry, compute its score, and validate it against the whole KB. Risky-content findings keep a draft as a flagged candidate; any other error drops it.
@@ -166,7 +166,7 @@ A long session gets only the rules that are new since its start, on the next pro
 
 All thresholds and weights are in `scoring.confidence`. `--dry-run` decides and prints without writing anything.
 
-**Merging review PRs.** In a KB with topic files, review PRs that add sections to the same file conflict once one of them merges. `homeostat review merge` rebuilds such a PR on the base branch, merging topic files section by section, waits until the host shows the rebuilt commit (an ordinary push nudges Bitbucket, which can miss a force push), and merges it. Bitbucket merges run asynchronously and are polled. A PR whose same rule changed on both sides is left for a person.
+**Merging review PRs.** In a KB with topic files, review PRs that add sections to the same file conflict once one of them merges. `homeostat review merge` rebuilds such a PR on the base branch, merging topic files section by section and documents section by section (two additions to one section are combined; two rewrites are not), waits until the host shows the rebuilt commit (an ordinary push nudges Bitbucket, which can miss a force push), and merges it. Bitbucket merges run asynchronously and are polled. A PR whose same rule changed on both sides is left for a person.
 
 **Monitoring.** The dashboard's Automation page reads the clone's copy of `homeostat/state`, with no network call. It shows the last run, lessons decided per run, the review queue (overdue items marked), and each developer's sync health: last heartbeat, clone behind, pending count, version, and "not syncing" after 48 hours. The Performance page (and `homeostat metrics`) computes, from the same branch and the local event log, the share merged without a person, calibration per confidence band, review latency, reach and the cost of every step; see [guide/dashboard.md](guide/dashboard.md).
 

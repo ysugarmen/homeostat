@@ -29,8 +29,8 @@ test("injections per day, rules served against the rules reachable here, overflo
         }),
         ev("2026-10-21T10:00:01Z", "doc-injection", {
           session: "b",
-          docs: ["integrations/partner-calls"],
-          sections: ["auth"],
+          docs: ["integrations/partner-calls", "integrations/billing"],
+          sections: [{ doc: "integrations/partner-calls", id: "auth" }],
         }),
         ev("2026-10-21T10:05:00Z", "doc-read", {
           doc: "integrations/partner-calls",
@@ -79,7 +79,8 @@ test("injections per day, rules served against the rules reachable here, overflo
     indexOverflowShare: 0.5,
     previous: { sessions: 1, distinctRules: 1 },
   });
-  expect(r.docs).toEqual({ listed: 1, read: 1, pullThrough: 1 });
+  // Two documents in the index, one opened.
+  expect(r.docs).toEqual({ listed: 2, read: 1, pullThrough: 0.5 });
   expect(r.team).toMatchObject({ sharing: 1, members: 3 });
   expect(r.team.byDay).toHaveLength(7);
   expect(r.team.byDay.at(-1)).toEqual({

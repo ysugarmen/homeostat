@@ -729,6 +729,42 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     );
   });
 
+  test("a review comment whose lesson waits in an open review PR is not drafted again", async () => {
+    const t = team();
+    // A high bar sends Sam's review lesson to review instead of merging it.
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace(
+        "scoring:\n",
+        "scoring:\n  confidence: { accept: 95, coreAccept: 95 }\n",
+      ),
+    );
+    t.g(t.ci, "commit", "-qam", "high bar");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    const provider = new FakeProvider();
+    await run(["daily", "--dir", t.ci], { provider });
+    expect(provider.opened.map((o) => o.pr.sourceBranch)).toEqual([
+      "homeostat/review-lee-2026-10-16",
+    ]);
+
+    // The next day the same PR is still in the window; its review PR is still open.
+    let drafts = 0;
+    const { stdout } = await run(["daily", "--dir", t.ci, "--dry-run", "--since", "2026-10-14"], {
+      provider,
+      now: () => new Date("2026-10-17T06:00:00Z"),
+      drafter: {
+        draft: async () => {
+          drafts++;
+          return { ...COLOUR_DRAFT, title: "Never hard-code hex colours in component styles" };
+        },
+      },
+      patcher: { propose: async () => null },
+    });
+    expect(drafts).toBe(0);
+    expect(stdout).toContain("already waiting in a review PR");
+  });
+
   test("review threads that gave no lesson are listed with the reason", async () => {
     const t = team();
     const { stdout } = await run(["daily", "--dir", t.ci], {

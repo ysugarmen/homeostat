@@ -25,7 +25,7 @@ import {
   writePendingFile,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { commitTree, forcePush, git } from "./git.ts";
+import { commitTree, forcePush, git, gitNet } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 
 /**
@@ -130,11 +130,16 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   // 1. Fetch. A branch that does not exist yet (no daily run so far) is fine; the base branch
   // failing to fetch is not.
   if (
-    git(root, "fetch", "--quiet", "origin", `+refs/heads/${base}:refs/remotes/origin/${base}`) ===
-    undefined
+    gitNet(
+      root,
+      "fetch",
+      "--quiet",
+      "origin",
+      `+refs/heads/${base}:refs/remotes/origin/${base}`,
+    ) === undefined
   )
     failed("fetch");
-  git(
+  gitNet(
     root,
     "fetch",
     "--quiet",
@@ -142,7 +147,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
     `+refs/heads/${STATE_BRANCH}:refs/remotes/origin/${STATE_BRANCH}`,
   );
   // Teammates' heartbeats, for the dashboard's sync health (each branch is small and shares main).
-  git(
+  gitNet(
     root,
     "fetch",
     "--quiet",

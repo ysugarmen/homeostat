@@ -1,5 +1,5 @@
-import { minimatch } from "minimatch";
 import type { Doc } from "./doc.ts";
+import { globMatch } from "./select.ts";
 import { countTokens } from "./tokens.ts";
 
 export interface ContextDoc {
@@ -28,7 +28,7 @@ const GLOBAL = new Set(["**", "**/*"]);
 
 /** Whether a document's scope covers a repo-relative path. */
 export const docCovers = (doc: Doc, path: string) =>
-  doc.frontmatter.scope.some((g) => minimatch(path, g, { dot: true }));
+  doc.frontmatter.scope.some((g) => globMatch(path, g));
 
 /** Words in a touched path that a section naming it would contain: the path, its folder, its file stem. */
 function needles(path: string): string[] {
@@ -52,8 +52,7 @@ export function docContext(
   const relevant = docs.filter(({ doc }) => {
     const scope = doc.frontmatter.scope;
     return (
-      scope.some((g) => GLOBAL.has(g)) ||
-      paths.some((p) => scope.some((g) => minimatch(p, g, { dot: true })))
+      scope.some((g) => GLOBAL.has(g)) || paths.some((p) => scope.some((g) => globMatch(p, g)))
     );
   });
   if (relevant.length === 0) return { text: "", listed: [], sections: [] };
@@ -85,7 +84,8 @@ export function docContext(
   const index = [head, ...lines].join("\n");
   if (listed.length === 0) return { text: "", listed: [], sections: [] };
 
-  const wanted = paths.flatMap(needles);
+  // Touched paths share folders, so the same needle repeats; each is searched for once.
+  const wanted = [...new Set(paths.flatMap(needles))];
   const scored = listed
     .flatMap(({ path, doc }) =>
       doc.sections.map((s) => ({

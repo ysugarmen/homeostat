@@ -69,6 +69,32 @@ describe("rebuildOnBase", () => {
     expect(t.g("merge-base", "--is-ancestor", "origin/main", `origin/${branch}`)).toBe("");
   });
 
+  test("additions to one document section on both sides are combined", () => {
+    const t = kb();
+    const DOC = "knowledge/integrations/docs/partner-calls.md";
+    const docText = (extra: string) =>
+      `---\ntitle: Partner calls\narea: integrations\nowner: dana\nscope: ["services/integrations/**"]\nupdated: 2026-10-20\n---\n\n## Timeouts {#timeouts}\n<!-- homeostat: source=manual updated=2026-10-20 -->\nPartner calls time out after 10 seconds.${extra}\n`;
+    writeFileSync(join(t.dir, DOC), docText(""));
+    t.g("add", "-A");
+    t.g("commit", "-qm", "doc");
+    t.g("push", "-q", "origin", "main");
+    const branch = "homeostat/review-lee-2026-10-20";
+    t.g("checkout", "-q", "-b", branch);
+    writeFileSync(join(t.dir, DOC), docText("\n\nBooking confirmation waits up to 30."));
+    t.g("commit", "-qam", "lee's doc edit");
+    t.g("push", "-q", "origin", branch);
+    t.g("checkout", "-q", "main");
+    writeFileSync(join(t.dir, DOC), docText("\n\nRetries back off exponentially."));
+    t.g("commit", "-qam", "a daily PR merged");
+    t.g("push", "-q", "origin", "main");
+
+    expect(rebuildOnBase(t.dir, "main", branch)).toMatchObject({ rebuilt: true });
+    t.g("fetch", "-q", "origin");
+    const merged = t.g("show", `origin/${branch}:${DOC}`);
+    expect(merged).toContain("Retries back off exponentially.");
+    expect(merged).toContain("Booking confirmation waits up to 30.");
+  });
+
   test("the same rule changed on both sides is left for a person, and nothing is pushed", () => {
     const t = kb();
     const branch = "homeostat/review-lee-2026-10-20";

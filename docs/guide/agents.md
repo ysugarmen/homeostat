@@ -18,7 +18,7 @@ Homeostat's agents run in your KB repo's CI (or on one shared box with `homeosta
 
 Protect the base branch and let only the daily run's token bypass it (`init` prints how). If the host refuses the merge, the daily PR stays open for a reviewer, with a commit that lets its pipeline run.
 
-In a KB with topic files, review PRs that share a file conflict once one of them merges. `homeostat review merge` rebuilds such a PR on the base branch, adding its rules beside the ones already there, waits until the host shows the rebuilt commit (nudging Bitbucket, which can miss a force push, with an ordinary one), and merges it.
+In a KB with topic files, review PRs that share a file conflict once one of them merges. `homeostat review merge` rebuilds such a PR on the base branch, adding its rules beside the ones already there (and, in documents, combining additions to the same section), waits until the host shows the rebuilt commit (nudging Bitbucket, which can miss a force push, with an ordinary one), and merges it.
 
 ### Lessons from reviews
 
@@ -27,7 +27,7 @@ The daily run reads pull requests merged in the KB's code repos (`repos`, or `so
 - was followed by a code change
 - is not already in the KB
 
-it does three things:
+it does three things (threads whose lesson is still waiting in an open review PR are skipped, so a lesson is not drafted twice):
 
 1. **Redacts secrets** from the thread, then asks the model whether it holds a lasting rule, and drafts one, with its area and its topic from the repo's list. The lesson is filed under the repo the PR came from. When no topic fits, it goes to `general` with a suggested topic, listed in the PR for you to add to `homeostat.yaml` if it is worth one.
 2. **Checks documents.** If a team document covers the file, it asks whether the thread makes one of its sections out of date, and proposes a one-section patch.
@@ -37,7 +37,7 @@ It never reads source code. It skips PRs marked `homeostat:skip`, members with `
 
 ### On developers' machines
 
-Nothing is scheduled there. The Claude Code plugin's hooks run `homeostat sync` in the background: when a session starts, on a prompt at most every 3 hours (sessions often stay open for days), and when a session stops with new lessons. A sync pulls the team KB, clears lessons the daily run has decided, and pushes new ones. `homeostat learn` lessons apply to the author's own sessions at once and reach the team the next morning.
+Nothing is scheduled there. The Claude Code plugin's hooks run `homeostat sync` in the background: when a session starts, on a prompt at most every 3 hours (sessions often stay open for days), and when a session stops with new lessons. A sync pulls the team KB, clears lessons the daily run has decided, and pushes new ones. Its fetches and push give up after 2 minutes (`HOMEOSTAT_GIT_TIMEOUT_MS`), and over ssh within about 20 seconds of a dead connection, so a sleeping laptop or a dropped network never leaves one hanging. `homeostat learn` lessons apply to the author's own sessions at once and reach the team the next morning.
 
 ## Deep dive (weekly)
 

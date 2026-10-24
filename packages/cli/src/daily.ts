@@ -26,6 +26,7 @@ import {
   loginKey,
   type OpenPullRequest,
   overlayPending,
+  parseDoc,
   parseEntry,
   REVIEW_REMINDER_DAYS,
   type RepoRef,
@@ -204,6 +205,21 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     }),
   );
 
+  // The review comments behind them, rules and document sections alike, are not drafted again.
+  const waitingUrls = [...decisions.values()].flatMap((d) =>
+    d.decided.flatMap((r) => {
+      if (r.decision !== "review" || !r.pr || !open.has(r.pr)) return [];
+      if (isDocPath(r.path)) {
+        const doc = parseDoc(showFile(root, remote(r.pr), r.path) ?? "").doc;
+        return doc?.sections.flatMap((s) => s.provenance?.url ?? []) ?? [];
+      }
+      return [];
+    }),
+  );
+  // Rules: read from their review branches above.
+  for (const { entry } of inReview)
+    if (entry.frontmatter.source.url) waitingUrls.push(entry.frontmatter.source.url);
+
   const lessons: Lesson[] = [];
   const decidedHashes = (m: string) => new Set(decisions.get(m)?.decided.map((r) => r.hash));
   const heartbeats: Record<string, string> = {};
@@ -255,6 +271,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       patcher: io.patcher ?? new ClaudeDocPatcher(asker),
       since,
       today,
+      waiting: waitingUrls,
     });
     drafted = result.entries;
     skipped = result.skipped.map((s) => ({ url: s.url, reason: s.reason }));

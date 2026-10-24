@@ -28,7 +28,7 @@ Every figure is computed at read time from a snapshot: config, entries, the loca
 | Review latency: hours from a review PR opening to its merge or close, median and 90th percentile | *new* `openedAt` and `settledAt` on decision records | how long lessons wait |
 | Rule reach: injections per day, distinct rules served, share of reachable rules served at least once in the window. Reachable rules: shared rules plus those of every repo seen in the window's injection events, minus team-only areas the git user cannot see | injection events; *new* opt-in heartbeat counters for team totals | whether rules reach sessions |
 | Index overflow: share of injections that dropped rules to the index | injection events (`dropped`) | whether the token budget is too small |
-| Document pull-through: sections read in the window against sections listed in it | doc-injection and doc-read events | whether the documents index earns its tokens |
+| Document pull-through: documents an agent opened (`read`) in the window against documents listed in session indexes (corrected in 0.2.3; it first counted only sections given in full) | doc-injection and doc-read events | whether the documents index earns its tokens |
 | Health trend: accepted, stale, flagged, disputed and possible-duplicate counts per run | *new* `kb` snapshot in the run report | whether the KB is decaying |
 
 ### Runtime

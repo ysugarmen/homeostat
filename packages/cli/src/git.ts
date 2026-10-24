@@ -15,6 +15,41 @@ export function git(dir: string, ...args: string[]): string | undefined {
   }
 }
 
+/** The most a network git call (fetch, push) may take before it is stopped; 2 minutes by default. */
+export const networkTimeout = () => Number(process.env.HOMEOSTAT_GIT_TIMEOUT_MS) || 120_000;
+
+/**
+ * An environment that makes a dead connection fail in seconds rather than hang: ssh gives up on
+ * an unreachable or silent server, and https on a stalled transfer. A developer's own ssh command
+ * (`GIT_SSH_COMMAND`, `core.sshCommand`) is left alone.
+ */
+export function networkEnv(dir: string, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...base,
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_HTTP_LOW_SPEED_LIMIT: base.GIT_HTTP_LOW_SPEED_LIMIT ?? "1000",
+    GIT_HTTP_LOW_SPEED_TIME: base.GIT_HTTP_LOW_SPEED_TIME ?? "30",
+  };
+  if (!base.GIT_SSH_COMMAND && !git(dir, "config", "core.sshCommand"))
+    env.GIT_SSH_COMMAND =
+      "ssh -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=2";
+  return env;
+}
+
+/** git() for calls that reach the remote: bounded in time, undefined on failure or timeout. */
+export function gitNet(dir: string, ...args: string[]): string | undefined {
+  try {
+    return execFileSync("git", ["-C", dir, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      env: networkEnv(dir),
+      timeout: networkTimeout(),
+    }).trimEnd();
+  } catch {
+    return undefined;
+  }
+}
+
 /** A file's exact text on a ref (git() trims, which would change a lesson's hash). */
 export function showFile(dir: string, ref: string, path: string): string | undefined {
   try {
@@ -31,13 +66,14 @@ export function showFile(dir: string, ref: string, path: string): string | undef
 function gitOrThrow(
   dir: string,
   args: string[],
-  opts: { input?: string; env?: NodeJS.ProcessEnv } = {},
+  opts: { input?: string; env?: NodeJS.ProcessEnv; timeout?: number } = {},
 ): string {
   try {
     return execFileSync("git", ["-C", dir, ...args], {
       encoding: "utf8",
       input: opts.input ?? "",
       env: opts.env ?? process.env,
+      ...(opts.timeout ? { timeout: opts.timeout } : {}),
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   } catch (e) {
@@ -140,7 +176,10 @@ export function commitTree(
 
 /** Force-pushes a commit to a branch on origin (for transport branches only). */
 export function forcePush(dir: string, commit: string, branch: string, remote = "origin") {
-  gitOrThrow(dir, ["push", "--quiet", "--force", remote, `${commit}:refs/heads/${branch}`]);
+  gitOrThrow(dir, ["push", "--quiet", "--force", remote, `${commit}:refs/heads/${branch}`], {
+    env: networkEnv(dir),
+    timeout: networkTimeout(),
+  });
 }
 
 /**

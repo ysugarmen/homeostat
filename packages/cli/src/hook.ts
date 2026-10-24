@@ -92,7 +92,9 @@ async function selectForSession(
   kbRoot: string,
   note: (fields: Record<string, unknown>) => void,
 ) {
-  const { config, entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files);
+  const { config, entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files, {
+    checks: false,
+  });
   if (!config) throw new HookSkip("knowledge base config is invalid; run homeostat validate");
   pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
 
@@ -254,7 +256,7 @@ async function stop(input: HookInput, io: Io) {
   if (pendingFingerprint(kbRoot) !== readSyncState(kbRoot).pushed) {
     io.background?.(["sync", "--dir", kbRoot, "--quiet", "--push-only"]);
   }
-  const { config } = validate(readKbFiles(kbRoot));
+  const { config } = validate(readKbFiles(kbRoot), { checks: false });
   if (!config?.agents.handoff.enabled) return;
 
   const state = readState(kbRoot, input.session_id);
@@ -306,7 +308,9 @@ async function prompt(input: HookInput, io: Io) {
   const news = takeNotices(kbRoot);
   if (view === state.view && news.length === 0) return;
 
-  const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files);
+  const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files, {
+    checks: false,
+  });
   if (!config) return;
   const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
   const seen = new Set(state.injected ?? []);

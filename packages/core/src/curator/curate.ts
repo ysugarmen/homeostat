@@ -30,6 +30,11 @@ export interface CurateInput {
   since: Date;
   /** ISO date for `created` / `lastConfirmed`. */
   today: string;
+  /**
+   * Review-comment URLs behind lessons and document sections still waiting in open review PRs.
+   * Their threads are skipped, so a lesson is not drafted again in other words while it waits.
+   */
+  waiting?: readonly string[];
 }
 
 export interface CuratedEntry {
@@ -91,6 +96,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
   const known = new Set(
     kb.entries.flatMap(({ entry }) => commentKeyOf(entry.frontmatter.source.url) ?? []),
   );
+  const waiting = new Set((input.waiting ?? []).flatMap((u) => commentKeyOf(u) ?? []));
   const ids = new Set(kb.entries.map(({ entry }) => entry.frontmatter.id));
   const result: CurateResult = { entries: [], skipped: [], scanned: [], redacted: 0, docs: [] };
   // Threads already behind a document section count as known, like those behind entries.
@@ -167,6 +173,10 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         }
         if (known.has(key)) {
           skip("already in the knowledge base");
+          continue;
+        }
+        if (waiting.has(key)) {
+          skip("already waiting in a review PR");
           continue;
         }
         if (!thread.changedCode) {

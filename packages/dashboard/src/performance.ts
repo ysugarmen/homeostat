@@ -176,7 +176,7 @@ export function performancePage(r: MetricsReport, opts: { shared: boolean }): st
   const localPanel = shared
     ? ""
     : re.sessions
-      ? `${areaChart(local, { title: `Sessions given rules per day, last ${w.days} days`, id: "reach", unit: "injections" })}<div class="stats" style="--cols: 3">${stat(pct(re.servedShare), "reachable rules served")}${stat(pct(re.indexOverflowShare), "starts that overflowed to the index")}${stat(pct(re.docs.pullThrough), "listed sections read")}</div>`
+      ? `${areaChart(local, { title: `Sessions given rules per day, last ${w.days} days`, id: "reach", unit: "injections" })}<div class="stats" style="--cols: 3">${stat(pct(re.servedShare), "reachable rules served")}${stat(pct(re.indexOverflowShare), "starts that overflowed to the index")}${stat(pct(re.docs.pullThrough), "listed documents opened")}</div>`
       : empty("No sessions recorded on this machine yet.");
 
   // 5. Runtime: four cards; only the daily run's survives a shared build.
