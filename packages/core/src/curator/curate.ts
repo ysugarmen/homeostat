@@ -50,6 +50,8 @@ export interface CuratedEntry {
   risks: string[];
   /** Filed under general: the drafter's suggestion for a topic to add, for the PR body. */
   suggestedTopic?: string;
+  /** The redacted thread it was drafted from, for the judge (see `judge.ts`). */
+  thread?: ReviewThread;
 }
 
 /** A document changed by this run: one or more section patches, each from a review thread. */
@@ -122,6 +124,15 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
 
   for (const repoName of sources.repos) {
     if (excludedRepos.has(repoName.toLowerCase())) continue;
+    // The KB repo's own pull requests are Homeostat's output: drafting from their review threads
+    // would make rules and document sections cite the knowledge base as their own evidence.
+    if (repoName.toLowerCase() === sources.kbRepo.toLowerCase()) {
+      result.skipped.push({
+        url: repoName,
+        reason: "the knowledge base's own repo is never read as a code repo",
+      });
+      continue;
+    }
     const [owner = "", name = ""] = repoName.split("/");
     const repo = { owner, name };
     // A multi-repo KB files each PR's lessons under its repo, with that repo's areas.
@@ -251,7 +262,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         ids.add(entry.frontmatter.id);
         known.add(key);
         const prAuthor = memberForLogin(config.team.members, pr.author.id)?.id;
-        result.entries.push(prAuthor ? { ...entry, prAuthor } : entry);
+        result.entries.push({ ...entry, ...(prAuthor ? { prAuthor } : {}), thread: safe });
       }
     }
   }
