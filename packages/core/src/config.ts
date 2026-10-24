@@ -275,7 +275,7 @@ export const configSchema = z.strictObject({
            * thread before it merges with no person; 0 turns the judge off. Past the cap, drafts
            * that would merge go to a reviewer instead.
            */
-          judgeCalls: z.int().min(0).default(30),
+          judgeCalls: z.int().min(0).default(100),
           /** The judge's model; by default a different one from `model` (see `judgeModelFor`). */
           judgeModel: z.string().min(1).optional(),
           judgeEffort: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),

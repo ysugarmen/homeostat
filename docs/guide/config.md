@@ -70,7 +70,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `agents.curator.effort` | `medium` | `low`, `medium`, `high`, `xhigh` or `max` |
 | `agents.curator.lookbackHours` | `26` | How far back each run reads merged PRs |
 | `agents.curator.consolidateCalls` | `30` | Most model calls per daily run that decide whether a new lesson updates, repeats or adds to the rules most like it ([details](agents.md#consolidate)). Lessons past the cap, and every lesson with `--no-reviews` or `0`, fall back to the word-overlap duplicate check |
-| `agents.curator.judgeCalls` | `30` | Most model calls per daily run that judge a drafted rule about to merge with no person against its review thread ([details](agents.md#judge)). A pass takes one call, a failure three. `0` turns the judge off; drafts past the cap go to a reviewer |
+| `agents.curator.judgeCalls` | `100` | Most model calls per daily run that judge a drafted rule about to merge with no person against its review thread ([details](agents.md#judge)). A pass takes one call, a failure three. Set it above the number of lessons a busy day merges on its own: `0` turns the judge off; drafts past the cap go to a reviewer |
 | `agents.curator.judgeModel` | `claude-sonnet-5-5` | The judge's model. Empty means `claude-sonnet-5-5`, or `claude-opus-5-5` when `agents.curator.model` is already `claude-sonnet-5-5`, so the judge is never the drafter grading itself |
 | `agents.curator.judgeEffort` | `medium` | The judge's effort |
 | `agents.curator.retractCalls` | `10` | Most model calls per daily run that rewrite a document section citing a rule the run retires ([details](agents.md#retract)). `0` lists the sections instead |

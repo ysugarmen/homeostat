@@ -62,7 +62,7 @@ A pass costs one call. A failure is asked twice more and kept only when most of 
 
 - **A kept failure** loses `scoring.confidence.penalty.judge` (30) points and goes to the review PR, whose body lists each problem with the judge's evidence.
 - **A kept contradiction** (most answers name `contradicts-thread`) is declined: the rule teaches the opposite of its own evidence, a reviewer would have to rewrite it from the thread anyway, and the decline and the evidence are in the daily PR for anyone who wants to write it by hand.
-- **Unjudged is not passed:** a judge that errors or gives no usable answer, and drafts past `agents.curator.judgeCalls` (30 calls), go to a reviewer. `judgeCalls: 0` turns the judge off, and drafts merge on confidence alone as before.
+- **Unjudged is not passed:** a judge that errors or gives no usable answer, and drafts past `agents.curator.judgeCalls` (100 calls; keep it above the lessons a busy day merges on its own), go to a reviewer. `judgeCalls: 0` turns the judge off, and drafts merge on confidence alone as before.
 
 Only these lessons are judged: the middle band already goes to a person, and lessons written by hand have no thread to hold them to. The judge's model is `agents.curator.judgeModel`; by default `claude-sonnet-5-5`, or `claude-opus-5-5` when the drafter already runs on Sonnet, on the same runtime as the drafter (with `claude-code` the model is passed to `claude --model`). The run warns when you set it to the drafter's own model. Each call is a few thousand characters and is logged as a `model-call` event with agent `judge`.
 
