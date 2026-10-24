@@ -42,7 +42,8 @@ const RULES: [RiskFinding["kind"], RegExp][] = [
   ["pipe-to-shell", /\biex\b[^\n]*\b(?:iwr|irm|invoke-webrequest|downloadstring)\b/i],
   [
     "credential-handling",
-    /\b(?:send|post|upload|exfiltrat\w*|forward|share|paste|print|echo|output|log|include|email)\b[^.\n]{0,60}\b(?:env(?:ironment)?\s*var(?:iable)?s?|environment variables|\.env\b|secrets?|tokens?|credentials?|api[ _-]?keys?|ssh keys?|passwords?|cookies?)\b/i,
+    // "send time", "send path": a noun after the verb names a moment or a route, not an action.
+    /\b(?:send(?![ -](?:time|path|side|step|rate|limit|queue|loop|button|window)\b)|post|upload|exfiltrat\w*|forward|share|paste|print|echo|output|log|include|email)\b[^.\n]{0,60}\b(?:env(?:ironment)?\s*var(?:iable)?s?|environment variables|\.env\b|secrets?|tokens?|credentials?|api[ _-]?keys?|ssh keys?|passwords?|cookies?)\b/i,
   ],
   [
     "disable-security",

@@ -108,6 +108,11 @@ describe("scanSecrets", () => {
     ["a version or decimal", "Pin 1234.5678.9012.3456 or 0.1234567890123"],
     ["a placeholder token", "set GITLAB_TOKEN to glpat-<token>"],
     ["a port list", "ports 8080 8081 8082 8083"],
+    // An international phone number can pass Luhn and start like a card; the + says it is a phone.
+    [
+      "an international phone number",
+      `For example, ${j("+4539", "1488", "0343", "6467")} reads as mobile.`,
+    ],
   ])("does not flag %s", (_, text) => {
     expect(scanSecrets(text)).toEqual([]);
   });

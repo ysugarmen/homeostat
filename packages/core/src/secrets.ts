@@ -65,9 +65,10 @@ const PATTERNS: [kind: string, re: RegExp][] = [
  * Payment card numbers: 13 to 19 digits, optionally grouped by spaces or dashes, that pass the
  * Luhn check and start like a real card (Visa, Mastercard, Amex, Discover, JCB, Diners). Digits
  * inside a longer run, a decimal, a UUID or a dashed id are not candidates, and the test numbers
- * payment docs quote (4242…, 4111…: three distinct digits or fewer) are left alone.
+ * payment docs quote (4242…, 4111…: three distinct digits or fewer) are left alone. A run after
+ * `+` is an international phone number, never a card.
  */
-const CARD = /(?<![\w.-])\d{4}(?:[ -]?\d{2,4}){2,4}(?![\w-]|\.\d)/g;
+const CARD = /(?<![\w.+-])\d{4}(?:[ -]?\d{2,4}){2,4}(?![\w-]|\.\d)/g;
 const CARD_PREFIX = /^(?:4|5[1-5]|2[2-7]|3[47]|6(?:011|5)|35|3(?:0[0-5]|[68]))/;
 function luhn(digits: string): boolean {
   let sum = 0;
