@@ -3,3 +3,11 @@ packages:
 
 # Supply-chain cooldown: never install a version published less than three days ago (minutes).
 minimumReleaseAge: 4320
+
+# A security patch is the one exception to the cooldown: body-parser 2.4.0 fixes GHSA-27r3-jxmh-p828
+# (reached only through the MCP SDK's express server, which Homeostat never starts). Remove both
+# entries once the SDK depends on a fixed version.
+minimumReleaseAgeExclude:
+  - body-parser
+overrides:
+  body-parser: ">=2.4.0"
