@@ -1,0 +1,16 @@
+{
+  "name": "homeostat-site",
+  "private": true,
+  "type": "module",
+  "description": "The Homeostat website: a landing page and the docs/ guides, built with Astro and Starlight.",
+  "scripts": {
+    "sync": "node scripts/sync-docs.mjs",
+    "dev": "node scripts/sync-docs.mjs && astro dev",
+    "build": "node scripts/sync-docs.mjs && astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.0",
+    "astro": "^7.2.10"
+  }
+}

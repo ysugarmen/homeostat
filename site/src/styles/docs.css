@@ -1,0 +1,43 @@
+/* Starlight, retuned to the landing page's instrument palette. */
+:root {
+  --sl-font: "IBM Plex Sans", ui-sans-serif, sans-serif;
+  --sl-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --sl-color-accent-low: #3a2a10;
+  --sl-color-accent: #d48a22;
+  --sl-color-accent-high: #f6c780;
+  --sl-color-white: #f3eee3;
+  --sl-color-gray-1: #eae4d6;
+  --sl-color-gray-2: #c4ccd3;
+  --sl-color-gray-3: #98a3ad;
+  --sl-color-gray-4: #5e6b76;
+  --sl-color-gray-5: #2b3843;
+  --sl-color-gray-6: #18222b;
+  --sl-color-black: #121a21;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #f7e3c4;
+  --sl-color-accent: #a8650c;
+  --sl-color-accent-high: #5a3606;
+  --sl-color-white: #121a21;
+  --sl-color-gray-1: #18222b;
+  --sl-color-gray-2: #2b3843;
+  --sl-color-gray-3: #4f5c67;
+  --sl-color-gray-4: #8b96a0;
+  --sl-color-gray-5: #d9d3c6;
+  --sl-color-gray-6: #efe9dc;
+  --sl-color-gray-7: #f7f3ea;
+  --sl-color-black: #fbf8f2;
+}
+.site-title {
+  font-family: "Archivo", sans-serif;
+  font-stretch: 125%;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.content-panel h1 {
+  font-family: "Archivo", sans-serif;
+  font-stretch: 112%;
+  letter-spacing: -0.01em;
+}

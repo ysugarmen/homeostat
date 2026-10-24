@@ -1,0 +1,5 @@
+# The website is its own project: never published, not part of the CLI's workspace.
+packages: []
+
+# Supply-chain cooldown, as in the repository root: nothing published less than three days ago.
+minimumReleaseAge: 4320

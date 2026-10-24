@@ -1,0 +1,404 @@
+---
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import Loop from "../components/Loop.astro";
+import mark from "../assets/mark.svg?raw";
+import "../styles/fonts.css";
+
+// The current release, read from the CLI so the install command is never out of date.
+const versionFile = readFileSync(join(process.cwd(), "../packages/core/src/version.ts"), "utf8");
+const version = /"(\d+\.\d+\.\d+[^"]*)"/.exec(versionFile)?.[1] ?? "latest";
+const repo = "https://github.com/ysugarmen/homeostat";
+
+const steps = [
+  {
+    title: "Start from what you have",
+    body: "homeostat bootstrap reads each repo you own: its docs, schemas, migrations, charts and pipelines. It drafts a first base for the team to correct in one pull request.",
+  },
+  {
+    title: "Capture what reviewers teach",
+    body: "Each morning a CI job reads yesterday's merged pull requests. Where a review comment was followed by a fix, it drafts one short rule, with a link to the comment.",
+  },
+  {
+    title: "Decide by confidence",
+    body: "Every lesson gets a 0 to 100 score from its source, who vouched for it and how specific it is. Confident ones merge themselves; only the uncertain ones wait for your reviewers.",
+  },
+  {
+    title: "Deliver to every agent",
+    body: "When a session starts, the agent gets the rules for the files it is touching, within a token budget. Claude Code, any MCP client, Cursor, Copilot and AGENTS.md all read the same rules.",
+  },
+];
+
+const lessons = [
+  // Default weights: 50 for a comment followed by a fix, 45 by hand, 25 from an agent; +20 lead,
+  // +14 senior, +6 member; +8 when it names real code, +4 for a clear title.
+  { score: 82, label: "A lead's comment, followed by a fix, naming the code", decision: "merged" },
+  { score: 76, label: "A senior's comment, followed by a fix, naming the code", decision: "merged" },
+  { score: 60, label: "A member's comment, followed by a fix, naming no code", decision: "review" },
+  { score: 55, label: "A rule a member wrote by hand", decision: "review" },
+  { score: 29, label: "A note an agent left at the end of a session", decision: "declined" },
+];
+
+const spec = [
+  ["Storage", "Markdown in your own git repo, one folder per code repo, rules grouped by topic"],
+  ["Changes", "Pull requests only. Confident lessons merge on their own; the rest go to named reviewers"],
+  ["Runs", "In the knowledge base's CI, once a day, on GitHub Actions or Bitbucket Pipelines"],
+  ["Developer machines", "Session hooks and an MCP server. Nothing scheduled, no daemon"],
+  ["Model", "Claude, through the API, Amazon Bedrock, Google Vertex AI or Claude Code. It reads review threads, never code"],
+  ["Session start", "About half a second on a 280-rule knowledge base"],
+  ["Agents", "Claude Code, any MCP client, Cursor, GitHub Copilot, AGENTS.md"],
+  ["Licence", "Apache-2.0"],
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Homeostat</title>
+    <meta name="description" content="Your team's code-review lessons, as rules every coding agent follows." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="nav">
+      <a class="brand" href="/"><span class="mark" set:html={mark} />Homeostat</a>
+      <nav aria-label="Main">
+        <a href="/docs/">Docs</a>
+        <a href="/docs/guide/quickstart/">Quickstart</a>
+        <a href="/docs/architecture/">Architecture</a>
+        <a href={repo} class="gh">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="hero-copy">
+          <h1>Code review, remembered by every agent.</h1>
+          <p class="lede">
+            Your reviewers already teach your coding agents, one comment at a time, and the agents forget by the next session.
+            Homeostat turns the comments that led to a fix into reviewed rules in your git repo, and gives every session the
+            ones for the files it touches.
+          </p>
+          <div class="ctas">
+            <a class="btn primary" href="/docs/guide/quickstart/">Read the quickstart</a>
+            <a class="btn" href={repo}>View on GitHub</a>
+          </div>
+          <p class="install"><span>In your team's knowledge base repo:</span><code>npx --yes homeostat@{version} init</code></p>
+        </div>
+        <div class="hero-visual">
+          <Loop />
+        </div>
+      </section>
+
+      <section class="steps" aria-labelledby="how">
+        <h2 id="how">How it works</h2>
+        <ol>
+          {steps.map((s) => (
+            <li>
+              <h3>{s.title}</h3>
+              <p>{s.body}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section class="scale" aria-labelledby="confidence">
+        <div class="scale-head">
+          <h2 id="confidence">Humans decide only the middle band</h2>
+          <p>
+            Nobody approves lessons one by one. The daily run scores each one and settles it: merged at 70 or more,
+            declined below 35, and only what falls between goes to the reviewers you name. Every weight and line is yours to
+            tune in <code>homeostat.yaml</code>.
+          </p>
+        </div>
+        <div class="bars" role="list">
+          {lessons.map((l) => (
+            <div class="bar-row" role="listitem">
+              <span class="bar-label">{l.label}</span>
+              <span class="bar-track">
+                <span class={`bar ${l.decision}`} style={`--w:${l.score}%`}></span>
+                <span class="line l35" aria-hidden="true"></span>
+                <span class="line l70" aria-hidden="true"></span>
+              </span>
+              <span class={`bar-value ${l.decision}`}>{l.score} <small>{l.decision}</small></span>
+            </div>
+          ))}
+          <div class="bar-row axis" aria-hidden="true">
+            <span></span>
+            <span class="bar-track bare"><span style="left:35%">35</span><span style="left:70%">70</span><span style="left:100%">100</span></span>
+            <span></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="plate" aria-labelledby="spec">
+        <h2 id="spec">Specifications</h2>
+        <dl>
+          {spec.map(([k, v]) => (
+            <div>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <p class="plate-note">
+          What leaves your network, and how to turn each part off: <a href="/docs/data-handling/">data handling</a>.
+        </p>
+      </section>
+
+      <section class="setup" aria-labelledby="start">
+        <h2 id="start">Ten minutes to a first daily run</h2>
+        <div class="setup-grid">
+          <div>
+            <p class="setup-step">Create the knowledge base</p>
+            <pre><code>npx --yes homeostat@{version} init</code></pre>
+          </div>
+          <div>
+            <p class="setup-step">Give Claude Code the team's rules</p>
+            <pre><code>claude plugin marketplace add ysugarmen/homeostat
+claude plugin install homeostat@homeostat</code></pre>
+          </div>
+          <div>
+            <p class="setup-step">Build a first base from your repos</p>
+            <pre><code>npx --yes homeostat@{version} bootstrap --dry-run</code></pre>
+          </div>
+        </div>
+        <a class="btn primary" href="/docs/guide/quickstart/">Follow the quickstart</a>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>
+        Named after W. Ross Ashby's homeostat of 1948: four units that kept one another in balance.
+      </p>
+      <p class="foot-links">
+        <a href="/docs/">Docs</a><a href={repo}>GitHub</a><a href="/docs/security/">Security</a><span>Apache-2.0</span>
+      </p>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --ink: #121a21;
+    --panel: #18222b;
+    --line: #2b3843;
+    --paper: #eae4d6;
+    --muted: #b3bbc2;
+    --faint: #7d8993;
+    --amber: #f0a541;
+    --teal: #6cc4a8;
+    --gold: #d8b25a;
+    --coral: #d9705c;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; background: var(--ink); }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(60% 40% at 85% -5%, rgb(240 165 65 / 0.07), transparent 70%),
+      linear-gradient(rgb(255 255 255 / 0.018) 1px, transparent 1px) 0 0 / 100% 32px,
+      var(--ink);
+    color: var(--paper);
+    font-family: "IBM Plex Sans", ui-sans-serif, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+  .skip { position: absolute; left: -999px; }
+  .skip:focus { left: 16px; top: 12px; background: var(--panel); padding: 6px 10px; z-index: 10; }
+  code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.88em; }
+  h1, h2, h3 { font-family: "Archivo", sans-serif; color: var(--paper); margin: 0; }
+  h2 { font-stretch: 112%; font-weight: 800; font-size: clamp(1.5rem, 2.6vw, 2.1rem); letter-spacing: -0.015em; line-height: 1.15; }
+  h3 { font-stretch: 105%; font-weight: 700; font-size: 1.08rem; }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px 24px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    font-family: "Archivo", sans-serif;
+    font-stretch: 125%;
+    font-weight: 800;
+    font-size: 1.1rem;
+  }
+  .mark { display: inline-flex; }
+  .mark svg { width: 28px; height: 28px; display: block; }
+  .nav nav { display: flex; gap: 22px; margin-left: auto; font-size: 0.95rem; }
+  .nav nav a { text-decoration: none; color: var(--muted); }
+  .nav nav a:hover { color: var(--paper); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: 56px;
+    align-items: center;
+    padding: 56px 0 96px;
+  }
+  .hero h1 {
+    font-stretch: 125%;
+    font-weight: 850;
+    font-size: clamp(2.4rem, 5vw, 4.1rem);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    max-width: 12ch;
+  }
+  .lede { color: var(--muted); font-size: 1.12rem; max-width: 34em; margin: 24px 0 32px; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 12px 20px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.98rem;
+    transition: border-color 150ms, background 150ms;
+  }
+  .btn:hover { border-color: var(--faint); }
+  .btn.primary { background: var(--amber); border-color: var(--amber); color: #1b1307; }
+  .btn.primary:hover { background: #f6b85f; }
+  .install { margin: 28px 0 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; color: var(--faint); font-size: 0.88rem; }
+  .install code { color: var(--paper); background: var(--panel); border: 1px solid var(--line); padding: 4px 10px; border-radius: 6px; }
+
+  .steps { padding: 32px 0 96px; border-top: 1px solid var(--line); }
+  .steps h2 { margin: 48px 0 36px; }
+  .steps ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    counter-reset: step;
+  }
+  .steps li {
+    counter-increment: step;
+    padding: 0 28px 0 0;
+    margin-right: 28px;
+    border-right: 1px solid var(--line);
+  }
+  .steps li:last-child { border-right: 0; margin-right: 0; }
+  .steps li::before {
+    content: counter(step);
+    display: block;
+    margin-bottom: 18px;
+    font-family: "Archivo", sans-serif;
+    font-stretch: 125%;
+    font-weight: 800;
+    font-size: 2.6rem;
+    line-height: 1;
+    color: var(--amber);
+  }
+  .steps p { color: var(--muted); font-size: 0.96rem; margin: 10px 0 0; }
+
+  .scale { padding: 80px 0 96px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 56px; }
+  .scale-head p { color: var(--muted); margin: 20px 0 0; }
+  .scale-head code { color: var(--paper); }
+  .bars { display: grid; gap: 18px; align-self: center; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr) 7.5em; gap: 16px; align-items: center; }
+  .bar-label { color: var(--muted); font-size: 0.9rem; line-height: 1.35; }
+  .bar-track { position: relative; height: 12px; background: rgb(255 255 255 / 0.03); border-radius: 3px; }
+  .bar { position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: 3px; }
+  .bar.merged { background: var(--teal); }
+  .bar.review { background: var(--gold); }
+  .bar.declined { background: var(--coral); }
+  .line { position: absolute; top: -5px; bottom: -5px; width: 1px; background: var(--paper); opacity: 0.45; }
+  .l35 { left: 35%; }
+  .l70 { left: 70%; }
+  .bar-value { font-family: "Archivo", sans-serif; font-stretch: 112%; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .bar-value small { font-family: "IBM Plex Sans", sans-serif; font-weight: 500; font-size: 0.78rem; margin-left: 4px; }
+  .bar-value.merged small { color: var(--teal); }
+  .bar-value.review small { color: var(--gold); }
+  .bar-value.declined small { color: var(--coral); }
+  .bar-row.axis { margin-top: -10px; }
+  .bar-track.bare { background: none; height: 1.2em; color: var(--faint); font-size: 0.75rem; }
+  .bar-track.bare span { position: absolute; transform: translateX(-50%); }
+
+  .plate {
+    margin: 0 0 96px;
+    padding: 40px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%), var(--panel);
+  }
+  .plate dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 48px; margin: 28px 0 0; }
+  .plate dl div { display: grid; grid-template-columns: 11em minmax(0, 1fr); gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .plate dt { color: var(--faint); font-size: 0.9rem; }
+  .plate dd { margin: 0; color: var(--paper); font-size: 0.95rem; }
+  .plate-note { margin: 24px 0 0; color: var(--faint); font-size: 0.9rem; }
+  .plate-note a { color: var(--amber); }
+
+  .setup { padding: 0 0 112px; }
+  .setup-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 32px 0; }
+  .setup-step { margin: 0 0 8px; color: var(--muted); font-size: 0.92rem; }
+  .setup pre {
+    margin: 0;
+    padding: 14px 16px;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--paper);
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+
+  .foot {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px 48px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 16px;
+    color: var(--faint);
+    font-size: 0.88rem;
+  }
+  .foot p { margin: 0; }
+  .foot-links { display: flex; gap: 20px; }
+  .foot-links a { text-decoration: none; }
+  .foot-links a:hover { color: var(--paper); }
+
+  @media (max-width: 960px) {
+    .hero { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-top: 32px; }
+    .steps ol { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 40px; }
+    .steps li:nth-child(2) { border-right: 0; margin-right: 0; }
+    .scale { grid-template-columns: minmax(0, 1fr); }
+    .plate dl { grid-template-columns: 1fr; }
+    .setup-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .nav { padding: 16px; gap: 12px; }
+    .nav nav { gap: 14px; font-size: 0.88rem; }
+    .nav nav a:not(.gh):nth-child(n + 2) { display: none; }
+    main { padding: 0 16px; }
+    .steps ol { grid-template-columns: 1fr; }
+    .steps li { border-right: 0; margin-right: 0; padding-right: 0; }
+    .bar-row { grid-template-columns: minmax(0, 1fr) 6.5em; }
+    .bar-label { grid-column: 1 / -1; }
+    .bar-row.axis { display: none; }
+    .plate { padding: 24px 18px; }
+    .plate dl div { grid-template-columns: 1fr; gap: 4px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="Homeostat">
+  <path d="M5 21a11 11 0 0 1 22 0" stroke="#5E6B76" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M21.6 11.4A11 11 0 0 1 27 21" stroke="#6CC4A8" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M16 21 23.2 13.6" stroke="#F0A541" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="16" cy="21" r="2.6" fill="#EAE4D6"/>
+  <path d="M7 26.5h18" stroke="#5E6B76" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

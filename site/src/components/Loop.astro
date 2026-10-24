@@ -1,0 +1,275 @@
+---
+// The hero instrument: one lesson travelling the loop, in the real file formats. Four units, as on
+// Ashby's homeostat; the confidence needle swings and settles before the rule moves on.
+// CSS only; with reduced motion it shows the settled state.
+const score = 76;
+const angle = -90 + (score / 100) * 180;
+---
+
+<figure class="loop" aria-label="One lesson through Homeostat: a review comment becomes a rule, the daily PR merges it at confidence 76, and the next session receives it.">
+  <div class="loop-grid">
+    <section class="unit u1">
+      <header><span class="dot"></span>Review <small>PR #812</small></header>
+      <div class="comment">
+        <p class="who">sam <span>senior</span> on <code>services/integrations/client.ts</code></p>
+        <p>Use <code>withRetry()</code> from <code>@acme/http-client</code> here. Hand-rolled loops drop the request-id header.</p>
+      </div>
+      <p class="commit"><span>a17fb39</span> use withRetry for partner calls</p>
+    </section>
+
+    <section class="unit u2">
+      <header><span class="dot"></span>Lesson <small>confidence</small></header>
+      <div class="gauge">
+        <svg viewBox="0 -2 200 118" aria-hidden="true">
+          <path class="band decline" d="M 20.0 100.0 A 80 80 0 0 1 61.0 30.1"></path>
+          <path class="band review" d="M 66.4 27.4 A 80 80 0 0 1 144.6 33.6"></path>
+          <path class="band merge" d="M 149.4 37.1 A 80 80 0 0 1 180.0 100.0"></path>
+          <g class="ticks">
+            <line x1="69.1" y1="39.4" x2="58.2" y2="18.0"></line>
+            <line x1="140.0" y1="45.0" x2="154.1" y2="25.6"></line>
+          </g>
+          <text x="74.6" y="50.1" class="tick-label" text-anchor="middle">35</text>
+          <text x="132.9" y="54.7" class="tick-label" text-anchor="middle">70</text>
+          <g class="needle" style={`--angle:${angle}deg`}>
+            <line x1="100" y1="100" x2="100" y2="34"></line>
+          </g>
+          <circle cx="100" cy="100" r="6" class="hub"></circle>
+        </svg>
+        <output class="reading">{score}</output>
+      </div>
+      <ul class="terms">
+        <li><b>+50</b> comment, then a fix</li>
+        <li><b>+14</b> from a senior</li>
+        <li><b>+8</b> names real code</li>
+        <li><b>+4</b> clear title</li>
+      </ul>
+    </section>
+
+    <section class="unit u3">
+      <header><span class="dot"></span>Daily PR <small>06:00 UTC</small></header>
+      <p class="pr-title">homeostat: daily lessons · lee</p>
+      <table class="pr-table">
+        <tbody>
+          <tr><td class="d merged">merged</td><td>Use the shared retry helper for partner calls</td><td class="n">76</td></tr>
+          <tr class="dim"><td class="d review">review</td><td>Name feature flags after the ticket</td><td class="n">61</td></tr>
+        </tbody>
+      </table>
+      <p class="stamp">Merged without a reviewer</p>
+    </section>
+
+    <section class="unit u4">
+      <header><span class="dot"></span>Session <small>next morning</small></header>
+      <pre class="session"><span class="prompt">$ claude</span>
+<span class="sys"># Team rules (homeostat)</span>
+<span class="sys">For the files you are changing:</span>
+<span class="rule">- Use the shared retry helper for partner calls:
+  wrap every partner call in withRetry().</span></pre>
+    </section>
+  </div>
+  <figcaption>One lesson, from a review comment to the next agent's session.</figcaption>
+</figure>
+
+<style>
+  .loop {
+    margin: 0;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background:
+      radial-gradient(120% 80% at 80% 0%, rgb(240 165 65 / 0.06), transparent 60%),
+      var(--panel);
+    box-shadow: 0 30px 80px -40px rgb(0 0 0 / 0.8), inset 0 1px 0 rgb(255 255 255 / 0.03);
+  }
+  .loop-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+  figcaption {
+    margin-top: 12px;
+    color: var(--faint);
+    font-size: 0.8rem;
+  }
+  .unit {
+    position: relative;
+    min-height: 200px;
+    padding: 14px 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--ink);
+    font-size: 0.82rem;
+    line-height: 1.45;
+    animation: unit-active 16s infinite;
+  }
+  .unit header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-family: "Archivo", sans-serif;
+    font-stretch: 112%;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    color: var(--paper);
+  }
+  .unit header small {
+    margin-left: auto;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-stretch: 100%;
+    font-weight: 400;
+    color: var(--faint);
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--line);
+    animation: dot-active 16s infinite;
+  }
+  .u2,
+  .u2 .dot { animation-delay: 3.2s; }
+  .u3,
+  .u3 .dot { animation-delay: 7.2s; }
+  .u4,
+  .u4 .dot { animation-delay: 10.4s; }
+
+  @keyframes unit-active {
+    0%, 22% { border-color: rgb(240 165 65 / 0.55); box-shadow: 0 0 0 3px rgb(240 165 65 / 0.07); }
+    28%, 100% { border-color: var(--line); box-shadow: none; }
+  }
+  @keyframes dot-active {
+    0%, 22% { background: var(--amber); }
+    28%, 100% { background: var(--line); }
+  }
+
+  code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.92em;
+    color: var(--paper);
+  }
+  .comment {
+    overflow-wrap: anywhere;
+    padding: 10px;
+    border-left: 2px solid var(--amber);
+    background: rgb(255 255 255 / 0.02);
+    color: var(--muted);
+  }
+  .comment p { margin: 0; }
+  .who { margin-bottom: 6px !important; font-size: 0.75rem; color: var(--faint); }
+  .who span { color: var(--muted); }
+  .commit {
+    margin: 10px 0 0;
+    color: var(--faint);
+    font-size: 0.75rem;
+    opacity: 0;
+    animation: appear 16s infinite;
+    animation-delay: 1.8s;
+  }
+  .commit span { font-family: "JetBrains Mono", monospace; color: var(--teal); }
+
+  .gauge { position: relative; width: 100%; max-width: 220px; margin: -2px auto 0; }
+  .gauge svg { display: block; width: 100%; overflow: visible; }
+  .band { fill: none; stroke-width: 9; stroke-linecap: butt; }
+  .band.decline { stroke: var(--coral); opacity: 0.55; }
+  .band.review { stroke: var(--gold); opacity: 0.55; }
+  .band.merge { stroke: var(--teal); }
+  .ticks line { stroke: var(--paper); stroke-width: 1.4; }
+  .tick-label { fill: var(--faint); font: 600 10px "IBM Plex Sans", sans-serif; }
+  .needle {
+    transform-origin: 100px 100px;
+    transform: rotate(var(--angle));
+    animation: needle 16s infinite;
+    animation-delay: 3.2s;
+  }
+  .needle line { stroke: var(--amber); stroke-width: 3; stroke-linecap: round; }
+  .hub { fill: var(--paper); }
+  .reading {
+    display: block;
+    margin-top: 2px;
+    text-align: center;
+    font-family: "Archivo", sans-serif;
+    font-stretch: 125%;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: var(--paper);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Swing past the reading, overshoot, settle: the instrument finding its balance. */
+  @keyframes needle {
+    0% { transform: rotate(-90deg); }
+    4% { transform: rotate(-90deg); }
+    9% { transform: rotate(68deg); }
+    12% { transform: rotate(34deg); }
+    15% { transform: rotate(52deg); }
+    18%, 92% { transform: rotate(var(--angle)); }
+    100% { transform: rotate(-90deg); }
+  }
+  .terms {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 10px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.72rem;
+    color: var(--faint);
+  }
+  .terms b { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .pr-title { margin: 0 0 8px; color: var(--paper); font-size: 0.78rem; }
+  .pr-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+  .pr-table td { padding: 6px 4px; border-top: 1px solid var(--line); color: var(--muted); vertical-align: top; }
+  .pr-table .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--paper); }
+  .pr-table .d { white-space: nowrap; font-weight: 600; }
+  .d.merged { color: var(--teal); }
+  .d.review { color: var(--gold); }
+  .pr-table tr:first-child { opacity: 0; animation: appear 16s infinite; animation-delay: 7.6s; }
+  .dim { opacity: 0.55; }
+  .stamp {
+    display: inline-block;
+    margin: 10px 0 0;
+    padding: 3px 8px;
+    border: 1px solid rgb(108 196 168 / 0.5);
+    border-radius: 999px;
+    color: var(--teal);
+    font-size: 0.72rem;
+    opacity: 0;
+    animation: appear 16s infinite;
+    animation-delay: 8.6s;
+  }
+
+  .session {
+    margin: 0;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    color: var(--faint);
+  }
+  .session .prompt { color: var(--paper); }
+  .session .rule {
+    display: inline-block;
+    color: var(--paper);
+    background: rgb(240 165 65 / 0.1);
+    border-left: 2px solid var(--amber);
+    padding-left: 6px;
+    opacity: 0;
+    animation: appear 16s infinite;
+    animation-delay: 11.2s;
+  }
+  @keyframes appear {
+    0% { opacity: 0; transform: translateY(4px); }
+    4%, 70% { opacity: 1; transform: none; }
+    76%, 100% { opacity: 0; transform: translateY(4px); }
+  }
+
+  @media (max-width: 640px) {
+    .loop-grid { grid-template-columns: minmax(0, 1fr); }
+    .unit { min-height: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .unit, .dot, .needle, .commit, .pr-table tr:first-child, .stamp, .session .rule { animation: none; opacity: 1; }
+    .needle { transform: rotate(var(--angle)); }
+  }
+</style>
