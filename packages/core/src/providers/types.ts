@@ -113,3 +113,63 @@ export interface ProviderOptions {
   /** API base URL, for self-hosted or proxied instances. */
   baseUrl?: string;
 }
+
+/** A repository as `homeostat setup` needs it: its default branch and whether the token can push. */
+export interface RepoInfo {
+  /** owner/name as the host spells it. */
+  fullName: string;
+  defaultBranch: string;
+  private?: boolean;
+  /** Whether the token may push; undefined when the host does not say. */
+  canWrite?: boolean;
+}
+
+/** A Pipelines repository variable. A secured one's value is never returned. */
+export interface RepoVariable {
+  uuid: string;
+  key: string;
+  secured: boolean;
+}
+
+/** A Pipelines schedule that runs a custom pipeline on a branch. */
+export interface PipelineSchedule {
+  uuid: string;
+  /** The custom pipeline's name (the selector pattern). */
+  pipeline: string;
+  branch: string;
+  /** Bitbucket's seven-field cron (seconds first, `?` for one of the day fields), in UTC. */
+  cron: string;
+  enabled: boolean;
+}
+
+/**
+ * The calls `homeostat setup` makes beyond the agents' needs. Members, repos and folders exist on
+ * both hosts; variables and schedules on Bitbucket; Actions secrets and permissions on GitHub
+ * (GitHub secrets are written with `gh`, since the REST API needs them encrypted first).
+ */
+export interface HostSetup {
+  readonly kind: "bitbucket" | "github";
+  /**
+   * Bitbucket: the workspace's members (nickname, display name). GitHub: the org's members,
+   * else the repo's collaborators when the owner is a user.
+   */
+  listMembers(repo: RepoRef): Promise<Person[]>;
+  getRepository(repo: RepoRef): Promise<RepoInfo>;
+  /** Throws unless the token can read the repo's pull requests (reads at most one). */
+  probePullRequests(repo: RepoRef): Promise<void>;
+  /** The names of the folders at the top of `branch`. */
+  topLevelFolders(repo: RepoRef, branch: string): Promise<string[]>;
+  listVariables?(repo: RepoRef): Promise<RepoVariable[]>;
+  /** Creates the variable, or updates the one with this key. */
+  setVariable?(repo: RepoRef, key: string, value: string, secured: boolean): Promise<void>;
+  listSchedules?(repo: RepoRef): Promise<PipelineSchedule[]>;
+  createSchedule?(
+    repo: RepoRef,
+    schedule: { pipeline: string; branch: string; cron: string },
+  ): Promise<void>;
+  enableSchedule?(repo: RepoRef, uuid: string): Promise<void>;
+  /** GitHub: the names of the repo's Actions secrets (needs admin). */
+  listSecretNames?(repo: RepoRef): Promise<string[]>;
+  /** GitHub: whether Actions may run in the repo. */
+  actionsEnabled?(repo: RepoRef): Promise<boolean>;
+}
