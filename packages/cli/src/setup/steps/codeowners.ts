@@ -1,9 +1,8 @@
 import { setupStep } from "@homeostat/core";
 import { runCodeowners } from "../../codeowners.ts";
 import { hostChecks } from "../../doctor.ts";
-import { PROTECTION_HELP } from "../../init.ts";
-import { TOKEN_VARS } from "../../provider.ts";
-import { EMAIL_VAR, type Step } from "../context.ts";
+import { PROTECTION_SHORT } from "../../init.ts";
+import { EMAIL_VAR, type Step, TOKEN_VAR } from "../context.ts";
 
 /** Step 9 (optional, recommended): CODEOWNERS written, and branch protection read back or explained. */
 export const codeownersStep: Step = {
@@ -26,7 +25,7 @@ export const codeownersStep: Step = {
     if (auth) {
       const env = {
         ...ctx.io.env,
-        [TOKEN_VARS[host][0]]: auth.token,
+        [TOKEN_VAR]: auth.token,
         ...(auth.user ? { [EMAIL_VAR]: auth.user } : {}),
       };
       const { access } = await hostChecks(config, { ...ctx.io, env });
@@ -36,6 +35,6 @@ export const codeownersStep: Step = {
         );
       if (access.every((c) => c.level === "ok")) return;
     }
-    ctx.say(PROTECTION_HELP[host].replace(/^/gm, "  "));
+    ctx.say(PROTECTION_SHORT[host].replace(/^/gm, "  "));
   },
 };

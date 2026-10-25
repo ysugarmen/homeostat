@@ -26,7 +26,7 @@ describe("homeostat up", () => {
     const { stdout, stderr } = await up("2026-10-13T06:00:00Z", "--once");
     expect(stdout).toContain("running curator");
     // No token in the test env: proves the curator itself ran.
-    expect(stderr).toContain("set HOMEOSTAT_BITBUCKET_TOKEN");
+    expect(stderr).toContain("set HOMEOSTAT_GIT_TOKEN");
   });
 
   test("--once outside any schedule runs nothing", async () => {

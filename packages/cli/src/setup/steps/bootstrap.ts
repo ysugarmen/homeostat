@@ -1,7 +1,6 @@
 import { readSetupRecord, setupStep, VERSION } from "@homeostat/core";
 import { runBootstrap } from "../../bootstrap.ts";
-import { TOKEN_VARS } from "../../provider.ts";
-import { EMAIL_VAR, type Step } from "../context.ts";
+import { EMAIL_VAR, type Step, TOKEN_VAR } from "../context.ts";
 
 /** Step 12 (optional): a first base, previewed (nothing sent) before it asks. */
 export const bootstrapStep: Step = {
@@ -19,13 +18,13 @@ export const bootstrapStep: Step = {
       );
       return;
     }
-    if (!(await ctx.yes("  Send these prompts to the model and open one PR per repo?"))) return;
+    if (!(await ctx.yes("  Send these files to the model and open one PR per repo?"))) return;
     // The credentials typed in this run, for this one command; nothing is written down.
     const host = ctx.host();
     const env = { ...ctx.io.env };
     if (ctx.modelKey) env.ANTHROPIC_API_KEY = ctx.modelKey;
     if (host && ctx.auth) {
-      env[TOKEN_VARS[host][0]] = ctx.auth.token;
+      env[TOKEN_VAR] = ctx.auth.token;
       if (ctx.auth.user) env[EMAIL_VAR] = ctx.auth.user;
     }
     await runBootstrap({ dir: ctx.root, yes: true }, { ...ctx.io, env });

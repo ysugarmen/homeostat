@@ -212,7 +212,7 @@ describe("homeostat learn <PR comment URL>", () => {
         "--area",
         "integrations",
       ],
-      { fetch, env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" } },
+      { fetch, env: { HOMEOSTAT_GIT_TOKEN: "t" } },
     );
     expect(code).toBe(0);
     expect(stdout).toContain("> Please use `withRetry()`");
@@ -232,7 +232,7 @@ describe("homeostat learn <PR comment URL>", () => {
     const url = "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-36";
     await run(["learn", url, "--dir", dir, "--id", "lgtm", "--title", "t", ...ruleArgs], {
       fetch,
-      env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" },
+      env: { HOMEOSTAT_GIT_TOKEN: "t" },
     });
     expect(entryAt(dir, "knowledge/core/lgtm.md").frontmatter.source.changedCode).toBe(false);
   });
@@ -280,7 +280,7 @@ describe("homeostat learn <PR comment URL>", () => {
     const url = "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33";
     const { code, stderr } = await run(["learn", url, "--dir", dir, "--title", "t", ...ruleArgs], {
       fetch,
-      env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" },
+      env: { HOMEOSTAT_GIT_TOKEN: "t" },
     });
     expect(code).toBe(1);
     expect(stderr).toContain('no member has handle "@dana"; pass --author');
@@ -290,7 +290,7 @@ describe("homeostat learn <PR comment URL>", () => {
     const url = "https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33";
     const { code, stderr } = await run(["learn", url, "--dir", kb(), ...ruleArgs]);
     expect(code).toBe(1);
-    expect(stderr).toContain("set HOMEOSTAT_BITBUCKET_TOKEN");
+    expect(stderr).toContain("set HOMEOSTAT_GIT_TOKEN");
   });
 
   test.each([

@@ -2,9 +2,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { CODEOWNERS_FILE, readKbFiles, setupStep, validate } from "@homeostat/core";
-import { formatIssues } from "../../format.ts";
+import { formatIssues, plural } from "../../format.ts";
 import { git, networkEnv, networkTimeout } from "../../git.ts";
 import { firstLine, type SetupContext, type Step } from "../context.ts";
+import { HTTPS_BITBUCKET_HINT, httpsBitbucket } from "./host.ts";
 
 export const SETUP_BRANCH = "homeostat-setup";
 
@@ -29,7 +30,8 @@ export const commitStep: Step = {
     if (git(ctx.root, "rev-parse", "--is-inside-work-tree") !== "true")
       return { state: "missing", reason: "not a git checkout" };
     const dirty = changed(ctx);
-    if (dirty.length) return { state: "missing", reason: `${dirty.length} files not committed` };
+    if (dirty.length)
+      return { state: "missing", reason: `${plural(dirty.length, "file")} not committed` };
     if (!git(ctx.root, "rev-parse", "--verify", "--quiet", "HEAD"))
       return { state: "missing", reason: "nothing committed yet" };
     const ahead = git(ctx.root, "rev-list", "--count", "@{u}..HEAD");
@@ -41,7 +43,7 @@ export const commitStep: Step = {
     }
     return ahead === "0"
       ? { state: "done", reason: "pushed" }
-      : { state: "missing", reason: `${ahead} commits not pushed` };
+      : { state: "missing", reason: `${plural(Number(ahead), "commit")} not pushed` };
   },
   async run(ctx) {
     const result = validate(readKbFiles(ctx.root));
@@ -68,7 +70,7 @@ export const commitStep: Step = {
         branch = base;
       } else if (current === base) {
         const toBase = await ctx.yes(
-          `  Commit straight to ${base} without review? (No: a branch ${SETUP_BRANCH} to open a PR from)`,
+          `  Push straight to ${base}, without a PR? (no: push the branch ${SETUP_BRANCH} and open a PR from it)`,
         );
         branch = toBase ? base : SETUP_BRANCH;
       }
@@ -87,6 +89,8 @@ export const commitStep: Step = {
       ctx.say(`  ${ctx.paint("green", "✓")} pushed ${branch}`);
     } catch (e) {
       ctx.say(`  ${ctx.paint("red", "✗")} ${(e as Error).message}`);
+      if (httpsBitbucket(git(ctx.root, "remote", "get-url", "origin")))
+        ctx.say(`  ${HTTPS_BITBUCKET_HINT}`);
       return;
     }
     if (branch !== base)

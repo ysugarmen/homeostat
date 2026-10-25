@@ -92,8 +92,17 @@ export interface SpawnResult {
 export type Spawner = (
   command: string,
   args: string[],
-  opts?: { input?: string; cwd?: string },
+  opts?: SpawnOptions,
 ) => Promise<SpawnResult>;
+
+export interface SpawnOptions {
+  input?: string;
+  cwd?: string;
+  /** Set over this process's environment; an undefined value removes the variable. */
+  env?: Record<string, string | undefined>;
+  /** Stops the program after this long; the result's code is then 124. */
+  timeoutMs?: number;
+}
 
 /** A git-host token, and on Bitbucket the account email that makes it an API token. */
 export interface HostAuth {
@@ -105,16 +114,38 @@ const spawnProcess: Spawner = (command, args, opts = {}) =>
   new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
+    let env: NodeJS.ProcessEnv | undefined;
+    if (opts.env) {
+      env = { ...process.env };
+      for (const [k, v] of Object.entries(opts.env)) {
+        if (v === undefined) delete env[k];
+        else env[k] = v;
+      }
+    }
     const child = spawn(command, args, {
       ...(opts.cwd ? { cwd: opts.cwd } : {}),
+      ...(env ? { env } : {}),
       stdio: ["pipe", "pipe", "pipe"],
     });
+    let timedOut = false;
+    const timer = opts.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          child.kill();
+        }, opts.timeoutMs)
+      : undefined;
     child.stdout.on("data", (d) => (stdout += d));
     child.stderr.on("data", (d) => (stderr += d));
-    child.on("error", (e: NodeJS.ErrnoException) =>
-      resolve({ code: e.code === "ENOENT" ? 127 : 1, stdout, stderr: e.message }),
-    );
-    child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
+    child.on("error", (e: NodeJS.ErrnoException) => {
+      clearTimeout(timer);
+      resolve({ code: e.code === "ENOENT" ? 127 : 1, stdout, stderr: e.message });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve(
+        timedOut ? { code: 124, stdout, stderr: "timed out" } : { code: code ?? 1, stdout, stderr },
+      );
+    });
     child.stdin.on("error", () => {});
     child.stdin.end(opts.input ?? "");
   });

@@ -12,8 +12,9 @@ export const reviewersStep: Step = {
     if (!config) return;
     const ids = config.team.members.map((m) => m.id);
     const seniors = config.team.members.filter((m) => isSenior(m.role)).map((m) => m.id);
+    ctx.say(`  Members: ${ids.join(", ")}`);
     const answer = await ctx.ask(
-      `  Reviewers (member ids: ${ids.join(", ")}; comma-separated)`,
+      `  Reviewers, comma-separated member ids (example: ${ids[0] ?? "dana"})`,
       seniors.join(", "),
     );
     const picked = [...new Set(answer.split(/[,\s]+/).filter((id) => ids.includes(id)))];

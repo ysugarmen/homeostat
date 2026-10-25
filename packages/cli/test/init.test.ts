@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { readKbFiles, VERSION, validate } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { runCli } from "../src/cli.ts";
+import { useClaudeCodeInCi } from "../src/init.ts";
 
 async function run(...args: string[]) {
   let stdout = "";
@@ -77,7 +78,7 @@ describe("homeostat init", () => {
       expect(workflow).toMatch(/actions\/checkout@[0-9a-f]{40} # v/);
       expect(workflow).toContain(`npx --yes homeostat@${VERSION} validate`);
       expect(stdout).toContain("Git host: GitHub (from the origin remote)");
-      expect(stdout).toContain("HOMEOSTAT_GITHUB_TOKEN");
+      expect(stdout).toContain("HOMEOSTAT_GIT_TOKEN");
     },
   );
 
@@ -92,9 +93,9 @@ describe("homeostat init", () => {
     expect(pipeline).toContain("pull-requests:");
     expect(pipeline).toContain(`npx --yes homeostat@${VERSION} validate`);
     expect(stdout).toContain("Git host: Bitbucket (from the origin remote)");
-    expect(stdout).toContain("pullrequest:write");
-    expect(stdout).toContain("HOMEOSTAT_BITBUCKET_TOKEN");
-    expect(stdout).toContain("HOMEOSTAT_BITBUCKET_EMAIL");
+    expect(stdout).toContain("write:pullrequest:bitbucket");
+    expect(stdout).toContain("HOMEOSTAT_GIT_TOKEN");
+    expect(stdout).toContain("HOMEOSTAT_GIT_EMAIL");
   });
 
   test("--host overrides detection", async () => {
@@ -214,5 +215,61 @@ describe("homeostat init Claude runtime in CI", () => {
     const pipeline = read(dir, "bitbucket-pipelines.yml");
     expect(pipeline).not.toMatch(/^\s+- npm install -g @anthropic-ai\/claude-code$/m);
     expect(pipeline).toContain("# With agents.runtime: claude-code, also:");
+  });
+
+  test("useClaudeCodeInCi turns the install lines on, once, on either host", async () => {
+    const gh = repo("git@github.com:acme/team-kb.git");
+    await run("init", gh);
+    const first = useClaudeCodeInCi(gh, "github");
+    expect(first.edited).toEqual([
+      ".github/workflows/homeostat-curator.yml",
+      ".github/workflows/homeostat-deep-dive.yml",
+    ]);
+    expect(first.manual).toEqual([]);
+    const workflow = read(gh, ".github/workflows/homeostat-curator.yml");
+    expect(workflow).toMatch(/^ {6}- run: npm install -g .*@anthropic-ai\/claude-code$/m);
+    expect(workflow).toMatch(
+      /^ {10}CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ secrets.CLAUDE_CODE_OAUTH_TOKEN \}\}$/m,
+    );
+    expect(useClaudeCodeInCi(gh, "github").edited).toEqual([]);
+
+    const bb = repo("git@bitbucket.org:acme/team-kb.git");
+    await run("init", bb);
+    expect(useClaudeCodeInCi(bb, "bitbucket").edited).toEqual(["bitbucket-pipelines.yml"]);
+    const pipeline = read(bb, "bitbucket-pipelines.yml");
+    expect(pipeline.match(/^ {12}- npm install -g .*@anthropic-ai\/claude-code$/gm)).toHaveLength(
+      2,
+    );
+    expect(pipeline).not.toContain("# With agents.runtime: claude-code, also:");
+
+    // A file without the commented line: the line to add by hand.
+    writeFileSync(join(bb, "bitbucket-pipelines.yml"), "pipelines: {}\n");
+    expect(useClaudeCodeInCi(bb, "bitbucket").manual).toEqual([
+      { path: "bitbucket-pipelines.yml", line: expect.stringContaining("npm install -g") },
+    ]);
+  });
+});
+
+describe("homeostat init token variables", () => {
+  test("GitHub workflows read HOMEOSTAT_GIT_TOKEN, then the old name, then GITHUB_TOKEN", async () => {
+    const dir = repo("git@github.com:acme/team-kb.git");
+    await run("init", dir);
+    for (const file of ["homeostat-curator.yml", "homeostat-deep-dive.yml"]) {
+      const workflow = read(dir, `.github/workflows/${file}`);
+      expect(workflow).toContain(
+        "HOMEOSTAT_GIT_TOKEN: ${{ secrets.HOMEOSTAT_GIT_TOKEN || secrets.HOMEOSTAT_GITHUB_TOKEN }}",
+      );
+      expect(workflow).toContain("GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
+    }
+  });
+
+  test("the Bitbucket pipeline names the new variables and the old ones it still reads", async () => {
+    const dir = repo("git@bitbucket.org:acme/team-kb.git");
+    const { stdout } = await run("init", dir);
+    const pipeline = read(dir, "bitbucket-pipelines.yml");
+    expect(pipeline).toContain("HOMEOSTAT_GIT_TOKEN (with HOMEOSTAT_GIT_EMAIL");
+    expect(pipeline).toContain("HOMEOSTAT_BITBUCKET_TOKEN");
+    expect(stdout).toContain("your own account works");
+    expect(stdout).not.toContain("bot account");
   });
 });

@@ -86,7 +86,7 @@ async function curate(dir: string, extra: Partial<Io>, args: string[] = ["--dry-
     stdout: (s) => (stdout += s),
     stderr: (s) => (stdout += s),
     color: false,
-    env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" },
+    env: { HOMEOSTAT_GIT_TOKEN: "t" },
     now: () => new Date("2026-10-13T06:00:00Z"),
     ...extra,
   });

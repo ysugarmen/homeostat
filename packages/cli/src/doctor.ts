@@ -12,7 +12,7 @@ import {
 import { minimatch } from "minimatch";
 import type { Io } from "./cli.ts";
 import { painter } from "./format.ts";
-import { BITBUCKET_USER_VAR, CliError, TOKEN_VARS } from "./provider.ts";
+import { CliError, envAuth, GIT_TOKEN_VAR, tokenHint } from "./provider.ts";
 
 export type Level = "ok" | "warn" | "fail" | "info";
 export interface Check {
@@ -38,16 +38,15 @@ const RUNTIME_PATH: Record<Config["agents"]["runtime"], string> = {
 
 /** A small client for the few git-host calls the checks need; every failure is "unknown". */
 function hostApi(host: "github" | "bitbucket", io: Io) {
-  const token = TOKEN_VARS[host].map((v) => io.env?.[v]).find(Boolean);
+  const found = envAuth(host, io.env);
+  const token = found?.token;
   const base = host === "github" ? "https://api.github.com/repos" : "https://api.bitbucket.org/2.0";
   const get = async (path: string, auth: boolean) => {
     try {
       const headers: Record<string, string> = { Accept: "application/json" };
       if (auth && token) {
         headers.Authorization =
-          host === "bitbucket"
-            ? bitbucketAuth(token, io.env?.[BITBUCKET_USER_VAR])
-            : `Bearer ${token}`;
+          host === "bitbucket" ? bitbucketAuth(token, found?.user) : `Bearer ${token}`;
       }
       const res = await (io.fetch ?? fetch)(`${base}${path}`, { headers });
       const body = res.ok ? ((await res.json()) as Record<string, unknown>) : undefined;
@@ -56,7 +55,7 @@ function hostApi(host: "github" | "bitbucket", io: Io) {
       return { status: 0, body: undefined };
     }
   };
-  return { token, get };
+  return { token, from: found?.from, get };
 }
 
 export async function hostChecks(
@@ -81,10 +80,13 @@ export async function hostChecks(
   else blast.push(ok(`the KB repo ${sources.kbRepo} is not publicly readable`));
 
   if (!api.token) {
-    const vars = TOKEN_VARS[sources.host].join(" or ");
-    access.push(info(`set ${vars} to check branch protection and the token's reach`));
+    access.push(
+      info(`set ${tokenHint(sources.host)} to check branch protection and the token's reach`),
+    );
     return { access, blast };
   }
+  if (api.from && api.from !== GIT_TOKEN_VAR && api.from !== "GITHUB_TOKEN")
+    access.push(info(`${api.from} works; consider renaming it to ${GIT_TOKEN_VAR}`));
 
   // Branch protection: without it, anything can merge into what every session reads.
   if (gh) {
@@ -131,7 +133,11 @@ export async function hostChecks(
     );
     if (!values)
       access.push(
-        info(`could not read branch restrictions on ${sources.kbRepo} (${r.status}; needs admin)`),
+        info(
+          r.status === 403
+            ? `could not read branch restrictions on ${sources.kbRepo}: the token lacks repository admin (403)`
+            : `could not read branch restrictions on ${sources.kbRepo} (${r.status}; needs repository admin)`,
+        ),
       );
     else if (
       !kinds.has("require_approvals_to_merge") &&
@@ -153,17 +159,15 @@ export async function hostChecks(
 
   // The token: code repos need read only; only the KB repo needs write.
   for (const repo of sources.repos) {
-    let canWrite: boolean | undefined;
-    if (gh) {
-      const r = await api.get(`/${repo}`, true);
-      const perms = r.body?.permissions as { push?: boolean } | undefined;
-      canWrite = perms ? perms.push === true : undefined;
-    } else {
-      const q = encodeURIComponent(`repository.full_name="${repo}"`);
-      const r = await api.get(`/user/permissions/repositories?q=${q}`, true);
-      const perm = (r.body?.values as { permission: string }[] | undefined)?.[0]?.permission;
-      canWrite = perm ? perm !== "read" : undefined;
+    // Bitbucket tells a token's access only under /2.0/user, which needs the read:account scope
+    // the daily run never needs, so that call is not made.
+    if (!gh) {
+      blast.push(info(`check by hand that the token only reads ${repo}`));
+      continue;
     }
+    const r = await api.get(`/${repo}`, true);
+    const perms = r.body?.permissions as { push?: boolean } | undefined;
+    const canWrite = perms ? perms.push === true : undefined;
     if (canWrite === true)
       blast.push(fail(`the token can write ${repo}; code repos need read access only`));
     else if (canWrite === false) blast.push(ok(`the token reads ${repo} without write access`));

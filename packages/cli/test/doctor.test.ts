@@ -185,12 +185,22 @@ describe("homeostat doctor --security (T8)", () => {
     expect(calls.find((c) => c.url.endsWith("/acme/team-kb"))?.auth).toBe(false);
   });
 
+  test("a token under its old name works, with a nudge to rename it", async () => {
+    const { fetch } = github({ "/acme/team-kb/branches/main": { protected: true } });
+    const { stdout } = await doctor(kb(`homeostat@${VERSION}`), {
+      fetch,
+      env: { HOMEOSTAT_GITHUB_TOKEN: "t" },
+    });
+    expect(stdout).toContain("✓ main is protected on acme/team-kb");
+    expect(stdout).toContain(
+      "HOMEOSTAT_GITHUB_TOKEN works; consider renaming it to HOMEOSTAT_GIT_TOKEN",
+    );
+  });
+
   test("without a token it says what it could not check", async () => {
     const { fetch } = github({});
     const { stdout } = await doctor(kb(`homeostat@${VERSION}`), { fetch, env: {} });
-    expect(stdout).toContain(
-      "set HOMEOSTAT_GITHUB_TOKEN or GITHUB_TOKEN to check branch protection",
-    );
+    expect(stdout).toContain("set HOMEOSTAT_GIT_TOKEN or GITHUB_TOKEN to check branch protection");
   });
 });
 
@@ -217,7 +227,7 @@ describe("homeostat doctor --security on Bitbucket", () => {
   }
 
   const run = (dir: string, fetch: typeof globalThis.fetch) =>
-    doctor(dir, { fetch, env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" } });
+    doctor(dir, { fetch, env: { HOMEOSTAT_GIT_TOKEN: "t" } });
 
   test("enforced approvals on the base branch pass", async () => {
     const { stdout } = await run(
