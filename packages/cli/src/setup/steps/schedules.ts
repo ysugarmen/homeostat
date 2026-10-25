@@ -33,12 +33,14 @@ export const schedulesStep: Step = {
       }
       if (!api.listSchedules) return { state: "unknown" };
       const have = await api.listSchedules(kb);
-      // Matched by pipeline and enabled, never by cron: Bitbucket rewrites the cron it stores
-      // (seconds, `?`, MON for 1), and a team may move a schedule to another hour on purpose.
+      // Matched by pipeline, branch and enabled, never by cron: Bitbucket rewrites the cron it
+      // stores (seconds, `?`, MON for 1), and a team may move a schedule to another hour on purpose.
+      // A schedule on another branch runs another KB (a trial branch), so it doesn't count.
+      const base = config.sources?.baseBranch ?? "main";
       const missing = wanted.filter(
         (w) =>
           !ctx.scheduledNow.has(w.pipeline) &&
-          !have.some((h) => h.pipeline === w.pipeline && h.enabled),
+          !have.some((h) => h.pipeline === w.pipeline && h.branch === base && h.enabled),
       );
       return missing.length
         ? {
@@ -84,7 +86,7 @@ export const schedulesStep: Step = {
         const have = await api.listSchedules(kb);
         for (const w of wanted) {
           if (ctx.scheduledNow.has(w.pipeline)) continue;
-          const existing = have.find((h) => h.pipeline === w.pipeline);
+          const existing = have.find((h) => h.pipeline === w.pipeline && h.branch === base);
           if (!existing?.enabled) {
             if (existing) await api.enableSchedule(kb, existing.uuid);
             else

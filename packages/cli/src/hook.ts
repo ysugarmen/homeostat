@@ -12,6 +12,7 @@ import {
   docRef,
   inRepo,
   isMultiRepo,
+  isRejectedDecision,
   logEvent,
   logTurnUsage,
   memberFromGit,
@@ -23,9 +24,12 @@ import {
   renderContext,
   repoNames,
   restCounts,
+  searchEntries,
+  searchSections,
   selectEntries,
   sessionGuide,
   summarizeTurns,
+  tokenize,
   validate,
   visibleTo,
 } from "@homeostat/core";
@@ -51,6 +55,8 @@ export interface HookInput {
   trigger?: string;
   /** Stop: the current turn's final reply, which the transcript file may not hold yet. */
   last_assistant_message?: string;
+  /** UserPromptSubmit: the message the developer sent. */
+  prompt?: string;
 }
 
 /** The KB checkout: the plugin's kb_dir option, then $HOMEOSTAT_DIR, then the session dir itself. */
@@ -240,6 +246,8 @@ interface HandoffState {
   compacted?: boolean;
   /** Rule ids this session has been given, so a later update adds only what is new. */
   injected?: string[];
+  /** Document sections (`<doc>#<id>`) given for a message, so each is given once. */
+  sections?: string[];
   /** The KB view the session last saw (HEAD + pending set); unchanged means nothing to add. */
   view?: string;
   /** Files already changed when the session started, so the Stop hook counts only its own. */
@@ -402,15 +410,17 @@ async function prompt(input: HookInput, io: Io) {
     io.background?.(["sync", "--dir", kbRoot, "--quiet"]);
   }
   let updates = "";
+  let matches = "";
   try {
     updates = promptUpdates(input.session_id, io, cwd, kbRoot);
+    matches = promptMatches(input.session_id, input.prompt ?? "", io, cwd, kbRoot);
   } finally {
     // The reminder goes out even when looking for updates failed.
     io.stdout(
       `${JSON.stringify({
         hookSpecificOutput: {
           hookEventName: "UserPromptSubmit",
-          additionalContext: [updates, PROMPT_GUIDE].filter(Boolean).join("\n\n"),
+          additionalContext: [updates, matches, PROMPT_GUIDE].filter(Boolean).join("\n\n"),
         },
       })}\n`,
     );
@@ -473,6 +483,150 @@ function promptUpdates(session: string, io: Io, cwd: string, kbRoot: string): st
           ),
         ]
       : []),
+  ];
+  return parts.join("\n\n");
+}
+
+/** A message needs this many words before it is matched against the KB. */
+const PROMPT_MIN_TERMS = 3;
+/** Words of conversation, not of the work: "yes, go ahead", "run the tests again", "commit it". */
+const CHAT = new Set(
+  "ahead again also all can check commit continue could done fine go good great just keep let look make me more my next nice no not now ok okay perfect please proceed push run see show so some start stop sure test thank that then there thi try wait will would ye yes".split(
+    " ",
+  ),
+);
+
+/** At most this many rules and document sections are given per message. */
+const PROMPT_RULES = 3;
+const PROMPT_SECTIONS = 2;
+/**
+ * A hit is given when it shares this many rare words with the message, and scores at least this
+ * share of the best hit of its kind. BM25 scores depend on the KB's size, so they make no floor; a
+ * word is rare when at most this share of the rules (or sections) hold it, so "yes, go ahead" or
+ * "run the tests again" match nothing. Set on 32 prompts drawn from a real team's reviews: the rule
+ * each came from was the best hit for 27 and among the first two for most of the rest.
+ */
+const PROMPT_MIN_SHARED = 2;
+const PROMPT_CLOSE = 0.6;
+const PROMPT_RARE = 0.1;
+
+/** Whether `fields` share `PROMPT_MIN_SHARED` of the message's words that are rare in `pool`. */
+function sharesRare(words: Set<string>, pool: readonly string[][]) {
+  const df = new Map<string, number>();
+  for (const doc of pool)
+    for (const w of new Set(doc)) if (words.has(w)) df.set(w, (df.get(w) ?? 0) + 1);
+  const most = Math.max(2, PROMPT_RARE * pool.length);
+  return (...fields: string[]) =>
+    new Set(tokenize(fields.join(" ")).filter((w) => words.has(w) && (df.get(w) ?? 0) <= most))
+      .size >= PROMPT_MIN_SHARED;
+}
+/** A section longer than this is cut, with a pointer to read the rest. */
+const PROMPT_SECTION_CHARS = 2400;
+
+/**
+ * The rules and document sections whose words match the developer's message, given once per
+ * session. The session start chooses by the files being changed; a question or a bug report names
+ * no file yet, so its own words choose here. Keyword search on the CPU: no model call.
+ */
+function promptMatches(session: string, text: string, io: Io, cwd: string, kbRoot: string): string {
+  const words = new Set(tokenize(text).filter((w) => !CHAT.has(w)));
+  if (words.size < PROMPT_MIN_TERMS) return "";
+  const { config, entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files, {
+    checks: false,
+  });
+  if (!config) return "";
+  const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
+  const repo = repoHere(cwd, config);
+  const state = readState(kbRoot, session);
+  const seen = new Set(state.injected ?? []);
+  const seenSections = new Set(state.sections ?? []);
+  const close = <T extends { score: number }>(hits: T[]) =>
+    hits.filter((h) => h.score >= PROMPT_CLOSE * (hits[0]?.score ?? 0));
+
+  const pool = visibleTo(
+    inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
+    config,
+    member,
+  ).filter((e) => !isRejectedDecision(e.frontmatter));
+  const ruleText = (e: Pick<(typeof pool)[number], "frontmatter" | "sections">) => [
+    e.frontmatter.title,
+    (e.frontmatter.tags ?? []).join(" "),
+    e.sections.rule ?? "",
+  ];
+  const ruleShares = sharesRare(
+    words,
+    pool.map((e) => tokenize(ruleText(e).join(" "))),
+  );
+  const rules = close(searchEntries(pool, text, { limit: PROMPT_RULES })).filter(
+    ({ entry: e }) => !seen.has(e.frontmatter.id) && ruleShares(...ruleText(e)),
+  );
+  const sectionPool = visibleTo(
+    inRepo(docs, config, repo).map((d) => ({ ...d, frontmatter: d.doc.frontmatter })),
+    config,
+    member,
+  ).flatMap(({ path, doc }) =>
+    doc.sections.map((s) => ({
+      doc: docRef(path),
+      title: doc.frontmatter.title,
+      id: s.id,
+      heading: s.heading,
+      body: s.body,
+    })),
+  );
+  const sectionShares = sharesRare(
+    words,
+    sectionPool.map((s) => tokenize(`${s.heading} ${s.body}`)),
+  );
+  const sections = close(searchSections(sectionPool, text, { limit: PROMPT_SECTIONS })).filter(
+    ({ section: s }) => !seenSections.has(`${s.doc}#${s.id}`) && sectionShares(s.heading, s.body),
+  );
+  if (rules.length === 0 && sections.length === 0) return "";
+
+  const ids = rules.map((h) => h.entry.frontmatter.id);
+  const refs = sections.map((h) => ({ doc: h.section.doc, id: h.section.id }));
+  writeState(kbRoot, session, {
+    ...state,
+    injected: [...seen, ...ids],
+    sections: [...seenSections, ...refs.map((r) => `${r.doc}#${r.id}`)],
+  });
+  const ts = (io.now?.() ?? new Date()).toISOString();
+  if (ids.length)
+    logEvent(kbRoot, {
+      ts,
+      type: "injection",
+      session,
+      source: "prompt",
+      cwd,
+      ...(repo ? { repo } : {}),
+      entries: ids.map((id) => ({ id, form: "full" })),
+    });
+  if (refs.length)
+    logEvent(kbRoot, {
+      ts,
+      type: "doc-injection",
+      session,
+      source: "prompt",
+      docs: [...new Set(refs.map((r) => r.doc))],
+      sections: refs,
+    });
+
+  const parts = [
+    "# Matching this message (homeostat)",
+    "Team rules and document sections whose words match the message. Use what applies; ignore the rest.",
+    ...(rules.length
+      ? [
+          renderContext({
+            items: rules.map((h) => ({ entry: h.entry, form: "full" as const })),
+          }).replace(/^# Team knowledge \(homeostat\)\n\n[\s\S]*?\n\n(?=## |\*\*)/, ""),
+        ]
+      : []),
+    ...sections.map(({ section: s }) => {
+      const body =
+        s.body.length > PROMPT_SECTION_CHARS
+          ? `${s.body.slice(0, PROMPT_SECTION_CHARS).replace(/\s+\S*$/, "")} [...] (read the rest with \`read\` ${s.doc}#${s.id})`
+          : s.body;
+      return `## ${s.heading} (${s.doc}#${s.id})\n${body}`;
+    }),
   ];
   return parts.join("\n\n");
 }

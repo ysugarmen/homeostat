@@ -427,6 +427,16 @@ describe("homeostat setup on Bitbucket", () => {
     expect(h.out.stdout).toMatch(/✓ +11\. Schedules · 3 schedules/);
   });
 
+  test("schedules on another branch (a trial KB) don't count for the base branch", async () => {
+    const { repo, h: first } = await bitbucketDone();
+    const state = first.state;
+    state.schedules = state.schedules.map((s) => ({ ...s, branch: "demo/fresh" }));
+    const h = harness({ host: "bitbucket", state, env: envFor });
+    expect(await setup(h.io, repo.dir, "--step", "schedules")).toBe(0);
+    expect(state.schedules.filter((s) => s.branch === "main")).toHaveLength(3);
+    expect(state.schedules.filter((s) => s.branch === "demo/fresh")).toHaveLength(3);
+  });
+
   test("a re-run repairs the one broken step and asks only for it", async () => {
     const { repo, h: first } = await bitbucketDone();
     const state = first.state;
