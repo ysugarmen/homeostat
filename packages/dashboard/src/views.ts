@@ -9,6 +9,7 @@ import {
   repoNames,
   repoOf,
   type SectionUsage,
+  type SetupRow,
   STATUSES,
   score,
 } from "@homeostat/core";
@@ -26,6 +27,7 @@ import {
 } from "./charts.ts";
 import type { AgentLiveness, Contribution, DesirePath, Health, Impact } from "./metrics.ts";
 import { currentValue, type Field, SECTIONS, type Section } from "./settings.ts";
+import { SETUP_CSS, setupComplete } from "./setup-panel.ts";
 
 const CSS = `
 :root {
@@ -294,7 +296,7 @@ button:hover { filter: brightness(1.1); }
 .gauge .rim { display: none; } .gauge .zero { stroke: var(--ink-3); }
 .gauge .needle { stroke: var(--accent); stroke-linecap: round; } .gauge .pivot { fill: var(--ink); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
-`;
+${SETUP_CSS}`;
 
 /** Stroke icons, drawn here (no icon font, nothing fetched). 20px, currentColor. */
 const ICON: Record<string, string> = {
@@ -536,6 +538,8 @@ export interface OverviewExtras {
   /** Rules accepted in the last 7 days. */
   newThisWeek: number;
   decided: { member: string; id: string; decision: string; confidence?: number; at: string }[];
+  /** The Setup card, rendered; it leads the page until every required step is done. */
+  setup?: { html: string; rows: readonly SetupRow[] };
 }
 
 export function overviewPage(
@@ -578,8 +582,10 @@ export function overviewPage(
     .map((a) => `${a.agent === "curator" ? "Daily run" : "Deep dive"}: ${schedule(a.schedule)}.`)
     .join(" ");
   const rows = x.decided.slice(0, 6);
+  const setupFirst = x.setup !== undefined && !setupComplete(x.setup.rows);
   return `<p class="hello">Hi ${esc(x.name ?? "there")},</p><h1 class="welcome">Welcome back</h1>
 <div class="grid">
+${setupFirst ? x.setup?.html : ""}
 <section class="card span-12" aria-labelledby="kb">
   <div class="card-head"><h2 id="kb">Knowledge${info("The rules every session gets, and how much they're used. Rules in force are accepted and not disputed.")}</h2></div>
   <div class="hero-body">
@@ -620,6 +626,7 @@ export function overviewPage(
       : '<p class="empty">No decisions yet. The first daily run fills this in.</p>'
   }
 </section>
+${setupFirst || !x.setup ? "" : x.setup.html}
 </div>`;
 }
 

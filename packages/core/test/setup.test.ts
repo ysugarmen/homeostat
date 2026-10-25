@@ -75,10 +75,18 @@ describe("the setup checklist", () => {
     const files = {
       "homeostat.yaml": `${CONFIG}sources:\n  host: github\n  kbRepo: acme/team-kb\n  repos: [acme/web-app]\n`,
     };
-    writeSetupRecord(root, { token: { state: "done", reason: "stored" } }, new Date("2026-10-20T09:00:00Z"));
+    writeSetupRecord(
+      root,
+      { token: { state: "done", reason: "stored" } },
+      new Date("2026-10-20T09:00:00Z"),
+    );
     const rows = setupRows(root, files, readSetupRecord(root));
     const by = (n: string) => rows.find((r) => r.name === n);
-    expect(by("token")).toMatchObject({ state: "done", source: "record", checkedAt: "2026-10-20T09:00:00.000Z" });
+    expect(by("token")).toMatchObject({
+      state: "done",
+      source: "record",
+      checkedAt: "2026-10-20T09:00:00.000Z",
+    });
     expect(by("model")).toMatchObject({ state: "unknown", source: "none" });
     expect(by("repos")).toMatchObject({ state: "done", source: "local" });
     const shared = setupRows(root, files, readSetupRecord(root), { shared: true });
