@@ -35,6 +35,7 @@ export default defineConfig({
             { label: "Using it from your tools", link: "/docs/guide/clients/" },
             { label: "Dashboard", link: "/docs/guide/dashboard/" },
             { label: "Measuring selection", link: "/docs/guide/eval/" },
+            { label: "Before and after", link: "/docs/guide/bench/" },
           ],
         },
         {
