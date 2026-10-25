@@ -119,6 +119,31 @@ export function migrateKb(
   return { files: result, moved, issues, notes };
 }
 
+/** One change to homeostat.yaml: set a value, append to a list, or delete a key. */
+export type ConfigEdit =
+  | { path: (string | number)[]; set: unknown }
+  | { path: (string | number)[]; append: unknown }
+  | { path: (string | number)[]; delete: true };
+
+/**
+ * Applies `edits` to the config text in place, so the user's comments, order and formatting
+ * survive: `homeostat setup` and `migrate` never regenerate the file.
+ */
+export function editConfig(text: string, edits: readonly ConfigEdit[]): string {
+  const doc = parseDocument(text);
+  for (const e of edits) {
+    if ("delete" in e) {
+      if (doc.hasIn(e.path)) doc.deleteIn(e.path);
+    } else if ("append" in e) {
+      if (doc.hasIn(e.path)) doc.addIn(e.path, doc.createNode(e.append));
+      else doc.setIn(e.path, doc.createNode([e.append]));
+    } else {
+      doc.setIn(e.path, doc.createNode(e.set));
+    }
+  }
+  return doc.toString();
+}
+
 /** The config, rewritten in place so comments and order survive. */
 function rewriteConfig(text: string, config: Config, plan: MigrationPlan, today: string): string {
   const doc = parseDocument(text);

@@ -310,6 +310,8 @@ export { usageCounts } from "./metrics/usage.ts";
 export { percentiles } from "./metrics/util.ts";
 export {
   ClaudeTopicProposer,
+  type ConfigEdit,
+  editConfig,
   type MigrationPlan,
   type MigrationResult,
   migratedPath,
@@ -422,6 +424,7 @@ export {
   type Surface,
   type SurfaceReport,
 } from "./selection-eval.ts";
+export * from "./setup.ts";
 export { slugify } from "./slug.ts";
 export { readState, type StateView } from "./state.ts";
 export { countTokens } from "./tokens.ts";
