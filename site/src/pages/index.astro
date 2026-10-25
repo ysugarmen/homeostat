@@ -86,7 +86,7 @@ const spec = [
             <a class="btn primary" href="/docs/guide/quickstart/">Read the quickstart</a>
             <a class="btn" href={repo}>View on GitHub</a>
           </div>
-          <p class="install"><span>In your team's knowledge base repo:</span><code>npx --yes homeostat@{version} init</code></p>
+          <p class="install"><span>In your team's knowledge base repo:</span><code>npx --yes homeostat@{version} setup</code></p>
         </div>
         <div class="hero-visual">
           <Loop />
@@ -153,20 +153,19 @@ const spec = [
         <h2 id="start">Ten minutes to a first daily run</h2>
         <div class="setup-grid">
           <div>
-            <p class="setup-step">Create the knowledge base</p>
-            <pre><code>npx --yes homeostat@{version} init</code></pre>
+            <p class="setup-step">In your team's knowledge base repo, one guided setup: tokens, repos, team, schedules, Slack</p>
+            <pre><code>npx --yes homeostat@{version} setup</code></pre>
           </div>
           <div>
-            <p class="setup-step">Give Claude Code the team's rules</p>
-            <pre><code>claude plugin marketplace add ysugarmen/homeostat
-claude plugin install homeostat@homeostat</code></pre>
+            <p class="setup-step">Each teammate, once: the Claude Code plugin, pointed at the knowledge base</p>
+            <pre><code>npx --yes homeostat@{version} setup --join</code></pre>
           </div>
           <div>
-            <p class="setup-step">Build a first base from your repos</p>
-            <pre><code>npx --yes homeostat@{version} bootstrap --dry-run</code></pre>
+            <p class="setup-step">Any time after: what's done, what's missing, what's optional</p>
+            <pre><code>npx --yes homeostat@{version} setup --check</code></pre>
           </div>
         </div>
-        <a class="btn primary" href="/docs/guide/quickstart/">Follow the quickstart</a>
+        <a class="btn primary" href="/docs/guide/setup/">Read the setup guide</a>
       </section>
     </main>
 

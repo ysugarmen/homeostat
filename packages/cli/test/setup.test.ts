@@ -38,8 +38,14 @@ interface HostState {
   variables: Map<string, { value: string; secured: boolean }>;
   schedules: PipelineSchedule[];
   refuseWrites: boolean;
+  /** The token may not read pipeline variables or schedules (not a repo admin). */
+  refuseReads?: boolean;
   members: { id: string; name?: string }[];
 }
+
+const forbidden = (): never => {
+  throw new ProviderError("Bitbucket", 403, "https://api.example/vars", "forbidden");
+};
 
 function fakeHost(kind: "bitbucket" | "github", state: HostState) {
   const good = kind === "bitbucket" ? TOKEN : GH_TOKEN;
@@ -60,6 +66,7 @@ function fakeHost(kind: "bitbucket" | "github", state: HostState) {
       ...common,
       listVariables: async () => (
         check(),
+        state.refuseReads && forbidden(),
         [...state.variables].map(([key, v], i) => ({ uuid: `{${i}}`, key, secured: v.secured }))
       ),
       setVariable: async (_r, key, value, secured) => {
@@ -68,7 +75,7 @@ function fakeHost(kind: "bitbucket" | "github", state: HostState) {
           throw new ProviderError("Bitbucket", 403, "https://api.example/vars", "forbidden");
         state.variables.set(key, { value, secured });
       },
-      listSchedules: async () => (check(), state.schedules),
+      listSchedules: async () => (check(), state.refuseReads && forbidden(), state.schedules),
       createSchedule: async (_r, s) => {
         check();
         state.schedules.push({ uuid: `{s${state.schedules.length}}`, ...s, enabled: true });
@@ -463,6 +470,19 @@ describe("homeostat setup without a terminal, --check and --join", () => {
     expect(h.out.stdout).toContain("No terminal, so nothing was asked");
     expect(h.out.stdout).toContain("repos: --repo owner/name");
     expect(h.out.stdout).toContain("token: HOMEOSTAT_BITBUCKET_TOKEN");
+  });
+
+  test("--check says which required steps it could not check, and why, without failing", async () => {
+    const { repo, h: first } = await bitbucketDone();
+    first.state.refuseReads = true;
+    const h = harness({ host: "bitbucket", state: first.state, env: envFor });
+    expect(await setup(h.io, repo.dir, "--check")).toBe(0);
+    expect(h.out.stdout).toMatch(/\? +2\. Git-host token for CI · .*403, needs repo admin to read/);
+    expect(h.out.stdout).toMatch(/\? +9\. Schedules · 403, needs repo admin to read/);
+    expect(h.out.stdout).toContain("No required step is missing, but 3 could not be checked");
+    expect(h.out.stdout).not.toContain("Every required step is done");
+    expect(h.out.stdout.match(/admin:pipeline:bitbucket/g)).toHaveLength(1);
+    expectNoSecret(h.out);
   });
 
   test("--check exits 1 while a required step is missing, 0 once all are done", async () => {

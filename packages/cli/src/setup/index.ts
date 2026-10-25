@@ -10,7 +10,14 @@ import {
 } from "@homeostat/core";
 import type { Io } from "../cli.ts";
 import { git } from "../git.ts";
-import { type SetupContext as Ctx, SetupContext, type SetupFlags, type Step } from "./context.ts";
+import {
+  adminNote,
+  type SetupContext as Ctx,
+  NEEDS_ADMIN,
+  SetupContext,
+  type SetupFlags,
+  type Step,
+} from "./context.ts";
 import { areasStep } from "./steps/areas.ts";
 import { bootstrapStep, teammatesStep } from "./steps/bootstrap.ts";
 import { codeownersStep } from "./steps/codeowners.ts";
@@ -94,11 +101,16 @@ function record(ctx: Ctx, results: Map<Step, SetupCheck>, now: Date) {
 function printChecklist(ctx: Ctx, results: Map<Step, SetupCheck>) {
   for (const [step, c] of results) ctx.say(line(ctx, step, c));
   const left = [...results].filter(([s, c]) => s.info.required && isOpen(c));
+  const unchecked = [...results].filter(([s, c]) => s.info.required && c.state === "unknown");
   ctx.say(
     left.length
       ? `\n${left.length} required ${left.length === 1 ? "step" : "steps"} left: ${left.map(([s]) => s.info.name).join(", ")}`
-      : "\nEvery required step is done.",
+      : unchecked.length
+        ? `\nNo required step is missing, but ${unchecked.length} could not be checked from here: ${unchecked.map(([s]) => s.info.name).join(", ")} (see the reasons above).`
+        : "\nEvery required step is done.",
   );
+  if ([...results.values()].some((c) => c.reason?.includes(NEEDS_ADMIN)))
+    ctx.say(`\n${adminNote(ctx.host())}`);
 }
 
 /** `homeostat setup`: the guided, re-runnable checklist for a team's knowledge base. */

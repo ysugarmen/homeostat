@@ -38,7 +38,7 @@ export const tokenStep: Step = {
     if (exists === false) return { state: "missing", reason: `${name} is not stored` };
     return {
       state: "unknown",
-      reason: `cannot list the CI ${host === "github" ? "secrets" : "variables"} from here (set ${name} or log in to gh)`,
+      reason: `cannot tell whether ${name} is stored: ${ctx.ciUnreadable}`,
     };
   },
   async run(ctx) {

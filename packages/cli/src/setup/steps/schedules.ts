@@ -1,5 +1,5 @@
 import { bitbucketCron, setupStep, wantedSchedules } from "@homeostat/core";
-import { describeError, errorStatus, repoUrl, type Step } from "../context.ts";
+import { adminHint, describeError, errorStatus, repoUrl, type Step } from "../context.ts";
 
 /** Step 9: Bitbucket Pipelines schedules through the API; on GitHub, the workflows and Actions. */
 export const schedulesStep: Step = {
@@ -37,7 +37,7 @@ export const schedulesStep: Step = {
           }
         : { state: "done", reason: `${have.length} schedules` };
     } catch (e) {
-      return { state: "unknown", reason: describeError(e) };
+      return { state: "unknown", reason: `${describeError(e)}${adminHint(host, e)}` };
     }
   },
   async run(ctx) {

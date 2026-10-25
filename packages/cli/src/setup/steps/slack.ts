@@ -15,7 +15,10 @@ export const slackStep: Step = {
     const exists = await ctx.secretExists(name);
     if (exists === true) return { state: "done", reason: `${name} is stored` };
     if (exists === false) return { state: "missing", reason: `${name} is not stored` };
-    return { state: "unknown", reason: `cannot list the CI secrets from here to find ${name}` };
+    return {
+      state: "unknown",
+      reason: `cannot tell whether ${name} is stored: ${ctx.ciUnreadable}`,
+    };
   },
   async run(ctx) {
     const config = ctx.config();

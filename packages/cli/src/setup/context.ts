@@ -89,6 +89,8 @@ export class SetupContext {
   shared = false;
   private readonly secrets: string[] = [];
   private gh: boolean | undefined;
+  /** Why the last check of the CI variables or secrets could not answer. */
+  ciUnreadable = "no token in the environment to read them with";
   private readonly given: Io;
 
   constructor(root: string, io: Io, flags: SetupFlags = {}) {
@@ -350,7 +352,8 @@ export class SetupContext {
       const api = auth ? this.client(host, auth) : undefined;
       if (!api?.listVariables) return undefined;
       return (await api.listVariables(kb)).some((v) => v.key === name);
-    } catch {
+    } catch (e) {
+      this.ciUnreadable = `${describeError(e)}${adminHint(host, e)}`;
       return undefined;
     }
   }
@@ -402,11 +405,29 @@ export class SetupContext {
 
 export const firstLine = (s: string) => s.trim().split("\n")[0]?.slice(0, 200) ?? "";
 
+/**
+ * Reading CI variables and schedules needs more than the daily run's token has: say what, so a
+ * 403 is not mistaken for a broken token.
+ */
+export function adminHint(host: string | undefined, e: unknown): string {
+  if (!(e instanceof ProviderError) || e.status !== 403) return "";
+  return host === "bitbucket" || host === "github" ? NEEDS_ADMIN : "";
+}
+
+/** The short form in a checklist row; `adminNote` explains it once below the list. */
+export const NEEDS_ADMIN = ", needs repo admin to read";
+
+export function adminNote(host: string | undefined): string {
+  return host === "github"
+    ? "Needs repo admin to read: listing Actions secrets needs admin on the KB repo. Log in to gh as an admin, or check them in Settings > Secrets. The daily run itself does not need it."
+    : "Needs repo admin to read: listing pipeline variables and schedules needs admin on the KB repo (an API token with admin:pipeline:bitbucket, or a repo admin's token). The daily run itself does not need it; check them by hand in Repository settings > Pipelines, or run setup with an admin token.";
+}
+
 /** A short reason for a failed call: the status and what it means, never a header or a value. */
 export function describeError(e: unknown): string {
   if (e instanceof ProviderError) {
     if (e.status === 401) return "401: the token was rejected (wrong token, or expired)";
-    if (e.status === 403) return "403: the token lacks the access this needs";
+    if (e.status === 403) return "403";
     if (e.status === 404) return "404: not found, or the token cannot see it";
     return `${e.provider} answered ${e.status}`;
   }
