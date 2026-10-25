@@ -3,3 +3,5 @@ dist/
 *.tsbuildinfo
 coverage/
 .DS_Store
+# homeostat bench: answers and diffs stay local
+*-transcripts/

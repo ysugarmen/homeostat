@@ -23,6 +23,7 @@ It turns accepted code-review feedback into short, scored rules and team documen
 - [Using it from your tools](guide/clients.md): the Claude Code plugin, MCP, and exports
 - [Dashboard](guide/dashboard.md)
 - [Measuring selection](guide/eval.md): `homeostat eval`, cases for the rules each session should get
+- [Before and after](guide/bench.md): `homeostat bench`, the same tasks through Claude Code with the plugin off and on
 
 ## Trust
 

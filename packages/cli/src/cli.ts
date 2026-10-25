@@ -16,6 +16,12 @@ import type {
 } from "@homeostat/core";
 import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
+import {
+  type BenchReportOptions,
+  type BenchRunOptions,
+  runBenchReport,
+  runBenchRun,
+} from "./bench.ts";
 import { type BootstrapOptions, runBootstrap } from "./bootstrap.ts";
 import { runCodeowners } from "./codeowners.ts";
 import { type CurateOptions, runCurate } from "./curate.ts";
@@ -599,6 +605,43 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--json", "print JSON")
     .action((opts) => {
       exitCode = runEval(opts, io);
+    });
+
+  const bench = program
+    .command("bench")
+    .description(
+      "Before/after benchmark: the same tasks through headless Claude Code with the plugin off and on.",
+    );
+  bench
+    .command("run")
+    .description(
+      "Run one condition's tasks, one call at a time, under a budget; a rerun continues where it stopped.",
+    )
+    .requiredOption("--tasks <file>", "task file, e.g. bench/tasks.yaml in the KB repo")
+    .requiredOption("--condition <condition>", "before (plugin off) or after (plugin on)")
+    .requiredOption("--budget <usd>", "stop before spending more than this, in US dollars")
+    .option("--repeats <n>", "runs per task", "2")
+    .option("--only <ids>", "only these task ids, comma-separated")
+    .option("--out <dir>", "results folder (default: results/ next to the task file)")
+    .option(
+      "--judge-model <model>",
+      "the judge's model (default: judge_model, else claude-opus-5-5)",
+    )
+    .option("--plugin <id>", "the plugin's Claude Code id, name@marketplace (default: detect)")
+    .option("--repo <dir>", "the code repo checkout (default: repo: in the task file)")
+    .option("--timeout <minutes>", "longest one agent call may take", "30")
+    .option("--dry-run", "print what would run and an estimate; call nothing")
+    .action(async (opts: BenchRunOptions) => {
+      exitCode = await runBenchRun(opts, io);
+    });
+  bench
+    .command("report")
+    .description("Compare before and after: accuracy, corrections, cost, time and turns.")
+    .option("--tasks <file>", "task file, to find its results/ folder")
+    .option("--out <dir>", "results folder (default: bench/results)")
+    .option("--json [file]", "aggregate-only JSON for a public page, to stdout or a file")
+    .action((opts: BenchReportOptions) => {
+      exitCode = runBenchReport(opts, io);
     });
 
   program
