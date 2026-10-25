@@ -287,7 +287,7 @@ a team KB needs a Console key or a Team/Enterprise plan.) Then add a sources sec
  * Auto-merge is safe only if nothing else can merge unreviewed: protect the base branch, require
  * the validate check and a CODEOWNERS approval, and let only the daily run's token skip the approval.
  */
-const PROTECTION_HELP: Record<Host, string> = {
+export const PROTECTION_HELP: Record<Host, string> = {
   bitbucket: `Protect main (Repository settings > Branch restrictions and Merge checks):
   - require a pull request, 1 approval and a passing build, and turn on "Prevent a merge with
     unresolved merge checks". Only Bitbucket Premium enforces merge checks; on other plans they
@@ -309,6 +309,8 @@ export interface InitOptions {
   member?: string;
   handle?: string;
   force?: boolean;
+  /** False when `homeostat setup` scaffolds: it checks each step instead of printing the guide. */
+  guide?: boolean;
 }
 
 /** `homeostat init [dir]`: scaffolds homeostat.yaml, knowledge/ and a validate CI file in a KB repo. */
@@ -372,6 +374,10 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
   io.stdout(
     `${paint("green", "✓")} knowledge base is valid (${result.entries.length} entries)\n\n`,
   );
+  if (opts.guide === false) {
+    for (const note of notes) io.stdout(`${note}\n\n`);
+    return 0;
+  }
 
   if (host) {
     const source = opts.host ? "--host" : "the origin remote";
@@ -387,7 +393,7 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
   for (const note of notes) io.stdout(`${note}\n\n`);
 
   io.stdout(
-    `Next steps:
+    `Next steps (homeostat setup walks you through each one and checks it):
   1. Add your teammates and areas to ${CONFIG_FILE}
   2. Give each member a handle, then run homeostat codeowners
   3. Write your first entry under knowledge/core/ and run homeostat validate

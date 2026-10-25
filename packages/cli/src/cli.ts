@@ -6,6 +6,7 @@ import type {
   DocPatcher,
   Drafter,
   DraftJudge,
+  HostSetup,
   Merger,
   Provider,
   Retractor,
@@ -36,6 +37,7 @@ import { runMigrate } from "./migrate.ts";
 import { runExplain, runList, runSearch, runStatus } from "./query.ts";
 import { type ReviewOptions, runReview } from "./review.ts";
 import { runSeed, type SeedOptions } from "./seed.ts";
+import { runSetup, type SetupOptions, STEP_NAMES } from "./setup/index.ts";
 import { runSync, type SyncOptions } from "./sync.ts";
 import { runDashboard, runUp, type UpOptions } from "./up.ts";
 import { runValidate } from "./validate.ts";
@@ -47,6 +49,12 @@ export interface Io {
   color: boolean;
   /** Prompts for one line; absent when there is no terminal to ask. */
   ask?: (question: string) => Promise<string>;
+  /** Prompts for a secret without echoing it; absent when there is no terminal to ask. */
+  secret?: (question: string) => Promise<string>;
+  /** Runs a program (gh, claude) and collects its output; tests pass a fake. */
+  spawn?: Spawner;
+  /** Test seam for `homeostat setup`: the git-host client for a token it was given. */
+  hostSetup?: (host: "bitbucket" | "github", auth: HostAuth) => HostSetup;
   /** Environment variables, for tokens. Defaults to none, so tests never see real tokens. */
   env?: Readonly<Record<string, string | undefined>>;
   fetch?: typeof fetch;
@@ -74,6 +82,89 @@ export interface Io {
   topicProposer?: TopicProposer;
 }
 
+export interface SpawnResult {
+  /** The exit code; 127 when the program is not installed. */
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+export type Spawner = (
+  command: string,
+  args: string[],
+  opts?: { input?: string; cwd?: string },
+) => Promise<SpawnResult>;
+
+/** A git-host token, and on Bitbucket the account email that makes it an API token. */
+export interface HostAuth {
+  token: string;
+  user?: string;
+}
+
+const spawnProcess: Spawner = (command, args, opts = {}) =>
+  new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    const child = spawn(command, args, {
+      ...(opts.cwd ? { cwd: opts.cwd } : {}),
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", (e: NodeJS.ErrnoException) =>
+      resolve({ code: e.code === "ENOENT" ? 127 : 1, stdout, stderr: e.message }),
+    );
+    child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
+    child.stdin.on("error", () => {});
+    child.stdin.end(opts.input ?? "");
+  });
+
+/**
+ * Reads a line with the terminal in raw mode, echoing nothing. A paste that carries more after
+ * its line break (the same token twice, say) is returned whole, so the caller can reject it
+ * rather than leave the rest for the next prompt to echo.
+ */
+function secretTerminal(question: string): Promise<string> {
+  const stdin = process.stdin;
+  process.stdout.write(`${question}: `);
+  return new Promise((resolve, reject) => {
+    let value = "";
+    let ended = false;
+    let timer: NodeJS.Timeout | undefined;
+    const wasRaw = stdin.isRaw;
+    stdin.setRawMode(true);
+    stdin.setEncoding("utf8");
+    stdin.resume();
+    const finish = (error?: Error) => {
+      stdin.off("data", onData);
+      stdin.setRawMode(wasRaw);
+      stdin.pause();
+      process.stdout.write("\n");
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const onData = (chunk: string) => {
+      for (const ch of chunk) {
+        if (ended) {
+          value += ch;
+        } else if (ch === "\r" || ch === "\n" || ch === "\u0004") {
+          ended = true;
+          value += "\n";
+        } else if (ch === "\u0003") {
+          return finish(new Error("cancelled"));
+        } else if (ch === "\u007f" || ch === "\b") {
+          value = value.slice(0, -1);
+        } else {
+          value += ch;
+        }
+      }
+      // Wait a moment for the rest of a long paste, then stop listening.
+      if (ended && !timer) timer = setTimeout(() => finish(), 40);
+    };
+    stdin.on("data", onData);
+  });
+}
+
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
@@ -93,8 +184,9 @@ export const processIo: Io = {
   stdout: (t) => process.stdout.write(t),
   stderr: (t) => process.stderr.write(t),
   color: process.stdout.isTTY === true && !process.env.NO_COLOR,
-  ...(process.stdin.isTTY ? { ask: askTerminal } : {}),
+  ...(process.stdin.isTTY ? { ask: askTerminal, secret: secretTerminal } : {}),
   env: process.env,
+  spawn: spawnProcess,
   stdin: readStdin,
   background: (args) => {
     const bin = process.argv[1];
@@ -152,6 +244,22 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     });
 
   const collect = (value: string, previous: string[] = []) => [...previous, value];
+  program
+    .command("setup")
+    .description(
+      "Guided, re-runnable setup of a team KB: checks each step, asks only for what is missing, verifies it.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--check", "print the checklist; exit 1 if a required step is missing (safe in CI)")
+    .option("--step <name>", `run one step: ${STEP_NAMES.join(", ")}`)
+    .option("--join", "developer side: install the plugin, point it at this KB, check your member")
+    .option("--host <host>", `git host: ${HOSTS.join(" or ")} (default: detect)`)
+    .option("--repo <owner/name>", "a code repo the daily run reads; repeatable", collect)
+    .option("--runtime <runtime>", "how the agents reach Claude: api, claude-code, bedrock, vertex")
+    .action(async (opts: SetupOptions) => {
+      exitCode = await runSetup(opts, io);
+    });
+
   program
     .command("learn")
     .aliases(["add", "remember"])

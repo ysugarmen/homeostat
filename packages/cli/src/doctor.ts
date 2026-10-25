@@ -59,7 +59,10 @@ function hostApi(host: "github" | "bitbucket", io: Io) {
   return { token, get };
 }
 
-async function hostChecks(config: Config, io: Io): Promise<{ access: Check[]; blast: Check[] }> {
+export async function hostChecks(
+  config: Config,
+  io: Io,
+): Promise<{ access: Check[]; blast: Check[] }> {
   const sources = config.sources;
   const access: Check[] = [];
   const blast: Check[] = [];
