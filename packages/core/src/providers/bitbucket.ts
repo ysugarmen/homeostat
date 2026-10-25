@@ -1,17 +1,28 @@
 import { ProviderError, requestJson } from "./http.ts";
 import {
   type Commit,
+  type HostSetup,
   type NewPullRequest,
   type OpenPullRequest,
   type Person,
+  type PipelineSchedule,
   type Provider,
   type ProviderOptions,
   type PullRequest,
   type PullRequestDetails,
+  type RepoInfo,
   type RepoRef,
+  type RepoVariable,
   type ReviewComment,
   SKIP_MARKER,
 } from "./types.ts";
+
+interface BbSchedule {
+  uuid: string;
+  enabled: boolean;
+  cron_pattern: string;
+  target?: { ref_name?: string; selector?: { type?: string; pattern?: string } };
+}
 
 interface BbUser {
   display_name?: string;
@@ -84,7 +95,7 @@ export function bitbucketAuth(token: string, user?: string): string {
 }
 
 /** Bitbucket Cloud REST 2.0, with an access token or an account's API token (see bitbucketAuth). */
-export class BitbucketProvider implements Provider {
+export class BitbucketProvider implements Provider, HostSetup {
   readonly kind = "bitbucket";
   private readonly fetch: typeof fetch;
   private readonly baseUrl: string;
@@ -369,6 +380,117 @@ export class BitbucketProvider implements Provider {
       headers: this.headers(),
       body: { title: pr.title, reviewers: uuids.map((uuid) => ({ uuid })) },
     });
+  }
+
+  /** Everyone in the repo's workspace, by nickname: the handle reviewers are asked by. */
+  async listMembers(repo: RepoRef): Promise<Person[]> {
+    const members = await this.workspaceMembers(repo.owner);
+    return members.filter((u) => u.nickname).map(person);
+  }
+
+  async getRepository(repo: RepoRef): Promise<RepoInfo> {
+    const { body } = await requestJson("Bitbucket", this.fetch, this.repoUrl(repo), {
+      headers: this.headers(),
+    });
+    const r = body as { full_name: string; is_private?: boolean; mainbranch?: { name: string } };
+    return {
+      fullName: r.full_name,
+      defaultBranch: r.mainbranch?.name ?? "main",
+      ...(r.is_private === undefined ? {} : { private: r.is_private }),
+    };
+  }
+
+  async probePullRequests(repo: RepoRef): Promise<void> {
+    await requestJson("Bitbucket", this.fetch, `${this.repoUrl(repo)}/pullrequests?pagelen=1`, {
+      headers: this.headers(),
+    });
+  }
+
+  /** The `src` listing of the branch's root; folders are `commit_directory` entries. */
+  async topLevelFolders(repo: RepoRef, branch: string): Promise<string[]> {
+    const items = await this.paginate<{ path: string; type: string }>(
+      `${this.repoUrl(repo)}/src/${encodeURIComponent(branch)}/?pagelen=100`,
+    );
+    return items.filter((i) => i.type === "commit_directory").map((i) => i.path);
+  }
+
+  async listVariables(repo: RepoRef): Promise<RepoVariable[]> {
+    const vars = await this.paginate<{ uuid: string; key: string; secured?: boolean }>(
+      `${this.repoUrl(repo)}/pipelines_config/variables/?pagelen=100`,
+    );
+    return vars.map((v) => ({ uuid: v.uuid, key: v.key, secured: v.secured === true }));
+  }
+
+  /** Updates the variable with this key by its uuid, or creates it. The value is only ever sent. */
+  async setVariable(repo: RepoRef, key: string, value: string, secured: boolean): Promise<void> {
+    const existing = (await this.listVariables(repo)).find((v) => v.key === key);
+    const base = `${this.repoUrl(repo)}/pipelines_config/variables/`;
+    const body = { key, value, secured };
+    if (existing) {
+      await requestJson("Bitbucket", this.fetch, `${base}${encodeURIComponent(existing.uuid)}`, {
+        method: "PUT",
+        headers: this.headers(),
+        body: { ...body, uuid: existing.uuid },
+      });
+    } else {
+      await requestJson("Bitbucket", this.fetch, base, {
+        method: "POST",
+        headers: this.headers(),
+        body,
+      });
+    }
+  }
+
+  async listSchedules(repo: RepoRef): Promise<PipelineSchedule[]> {
+    const items = await this.paginate<BbSchedule>(
+      `${this.repoUrl(repo)}/pipelines_config/schedules/?pagelen=100`,
+    );
+    return items.map((s) => ({
+      uuid: s.uuid,
+      pipeline: s.target?.selector?.pattern ?? "",
+      branch: s.target?.ref_name ?? "",
+      cron: s.cron_pattern,
+      enabled: s.enabled,
+    }));
+  }
+
+  async createSchedule(
+    repo: RepoRef,
+    schedule: { pipeline: string; branch: string; cron: string },
+  ): Promise<void> {
+    await requestJson(
+      "Bitbucket",
+      this.fetch,
+      `${this.repoUrl(repo)}/pipelines_config/schedules/`,
+      {
+        method: "POST",
+        headers: this.headers(),
+        body: {
+          type: "pipeline_schedule",
+          enabled: true,
+          cron_pattern: schedule.cron,
+          target: {
+            type: "pipeline_ref_target",
+            ref_type: "branch",
+            ref_name: schedule.branch,
+            selector: { type: "custom", pattern: schedule.pipeline },
+          },
+        },
+      },
+    );
+  }
+
+  async enableSchedule(repo: RepoRef, uuid: string): Promise<void> {
+    await requestJson(
+      "Bitbucket",
+      this.fetch,
+      `${this.repoUrl(repo)}/pipelines_config/schedules/${encodeURIComponent(uuid)}`,
+      {
+        method: "PUT",
+        headers: this.headers(),
+        body: { type: "pipeline_schedule", enabled: true },
+      },
+    );
   }
 
   private workspaceMembers(workspace: string): Promise<BbUser[]> {

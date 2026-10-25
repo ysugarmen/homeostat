@@ -1,12 +1,15 @@
-import { requestJson } from "./http.ts";
+import { ProviderError, requestJson } from "./http.ts";
 import {
   type Commit,
+  type HostSetup,
   type NewPullRequest,
   type OpenPullRequest,
+  type Person,
   type Provider,
   type ProviderOptions,
   type PullRequest,
   type PullRequestDetails,
+  type RepoInfo,
   type RepoRef,
   type ReviewComment,
   SKIP_MARKER,
@@ -65,7 +68,7 @@ function nextLink(header: string | null): string | undefined {
  * GitHub REST API. Auth is the workflow's `GITHUB_TOKEN` for the same repo, or a fine-grained
  * PAT / GitHub App token when reading other repos in the org.
  */
-export class GitHubProvider implements Provider {
+export class GitHubProvider implements Provider, HostSetup {
   readonly kind = "github";
   private readonly fetch: typeof fetch;
   private readonly baseUrl: string;
@@ -244,6 +247,59 @@ export class GitHubProvider implements Provider {
           : {}),
       },
     });
+  }
+
+  /** The org's members; for a repo owned by a user (the orgs call 404s), its collaborators. */
+  async listMembers(repo: RepoRef): Promise<Person[]> {
+    let users: GhUser[];
+    try {
+      users = await this.paginate<GhUser>(
+        `${this.baseUrl}/orgs/${encodeURIComponent(repo.owner)}/members?per_page=100`,
+      );
+    } catch (e) {
+      if (!(e instanceof ProviderError) || e.status !== 404) throw e;
+      users = await this.paginate<GhUser>(`${this.repoUrl(repo)}/collaborators?per_page=100`);
+    }
+    return users.map((u) => ({ id: u.login }));
+  }
+
+  async getRepository(repo: RepoRef): Promise<RepoInfo> {
+    const { body } = await this.get(this.repoUrl(repo));
+    const r = body as {
+      full_name: string;
+      default_branch: string;
+      private?: boolean;
+      permissions?: { push?: boolean };
+    };
+    return {
+      fullName: r.full_name,
+      defaultBranch: r.default_branch,
+      ...(r.private === undefined ? {} : { private: r.private }),
+      ...(r.permissions ? { canWrite: r.permissions.push === true } : {}),
+    };
+  }
+
+  async probePullRequests(repo: RepoRef): Promise<void> {
+    await this.get(`${this.repoUrl(repo)}/pulls?state=all&per_page=1`);
+  }
+
+  async topLevelFolders(repo: RepoRef, branch: string): Promise<string[]> {
+    const { body } = await this.get(
+      `${this.repoUrl(repo)}/contents/?ref=${encodeURIComponent(branch)}`,
+    );
+    return (body as { name: string; type: string }[])
+      .filter((i) => i.type === "dir")
+      .map((i) => i.name);
+  }
+
+  async listSecretNames(repo: RepoRef): Promise<string[]> {
+    const { body } = await this.get(`${this.repoUrl(repo)}/actions/secrets?per_page=100`);
+    return (body as { secrets: { name: string }[] }).secrets.map((s) => s.name);
+  }
+
+  async actionsEnabled(repo: RepoRef): Promise<boolean> {
+    const { body } = await this.get(`${this.repoUrl(repo)}/actions/permissions`);
+    return (body as { enabled: boolean }).enabled === true;
   }
 
   private repoUrl(repo: RepoRef) {

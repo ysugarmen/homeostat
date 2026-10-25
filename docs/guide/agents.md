@@ -127,4 +127,4 @@ Each model call is logged locally by size, never content. Details: [runtimes](..
 | Bitbucket Pipelines | `init` writes custom pipelines (`homeostat-curator` runs the daily run, a name kept from 0.1 so existing schedules keep working); schedule them under Repository settings → Pipelines → Schedules. The token is the secured variable `HOMEOSTAT_BITBUCKET_TOKEN`: an access token, or an Atlassian API token with its account's email in `HOMEOSTAT_BITBUCKET_EMAIL` |
 | One shared box | `homeostat up` runs the daily run and the deep dive on their cron schedules and the digest on `digestDay`, and serves the dashboard. The Docker image does the same |
 
-Check a setup with `homeostat doctor --security`.
+`homeostat setup` stores the tokens as CI variables and, on Bitbucket, creates the schedules through the Pipelines API; `homeostat setup --check` says what is still missing ([setup](setup.md)). Check a setup's security with `homeostat doctor --security`.

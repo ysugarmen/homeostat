@@ -1,6 +1,6 @@
 # `homeostat setup`: one guided setup for a team's knowledge base
 
-Status: agreed design, 2026-10-25, for implementation.
+Status: implemented, 2026-10-25 (`homeostat setup`; see [the guide](../guide/setup.md)).
 
 ## The problem
 

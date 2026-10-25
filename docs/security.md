@@ -83,6 +83,13 @@ Controls:
    - Bitbucket repository access tokens over a workspace token
    - for Claude, workload identity federation on the API runtime (no stored key), or a cloud provider runtime (T5)
 3. **No secrets in prompts or logs.** Already true; add a test that fails if a token value ever reaches a prompt or the event log.
+4. **Secrets entered through `homeostat setup`:**
+   - Read from the terminal with echo off, trimmed, and refused when they hold whitespace or are the same value pasted twice.
+   - Verified with a real call before they are stored, and sent only to their own service: the git-host token to the git host, the API key to Anthropic, the webhook to Slack.
+   - Stored only as CI variables: Bitbucket secured repository variables through the Pipelines API, or GitHub Actions secrets through `gh secret set` with the value on standard input, never on a command line where other processes could read it.
+   - Kept in memory for the run, never written to disk, and scrubbed from every line setup prints. When a write is refused, setup prints where to paste the value, not the value.
+   - The admin access the variable writes need can come from a separate token, used for that write only.
+   - `setup --check` and the dashboard's setup record report only whether a variable exists. Tests assert that no secret reaches any output.
 
 ### T4. Supply chain of Homeostat itself — high
 

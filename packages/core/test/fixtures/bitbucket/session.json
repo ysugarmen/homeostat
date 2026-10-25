@@ -744,7 +744,7 @@
         "status": 200,
         "body": {
           "id": 42,
-          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "title": "homeostat: 2 lessons to review · lee · 2026-10-15",
           "description": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
           "author": {
             "display_name": "homeostat",
@@ -813,7 +813,7 @@
         "status": 200,
         "body": {
           "id": 43,
-          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "title": "homeostat: 2 lessons to review · lee · 2026-10-15",
           "description": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
           "author": {
             "display_name": "homeostat",
@@ -882,7 +882,7 @@
         "status": 200,
         "body": {
           "id": 44,
-          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "title": "homeostat: 2 lessons to review · lee · 2026-10-15",
           "description": "| review | Use withRetry (`use-with-retry`) | 55 | | middle band |",
           "author": {
             "display_name": "homeostat",
@@ -972,6 +972,216 @@
         "body": {
           "id": 42,
           "state": "DECLINED"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "repository",
+          "full_name": "acme/team-kb",
+          "is_private": true,
+          "mainbranch": {
+            "type": "branch",
+            "name": "main"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/pullrequests?pagelen=1"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 1,
+          "values": [],
+          "page": 1
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/integrations-api/src/main/?pagelen=100"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 100,
+          "page": 1,
+          "values": [
+            {
+              "type": "commit_directory",
+              "path": "services"
+            },
+            {
+              "type": "commit_directory",
+              "path": "apps"
+            },
+            {
+              "type": "commit_file",
+              "path": "README.md",
+              "size": 1200
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pipelines_config/variables/?pagelen=100"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 100,
+          "size": 2,
+          "page": 1,
+          "values": [
+            {
+              "type": "pipeline_variable",
+              "uuid": "{6f1d2c3b-0000-4000-8000-000000000001}",
+              "key": "HOMEOSTAT_BITBUCKET_TOKEN",
+              "secured": true
+            },
+            {
+              "type": "pipeline_variable",
+              "uuid": "{6f1d2c3b-0000-4000-8000-000000000002}",
+              "key": "HOMEOSTAT_BITBUCKET_EMAIL",
+              "value": "bot@acme.example",
+              "secured": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pipelines_config/variables/%7B6f1d2c3b-0000-4000-8000-000000000001%7D",
+        "body": {
+          "key": "HOMEOSTAT_BITBUCKET_TOKEN",
+          "value": "fixture-secret",
+          "secured": true,
+          "uuid": "{6f1d2c3b-0000-4000-8000-000000000001}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "pipeline_variable",
+          "uuid": "{6f1d2c3b-0000-4000-8000-000000000001}",
+          "key": "HOMEOSTAT_BITBUCKET_TOKEN",
+          "secured": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pipelines_config/variables/",
+        "body": {
+          "key": "ANTHROPIC_API_KEY",
+          "value": "fixture-secret",
+          "secured": true
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "type": "pipeline_variable",
+          "uuid": "{6f1d2c3b-0000-4000-8000-000000000003}",
+          "key": "ANTHROPIC_API_KEY",
+          "secured": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pipelines_config/schedules/?pagelen=100"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "pagelen": 100,
+          "page": 1,
+          "values": [
+            {
+              "type": "pipeline_schedule",
+              "uuid": "{9a8b7c6d-0000-4000-8000-000000000001}",
+              "enabled": false,
+              "cron_pattern": "0 0 6 * * ? *",
+              "target": {
+                "type": "pipeline_ref_target",
+                "ref_type": "branch",
+                "ref_name": "main",
+                "selector": {
+                  "type": "custom",
+                  "pattern": "homeostat-curator"
+                }
+              },
+              "created_on": "2026-10-01T09:00:00.000000Z",
+              "updated_on": "2026-10-01T09:00:00.000000Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pipelines_config/schedules/",
+        "body": {
+          "type": "pipeline_schedule",
+          "enabled": true,
+          "cron_pattern": "0 0 7 ? * MON *",
+          "target": {
+            "type": "pipeline_ref_target",
+            "ref_type": "branch",
+            "ref_name": "main",
+            "selector": {
+              "type": "custom",
+              "pattern": "homeostat-deep-dive"
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "type": "pipeline_schedule",
+          "uuid": "{9a8b7c6d-0000-4000-8000-000000000002}",
+          "enabled": true,
+          "cron_pattern": "0 0 7 ? * MON *"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://api.bitbucket.org/2.0/repositories/acme/team-kb/pipelines_config/schedules/%7B9a8b7c6d-0000-4000-8000-000000000001%7D",
+        "body": {
+          "type": "pipeline_schedule",
+          "enabled": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "type": "pipeline_schedule",
+          "uuid": "{9a8b7c6d-0000-4000-8000-000000000001}",
+          "enabled": true,
+          "cron_pattern": "0 0 6 * * ? *"
         }
       }
     }

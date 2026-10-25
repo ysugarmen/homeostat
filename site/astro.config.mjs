@@ -20,6 +20,7 @@ export default defineConfig({
           items: [
             { label: "Overview", link: "/docs/" },
             { label: "Quickstart", link: "/docs/guide/quickstart/" },
+            { label: "Setup", link: "/docs/guide/setup/" },
             { label: "A first base", link: "/docs/guide/bootstrap/" },
             { label: "Moving to 0.2", link: "/docs/guide/migrating/" },
           ],

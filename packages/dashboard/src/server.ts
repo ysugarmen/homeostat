@@ -11,7 +11,9 @@ import {
   metricsReport,
   readEvents,
   readKbFiles,
+  readSetupRecord,
   sectionUsage,
+  setupRows,
   validate,
 } from "@homeostat/core";
 import {
@@ -35,6 +37,7 @@ import {
 } from "./metrics.ts";
 import { performancePage } from "./performance.ts";
 import { applySection, SECTIONS } from "./settings.ts";
+import { setupPanel } from "./setup-panel.ts";
 import {
   coveragePage,
   desirePathsPage,
@@ -154,6 +157,19 @@ export function dashboardView(kbRoot: string, snap: Snapshot): DashboardView {
 }
 
 /**
+ * The Setup card from local files only: the KB checkout and, outside a shared build, the
+ * ignored record of the last `homeostat setup` checks. No network call, no token.
+ */
+function setupCard(kbRoot: string, shared: boolean) {
+  const record = shared ? {} : readSetupRecord(kbRoot);
+  const rows = setupRows(kbRoot, readKbFiles(kbRoot), record, { shared });
+  return {
+    rows,
+    html: setupPanel(rows, { shared, ...(record.join ? { join: record.join } : {}) }),
+  };
+}
+
+/**
  * One GET page. With a `token` the settings pages are forms; without one (the shared, static
  * build) they are read-only, and the greeting, which names the checkout's git user, is left out.
  */
@@ -184,6 +200,7 @@ export function renderPage(
               e.frontmatter.status === "accepted" && e.frontmatter.created >= week.slice(0, 10),
           ).length,
           decided: decidedLessons(autoState),
+          setup: setupCard(v.kbRoot, opts.shared === true),
         }),
       );
     }

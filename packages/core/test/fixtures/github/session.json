@@ -270,7 +270,7 @@
         "status": 200,
         "body": {
           "number": 8,
-          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "title": "homeostat: 2 lessons to review · lee · 2026-10-15",
           "html_url": "https://github.com/acme/team-kb/pull/8",
           "user": {
             "login": "homeostat-bot"
@@ -305,7 +305,7 @@
         "status": 200,
         "body": {
           "number": 9,
-          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "title": "homeostat: 2 lessons to review · lee · 2026-10-15",
           "html_url": "https://github.com/acme/team-kb/pull/9",
           "user": {
             "login": "homeostat-bot"
@@ -340,7 +340,7 @@
         "status": 200,
         "body": {
           "number": 10,
-          "title": "homeostat: 2 lessons to review \u00b7 lee \u00b7 2026-10-15",
+          "title": "homeostat: 2 lessons to review · lee · 2026-10-15",
           "html_url": "https://github.com/acme/team-kb/pull/10",
           "user": {
             "login": "homeostat-bot"
@@ -404,6 +404,172 @@
         "status": 201,
         "body": {
           "id": 1
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/orgs/acme/members?per_page=100"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "link": "<https://api.github.com/organizations/1001/members?per_page=100&page=2>; rel=\"next\""
+        },
+        "body": [
+          {
+            "login": "dana",
+            "id": 11,
+            "type": "User"
+          },
+          {
+            "login": "lee",
+            "id": 12,
+            "type": "User"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/organizations/1001/members?per_page=100&page=2"
+      },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "login": "sam",
+            "id": 13,
+            "type": "User"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/orgs/ada/members?per_page=100"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "message": "Not Found",
+          "documentation_url": "https://docs.github.com/rest/orgs/members#list-organization-members",
+          "status": "404"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/ada/notes/collaborators?per_page=100"
+      },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "login": "ada",
+            "id": 21,
+            "type": "User",
+            "permissions": {
+              "admin": true,
+              "push": true,
+              "pull": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/team-kb"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "full_name": "acme/team-kb",
+          "private": true,
+          "default_branch": "main",
+          "permissions": {
+            "admin": false,
+            "push": true,
+            "pull": true
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/web-app/pulls?state=all&per_page=1"
+      },
+      "response": {
+        "status": 200,
+        "body": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/web-app/contents/?ref=main"
+      },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "name": "apps",
+            "path": "apps",
+            "type": "dir",
+            "sha": "a1"
+          },
+          {
+            "name": "packages",
+            "path": "packages",
+            "type": "dir",
+            "sha": "a2"
+          },
+          {
+            "name": "package.json",
+            "path": "package.json",
+            "type": "file",
+            "sha": "a3",
+            "size": 900
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/team-kb/actions/secrets?per_page=100"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "total_count": 1,
+          "secrets": [
+            {
+              "name": "ANTHROPIC_API_KEY",
+              "created_at": "2026-10-01T09:00:00Z",
+              "updated_at": "2026-10-01T09:00:00Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/acme/team-kb/actions/permissions"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "enabled": true,
+          "allowed_actions": "all"
         }
       }
     }
