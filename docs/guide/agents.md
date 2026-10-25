@@ -123,8 +123,8 @@ Each model call is logged locally by size, never content. Details: [runtimes](..
 
 | Where | How |
 | --- | --- |
-| GitHub Actions | `init` writes `homeostat-curator.yml` (the daily run; the name is kept from 0.1), `homeostat-deep-dive.yml` and `homeostat-digest.yml` |
-| Bitbucket Pipelines | `init` writes custom pipelines (`homeostat-curator` runs the daily run, a name kept from 0.1 so existing schedules keep working); schedule them under Repository settings → Pipelines → Schedules. The token is the secured variable `HOMEOSTAT_BITBUCKET_TOKEN`: an access token, or an Atlassian API token with its account's email in `HOMEOSTAT_BITBUCKET_EMAIL` |
+| GitHub Actions | `init` writes `homeostat-curator.yml` (the daily run; the name is kept from 0.1), `homeostat-deep-dive.yml` and `homeostat-digest.yml`. The token is the Actions secret `HOMEOSTAT_GIT_TOKEN` (the old `HOMEOSTAT_GITHUB_TOKEN` still works), else the workflow's own `GITHUB_TOKEN`, which reaches the KB repo only |
+| Bitbucket Pipelines | `init` writes custom pipelines (`homeostat-curator` runs the daily run, a name kept from 0.1 so existing schedules keep working); schedule them under Repository settings → Pipelines → Schedules. The token is the secured variable `HOMEOSTAT_GIT_TOKEN`: an access token, or an Atlassian API token with the email of the account that created it in `HOMEOSTAT_GIT_EMAIL` ([which token](setup.md#git-host-token)). The names up to 0.3.2, `HOMEOSTAT_BITBUCKET_TOKEN` and `HOMEOSTAT_BITBUCKET_EMAIL`, still work |
 | One shared box | `homeostat up` runs the daily run and the deep dive on their cron schedules and the digest on `digestDay`, and serves the dashboard. The Docker image does the same |
 
 `homeostat setup` stores the tokens as CI variables and, on Bitbucket, creates the schedules through the Pipelines API; `homeostat setup --check` says what is still missing ([setup](setup.md)). Check a setup's security with `homeostat doctor --security`.

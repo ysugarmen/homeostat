@@ -1,7 +1,7 @@
 # Homeostat on a shared box: the dashboard plus the scheduled agents (homeostat up).
 #   docker build -t homeostat .
 #   docker run -p 4747:4747 -v /path/to/kb-checkout:/kb \
-#     -e ANTHROPIC_API_KEY -e HOMEOSTAT_GITHUB_TOKEN homeostat
+#     -e ANTHROPIC_API_KEY -e HOMEOSTAT_GIT_TOKEN homeostat
 # The KB checkout is mounted at /kb; the agents commit and push from it, so it needs a remote
 # and credentials the container can use (e.g. an https remote with a token).
 FROM node:24-slim

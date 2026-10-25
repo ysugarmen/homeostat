@@ -67,7 +67,7 @@ Otherwise:
 homeostat learn --dir "<kb>" --title "<title>" --rule "<rule>" --why "<why>" --area <area> --author <member-id> [--topic <topic>]
 ```
 
-Add `--scope "<glob>"` (repeatable) only when the rule applies to narrower paths than the area. Run the command from the session's working directory, so the CLI can tell which repo the rule is for; `--repo <name>` overrides it. A URL needs `HOMEOSTAT_BITBUCKET_TOKEN` or `HOMEOSTAT_GITHUB_TOKEN`; if the CLI says the token is missing, tell the user which variable to set rather than retrying.
+Add `--scope "<glob>"` (repeatable) only when the rule applies to narrower paths than the area. Run the command from the session's working directory, so the CLI can tell which repo the rule is for; `--repo <name>` overrides it. A URL needs `HOMEOSTAT_GIT_TOKEN` (the old `HOMEOSTAT_BITBUCKET_TOKEN` and `HOMEOSTAT_GITHUB_TOKEN` also work); if the CLI says the token is missing, tell the user which variable to set rather than retrying.
 
 If the CLI reports validation errors, fix the draft (usually length) and run it again. Nothing is written until it passes.
 
