@@ -32,6 +32,7 @@ export default defineConfig({
             { label: "The agents", link: "/docs/guide/agents/" },
             { label: "Using it from your tools", link: "/docs/guide/clients/" },
             { label: "Dashboard", link: "/docs/guide/dashboard/" },
+            { label: "Measuring selection", link: "/docs/guide/eval/" },
           ],
         },
         {

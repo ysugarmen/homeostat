@@ -49,3 +49,14 @@ for (const file of walk(source)) {
   count++;
 }
 console.log(`synced ${count} pages from docs/`);
+
+// Every synced page must be reachable from the sidebar, or a new guide ships invisible.
+const config = readFileSync(join(here, "../astro.config.mjs"), "utf8");
+const linked = new Set([...config.matchAll(/link:\s*"([^"]+)"/g)].map((m) => m[1]));
+const missing = walk(source)
+  .map((f) => route(relative(source, f).split("\\").join("/")))
+  .filter((r) => !linked.has(r));
+if (missing.length) {
+  console.error(`not in the sidebar (site/astro.config.mjs): ${missing.join(", ")}`);
+  process.exit(1);
+}
