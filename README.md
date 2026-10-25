@@ -14,15 +14,14 @@ Homeostat closes the loop:
 ## Get started
 
 ```sh
-# In a new or existing repo for your team's knowledge base:
-npx --yes homeostat@0.3.2 init
+# In a clone of a new or existing repo for your team's knowledge base:
+npx --yes homeostat@0.3.2 setup
 
-# In Claude Code, on each developer's machine:
-claude plugin marketplace add ysugarmen/homeostat
-claude plugin install homeostat@homeostat
+# Then each developer, once, in their own clone (installs the Claude Code plugin):
+npx --yes homeostat@0.3.2 setup --join
 ```
 
-The [quickstart](docs/guide/quickstart.md) takes you from there to the first daily run in about ten minutes. The full guide starts at [docs/index.md](docs/index.md).
+`setup` is a re-runnable checklist: it asks only for what is missing, checks each step with a real call, and stores the CI secrets for you ([every step](docs/guide/setup.md)). The [quickstart](docs/guide/quickstart.md) takes you from there to the first daily run in about ten minutes. The full guide starts at [docs/index.md](docs/index.md).
 
 > 0.2 adds knowledge bases for several code repos, rules grouped into topic files, and `homeostat bootstrap`. Coming from 0.1: [moving to 0.2](docs/guide/migrating.md). How it works technically: [docs/architecture.md](docs/architecture.md).
 
@@ -41,6 +40,7 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 
 | Command | What it does |
 | --- | --- |
+| `homeostat setup [--check] [--step <name>] [--join]` | Guided, re-runnable setup of a team KB: checks each step, asks only for what is missing, verifies tokens and stores them as CI secrets; `--join` sets up a developer's machine |
 | `homeostat init` | Scaffold `homeostat.yaml`, `knowledge/` and the CI jobs (validate on PRs, the daily run, weekly deep dive) in a KB repo |
 | `homeostat validate [--fix]` | Check the config and every entry; `--fix` rewrites stale scores and token counts |
 | `homeostat learn [comment-url]` | Save one lesson from flags, prompts or a PR review comment; it applies to your sessions now and goes to tomorrow's daily run |

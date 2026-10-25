@@ -2,7 +2,34 @@
 
 You need Node 22.18 or later and a git repo for the knowledge base (KB). It can be a new, empty repo; your code stays where it is.
 
-## 1. Create the knowledge base
+## Run setup
+
+```sh
+git clone git@github.com:your-org/team-kb.git && cd team-kb   # or git@bitbucket.org:your-workspace/team-kb.git
+npx --yes homeostat@0.3.2 setup
+```
+
+`setup` walks a checklist and checks each step as it goes:
+- the KB repo and host
+- a CI token, verified and stored as a CI variable
+- your code repos and their areas
+- the team and reviewers
+- the model credential
+- Slack
+- the schedules
+- CODEOWNERS
+- one commit
+- a first base
+
+Run it again at any time: it asks only for what is missing or broken. `homeostat setup --check` prints where things stand. Each teammate then runs `npx --yes homeostat@0.3.2 setup --join` once in their own clone. [Every step, and why the optional ones are optional](setup.md).
+
+Before you invite the team, run `homeostat doctor --security`.
+
+## By hand
+
+The rest of this page is what `setup` does for you, step by step, for when you want to do it yourself or need to know where something lives.
+
+### 1. Create the knowledge base
 
 ```sh
 git clone git@github.com:your-org/team-kb.git && cd team-kb   # or git@bitbucket.org:your-workspace/team-kb.git
@@ -18,7 +45,7 @@ A handle is your GitHub login or, on Bitbucket, your Bitbucket nickname (Persona
 
 It also prints which tokens to create and how to protect the branch.
 
-## 2. Describe your team
+### 2. Describe your team
 
 Edit `homeostat.yaml` (all keys: [configuration](config.md)):
 
@@ -62,7 +89,7 @@ npx --yes homeostat@0.3.2 codeowners
 npx --yes homeostat@0.3.2 validate
 ```
 
-## 3. Build a first base
+### 3. Build a first base
 
 With your code repos checked out next to the KB:
 
@@ -72,7 +99,7 @@ npx --yes homeostat@0.3.2 bootstrap --dry-run
 
 It lists every file it would read from each repo (existing docs, schemas and migrations, charts and pipelines) and what the model calls would cost. Run it without `--dry-run` to import the docs and draft the rest; you get one PR per repo to correct and merge ([details](bootstrap.md)).
 
-## 4. Write a first rule
+### 4. Write a first rule
 
 ```sh
 npx --yes homeostat@0.3.2 learn --area integrations \
@@ -83,7 +110,7 @@ npx --yes homeostat@0.3.2 learn --area integrations \
 
 Or capture it from a review comment: `homeostat learn <comment URL>`. Commit on a branch, open a PR, and once it is approved the rule is live.
 
-## 5. Get it to your agents
+### 5. Get it to your agents
 
 - **Claude Code**: install the plugin and point it at your KB checkout ([details](clients.md)):
 
@@ -95,7 +122,7 @@ Or capture it from a review comment: `homeostat learn <comment URL>`. Commit on 
 - **Cursor, Copilot, AGENTS.md**: from a code repo, run `homeostat export --kb ../team-kb`.
 - **Any MCP client**: run `homeostat mcp`.
 
-## 6. Turn on the daily run
+### 6. Turn on the daily run
 
 Add the secrets `init` printed: a git-host token and a Claude credential, or use your cloud account ([runtimes](../runtimes.md)). Run `homeostat curate --show-prompts` once to see exactly what would be sent, and `homeostat daily --dry-run` to see what it would decide. From then on, each morning, every developer's lessons and what their reviewers taught them arrive in one PR per developer. Confident lessons merge themselves; only the uncertain ones wait for a reviewer ([how it decides](agents.md#daily)). Developers need nothing beyond the plugin: their sessions sync in the background.
 
