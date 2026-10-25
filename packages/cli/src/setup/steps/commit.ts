@@ -22,7 +22,7 @@ const PATHS = [
 const changed = (ctx: SetupContext) =>
   (git(ctx.root, "status", "--porcelain", "--", ...PATHS) ?? "").split("\n").filter(Boolean);
 
-/** Step 11: one validated commit, pushed to a branch for review (or to the base branch if you say so). */
+/** Step 10: one validated commit, pushed to a branch for review (or to the base branch if you say so). */
 export const commitStep: Step = {
   info: setupStep("commit") as NonNullable<ReturnType<typeof setupStep>>,
   async detect(ctx) {

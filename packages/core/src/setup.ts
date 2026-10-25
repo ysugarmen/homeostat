@@ -95,13 +95,6 @@ export const SETUP_STEPS: readonly SetupStepInfo[] = [
     remote: true,
   },
   {
-    name: "schedules",
-    title: "Schedules",
-    required: true,
-    why: "Nothing runs on its own without them.",
-    remote: true,
-  },
-  {
     name: "codeowners",
     title: "CODEOWNERS and branch protection",
     required: false,
@@ -113,6 +106,13 @@ export const SETUP_STEPS: readonly SetupStepInfo[] = [
     title: "Commit and push",
     required: true,
     why: "CI runs what is pushed, not what is on your laptop.",
+    remote: true,
+  },
+  {
+    name: "schedules",
+    title: "Schedules",
+    required: true,
+    why: "Nothing runs on its own without them.",
     remote: true,
   },
   {

@@ -442,7 +442,7 @@ describe("homeostat setup on GitHub", () => {
     expect(h.out.calls).toContain("gh secret set ANTHROPIC_API_KEY -R acme/team-kb");
     expect(h.out.calls.join("\n")).not.toContain(API_KEY);
     expect(existsSync(join(repo.dir, ".github/workflows/homeostat-curator.yml"))).toBe(true);
-    expect(h.out.stdout).toMatch(/✓ +9\. Schedules/);
+    expect(h.out.stdout).toMatch(/✓ +11\. Schedules/);
     expectNoSecret(h.out);
   });
 
@@ -478,7 +478,7 @@ describe("homeostat setup without a terminal, --check and --join", () => {
     const h = harness({ host: "bitbucket", state: first.state, env: envFor });
     expect(await setup(h.io, repo.dir, "--check")).toBe(0);
     expect(h.out.stdout).toMatch(/\? +2\. Git-host token for CI · .*403, needs repo admin to read/);
-    expect(h.out.stdout).toMatch(/\? +9\. Schedules · 403, needs repo admin to read/);
+    expect(h.out.stdout).toMatch(/\? +11\. Schedules · 403, needs repo admin to read/);
     expect(h.out.stdout).toContain("No required step is missing, but 3 could not be checked");
     expect(h.out.stdout).not.toContain("Every required step is done");
     expect(h.out.stdout.match(/admin:pipeline:bitbucket/g)).toHaveLength(1);

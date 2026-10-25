@@ -35,9 +35,9 @@ Without a terminal (in CI, or piped), `setup` asks nothing. It prints the checkl
 | 6 | `reviewers`: reviewers | optional | picked from the members | `team.reviewers` |
 | 7 | `model`: model credential | required for drafting | `api`: a free models call with the key. `claude-code`: guides you through `claude setup-token`. `bedrock`, `vertex`: prints what the CI identity needs | a secured CI variable; `agents.runtime` |
 | 8 | `slack`: Slack | optional | one test post to the webhook, which you confirm arrived; then the reviewers' Slack member IDs | a secured CI variable; `notifications.slackWebhookEnv`; members' `slack` |
-| 9 | `schedules`: schedules | required for anything to run on its own | Bitbucket: Pipelines schedules created or enabled through the API (daily run, weekly deep dive, weekly digest when Slack is set). GitHub: the workflows' crons are in the files, and Actions are on | schedules on the KB repo |
-| 10 | `codeowners`: CODEOWNERS and branch protection | optional, recommended | writes CODEOWNERS; reads protection back where the token may, else prints the exact settings to click | `.bitbucket/CODEOWNERS` or `CODEOWNERS` |
-| 11 | `commit`: commit and push | required | `validate` passes; one commit, `homeostat: setup`, on the branch `homeostat-setup` for review, or on `main` if you say so (an empty repo's first commit goes to `main`) | |
+| 9 | `codeowners`: CODEOWNERS and branch protection | optional, recommended | writes CODEOWNERS; reads protection back where the token may, else prints the exact settings to click | `.bitbucket/CODEOWNERS` or `CODEOWNERS` |
+| 10 | `commit`: commit and push | required | `validate` passes; one commit, `homeostat: setup`, on the branch `homeostat-setup` for review, or on `main` if you say so (an empty repo's first commit goes to `main`) | |
+| 11 | `schedules`: schedules | required for anything to run on its own (after the commit: Bitbucket can only schedule a pipeline that is on the branch) | Bitbucket: Pipelines schedules created or enabled through the API (daily run, weekly deep dive, weekly digest when Slack is set). GitHub: the workflows' crons are in the files, and Actions are on | schedules on the KB repo |
 | 12 | `bootstrap`: first base | optional | a `bootstrap --dry-run` preview, then asks before anything is sent | one PR per repo |
 | 13 | `teammates`: teammates | optional | prints the one line each teammate runs | |
 

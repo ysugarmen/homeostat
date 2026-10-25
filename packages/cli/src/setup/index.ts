@@ -41,9 +41,10 @@ export const STEPS: readonly Step[] = [
   reviewersStep,
   modelStep,
   slackStep,
-  schedulesStep,
   codeownersStep,
   commitStep,
+  // After the commit: Bitbucket can only schedule a pipeline that is on the branch.
+  schedulesStep,
   bootstrapStep,
   teammatesStep,
 ];

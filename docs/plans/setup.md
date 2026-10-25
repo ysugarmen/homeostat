@@ -45,9 +45,9 @@ Each step shows ✓ done, ✗ missing, or ○ optional and not set. An optional 
 | 6 | Reviewers | optional: without them, area owners, then seniors and leads, review the middle band | picked from members | `team.reviewers` |
 | 7 | Model credential | required for drafting (without it, `daily --no-reviews` only decides hand-written lessons) | runtime chosen (`api`, `claude-code`, `bedrock`, `vertex`); `api` key checked with a free models call; `claude-code` guides you to `claude setup-token`; cloud runtimes print what the CI identity needs | secured CI variable; `agents.runtime`, model |
 | 8 | Slack | optional: without it, nobody is pinged about the review queue or the weekly digest | the webhook gets one test post that you confirm arrived; reviewers' Slack member IDs asked (with where to find them) | secured CI variable; `notifications.slackWebhookEnv`; members' `slack` |
-| 9 | Schedules | required for anything to run on its own | Bitbucket: Pipelines schedules created or updated through the API (daily, deep dive weekly, digest weekly); GitHub: the workflow crons already in the files, and Actions enabled | schedules on the KB repo |
-| 10 | CODEOWNERS and branch protection | optional but recommended: without protection, anyone can merge unreviewed rules | CODEOWNERS generated; protection read back where the API allows, otherwise the exact settings to click | `.bitbucket/CODEOWNERS` or `.github/CODEOWNERS` |
-| 11 | Commit and push | required | `validate` passes; one commit "homeostat: setup" on a branch, or on `main` if you say so | |
+| 9 | CODEOWNERS and branch protection | optional but recommended: without protection, anyone can merge unreviewed rules | CODEOWNERS generated; protection read back where the API allows, otherwise the exact settings to click | `.bitbucket/CODEOWNERS` or `.github/CODEOWNERS` |
+| 10 | Commit and push | required | `validate` passes; one commit "homeostat: setup" on a branch, or on `main` if you say so | |
+| 11 | Schedules | required for anything to run on its own (after the commit: Bitbucket can only schedule a pipeline that is on the branch) | Bitbucket: Pipelines schedules created or updated through the API (daily, deep dive weekly, digest weekly); GitHub: the workflow crons already in the files, and Actions enabled | schedules on the KB repo |
 | 12 | First base | optional: without it the KB starts empty and fills from reviews | `bootstrap --dry-run` preview, then asks | one PR per repo |
 | 13 | Teammates | optional | prints the one-line join command and the plugin install lines | |
 

@@ -5,7 +5,7 @@ import { PROTECTION_HELP } from "../../init.ts";
 import { TOKEN_VARS } from "../../provider.ts";
 import { EMAIL_VAR, type Step } from "../context.ts";
 
-/** Step 10 (optional, recommended): CODEOWNERS written, and branch protection read back or explained. */
+/** Step 9 (optional, recommended): CODEOWNERS written, and branch protection read back or explained. */
 export const codeownersStep: Step = {
   info: setupStep("codeowners") as NonNullable<ReturnType<typeof setupStep>>,
   async detect(ctx) {

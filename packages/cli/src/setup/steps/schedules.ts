@@ -1,7 +1,7 @@
 import { bitbucketCron, setupStep, wantedSchedules } from "@homeostat/core";
 import { adminHint, describeError, errorStatus, repoUrl, type Step } from "../context.ts";
 
-/** Step 9: Bitbucket Pipelines schedules through the API; on GitHub, the workflows and Actions. */
+/** Step 11: Bitbucket Pipelines schedules through the API; on GitHub, the workflows and Actions. */
 export const schedulesStep: Step = {
   info: setupStep("schedules") as NonNullable<ReturnType<typeof setupStep>>,
   async detect(ctx) {
