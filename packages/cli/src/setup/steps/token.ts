@@ -1,66 +1,43 @@
 import { setupStep } from "@homeostat/core";
 import type { HostAuth } from "../../cli.ts";
+import { TOKEN_SCOPES } from "../../init.ts";
+import { EMAIL_VARS, LEGACY_TOKEN_VAR, TOKEN_VARS } from "../../provider.ts";
 import {
   describeError,
   EMAIL_VAR,
   errorStatus,
+  HOST_NAME,
   parseRepoRef,
   type SetupContext,
   type Step,
   TOKEN_VAR,
 } from "../context.ts";
 
-const HELP = {
-  bitbucket: `  The daily run needs one token that reaches the KB repo and every code repo:
-    - an Atlassian API token of a bot account in the workspace, plus that account's email (any
-      plan; scopes read:repository:bitbucket, write:repository:bitbucket,
-      read:pullrequest:bitbucket, write:pullrequest:bitbucket, read:workspace:bitbucket), or
-    - a workspace access token (Bitbucket Premium; scopes repository:write, pullrequest:write).
-  A repository access token reaches one repo only, so it is not enough. Code repos need read
-  access only. Storing it as a CI variable needs admin on the KB repo (admin:pipeline:bitbucket);
-  setup asks whether to use this token or a separate one for that write.`,
-  github: `  The daily run reads PRs from the code repos and opens PRs on the KB repo. Create a
-  fine-grained token (or a GitHub App) with:
-    code repos: Pull requests read, Contents read;  KB repo: Pull requests write, Contents write;
-    org: Members read (to ask reviewers).`,
-};
-
 /** Step 2: the CI token, verified with real reads and stored where CI reads it. */
 export const tokenStep: Step = {
   info: setupStep("token") as NonNullable<ReturnType<typeof setupStep>>,
-  supply: `${TOKEN_VAR.bitbucket} (and ${EMAIL_VAR} for an API token) or ${TOKEN_VAR.github} in the environment`,
+  supply: `${TOKEN_VAR} in the environment (on Bitbucket with ${EMAIL_VAR} for an Atlassian API token)`,
   async detect(ctx) {
     const host = ctx.host();
     if (!host) return { state: "missing", reason: "needs the host step first" };
-    const name = TOKEN_VAR[host];
-    const exists = await ctx.secretExists(name);
-    if (exists === true) return { state: "done", reason: `${name} is stored` };
-    if (exists === false) return { state: "missing", reason: `${name} is not stored` };
-    return {
-      state: "unknown",
-      reason: `cannot tell whether ${name} is stored: ${ctx.ciUnreadable}`,
-    };
+    return ctx.secretState(TOKEN_VAR, LEGACY_TOKEN_VAR[host]);
   },
   async run(ctx) {
     const host = ctx.host();
     const kb = ctx.kbRepo();
     if (!host || !kb) return;
-    ctx.say(HELP[host]);
-    const token = await ctx.secret(`  ${TOKEN_VAR[host]}`, TOKEN_VAR[host]);
+    ctx.say(TOKEN_SCOPES[host].replace(/^/gm, "  "));
+    const token = await ctx.secret(`the ${HOST_NAME[host]} token`, TOKEN_VARS[host]);
     if (!token) return;
     let auth: HostAuth = { token };
     if (host === "bitbucket") {
-      const user =
-        ctx.io.env?.[EMAIL_VAR] ??
-        (await ctx.ask(
-          "  Its account email, for an API token (empty for a workspace access token)",
-        ));
+      const user = EMAIL_VARS.map((v) => ctx.io.env?.[v]).find(Boolean) ?? (await ctx.askEmail());
       if (user) auth = { token, user };
     }
     const verified = await verify(ctx, auth);
     if (!verified) return;
     ctx.auth = verified;
-    const stored = await ctx.storeSecret(TOKEN_VAR[host], verified.token);
+    const stored = await ctx.storeSecret(TOKEN_VAR, verified.token);
     if (host === "bitbucket" && verified.user && stored)
       await ctx.storeSecret(EMAIL_VAR, verified.user, false);
   },
@@ -88,16 +65,18 @@ async function verify(ctx: SetupContext, auth: HostAuth): Promise<HostAuth | und
     if (host === "bitbucket" && auth.user && errorStatus(e) === 401) {
       try {
         await check({ token: auth.token });
-        ctx.say("  That is an access token (Bearer): no email needed.");
+        ctx.say("  That is an access token, so no email is needed.");
         auth = { token: auth.token };
       } catch {
-        ctx.say(`  ${ctx.paint("red", "✗")} ${describeError(e)}`);
+        ctx.bad(describeError(e));
         return undefined;
       }
     } else {
-      ctx.say(`  ${ctx.paint("red", "✗")} ${describeError(e)}`);
+      ctx.bad(describeError(e));
       if (host === "bitbucket" && !auth.user && errorStatus(e) === 401)
-        ctx.say("  An Atlassian API token needs its account email: rerun and give it.");
+        ctx.say(
+          "  An Atlassian API token also needs the email of the account that created it: rerun and give it.",
+        );
       return undefined;
     }
   }
@@ -107,8 +86,6 @@ async function verify(ctx: SetupContext, auth: HostAuth): Promise<HostAuth | und
       : auth.user
         ? "Atlassian API token (with its account email)"
         : "access token";
-  ctx.say(
-    `  ${ctx.paint("green", "✓")} the ${kind} reads the KB repo, the code repos and the members`,
-  );
+  ctx.ok(`the ${kind} reads the KB repo, the code repos and the members`);
   return auth;
 }

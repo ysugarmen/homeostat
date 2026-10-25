@@ -96,7 +96,7 @@ async function run(args: string[], extra: Partial<Io> = {}) {
     stdout: (s) => (stdout += s),
     stderr: (s) => (stderr += s),
     color: false,
-    env: { HOMEOSTAT_BITBUCKET_TOKEN: "t" },
+    env: { HOMEOSTAT_GIT_TOKEN: "t" },
     now: () => new Date("2026-10-13T06:00:00Z"),
     ...extra,
   });

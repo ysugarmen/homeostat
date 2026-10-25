@@ -58,8 +58,9 @@ Each step shows ✓ done, ✗ missing, or ○ optional and not set. An optional 
 - **Bitbucket:** stored as secured repository variables on the KB repo through the Pipelines variables API (`/repositories/{ws}/{repo}/pipelines_config/variables/`), created or updated by name.
 - **GitHub:** stored as Actions secrets through `gh secret set` if `gh` is installed and logged in. Otherwise setup prints the exact `gh` command to run, because encrypting a secret for the REST API needs libsodium, a dependency we don't add.
 - Storing needs admin access to the KB repo, which the CI token usually lacks. Setup asks whether to use the same token or a separate one for this one write. If the write is refused, it prints exactly where to paste the value in the UI. The values are never echoed.
-- Variable names are the ones the CI files read (`HOMEOSTAT_BITBUCKET_TOKEN`, `HOMEOSTAT_BITBUCKET_EMAIL`, `HOMEOSTAT_GITHUB_TOKEN`, `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, the Slack webhook variable). `--check` reports only whether each exists, never its value.
-- Bitbucket token types are explained at the prompt: an Atlassian API token plus its account email (any plan), or a workspace access token (Premium). Setup detects which one was pasted from the verification call.
+- Variable names are the ones the CI files read (`HOMEOSTAT_GIT_TOKEN`, `HOMEOSTAT_GIT_EMAIL`, `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, the Slack webhook variable). `--check` reports only whether each exists, never its value.
+- Variable names are provider-agnostic since the first real run: the per-host names before them (`HOMEOSTAT_BITBUCKET_TOKEN`, `HOMEOSTAT_BITBUCKET_EMAIL`, `HOMEOSTAT_GITHUB_TOKEN`) are still read, after the new ones, and never renamed for the user.
+- Bitbucket token types are named in two lines before the prompt (an Atlassian API token plus its account email, any plan; or a workspace access token, Premium), with the details in the guide. Setup detects which one was pasted from the verification call.
 
 ## What it never does
 

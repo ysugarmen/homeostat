@@ -1,4 +1,5 @@
 import { bitbucketCron, setupStep, wantedSchedules } from "@homeostat/core";
+import { plural } from "../../format.ts";
 import { adminHint, describeError, errorStatus, repoUrl, type Step } from "../context.ts";
 
 /** Step 11: Bitbucket Pipelines schedules through the API; on GitHub, the workflows and Actions. */
@@ -11,6 +12,11 @@ export const schedulesStep: Step = {
     const kb = ctx.kbRepo();
     const host = ctx.host();
     if (!config || !kb || !host) return { state: "missing", reason: "needs the host step first" };
+    // Scheduled in this run counts as scheduled: the host's list lags behind a write.
+    const wanted = wantedSchedules(config);
+    const fresh = wanted.filter((w) => ctx.scheduledNow.has(w.pipeline));
+    if (host === "bitbucket" && wanted.length && fresh.length === wanted.length)
+      return { state: "done", reason: `${plural(wanted.length, "schedule")} set just now` };
     const api =
       host === "bitbucket"
         ? ctx.admin
@@ -27,15 +33,19 @@ export const schedulesStep: Step = {
       }
       if (!api.listSchedules) return { state: "unknown" };
       const have = await api.listSchedules(kb);
-      const missing = wantedSchedules(config).filter(
-        (w) => !have.some((h) => h.pipeline === w.pipeline && h.enabled),
+      // Matched by pipeline and enabled, never by cron: Bitbucket rewrites the cron it stores
+      // (seconds, `?`, MON for 1), and a team may move a schedule to another hour on purpose.
+      const missing = wanted.filter(
+        (w) =>
+          !ctx.scheduledNow.has(w.pipeline) &&
+          !have.some((h) => h.pipeline === w.pipeline && h.enabled),
       );
       return missing.length
         ? {
             state: "missing",
             reason: `not scheduled: ${missing.map((m) => m.pipeline).join(", ")}`,
           }
-        : { state: "done", reason: `${have.length} schedules` };
+        : { state: "done", reason: plural(wanted.length, "schedule") };
     } catch (e) {
       return { state: "unknown", reason: `${describeError(e)}${adminHint(host, e)}` };
     }
@@ -59,7 +69,6 @@ export const schedulesStep: Step = {
       );
       return;
     }
-    const api = await ctx.adminClient();
     const base = config.sources.baseBranch;
     const wanted = wantedSchedules(config);
     const manual = () =>
@@ -68,25 +77,29 @@ export const schedulesStep: Step = {
           .map((w) => `    ${w.pipeline} on ${base}, cron ${w.cron} (UTC)`)
           .join("\n")}`,
       );
-    if (!api?.listSchedules || !api.createSchedule || !api.enableSchedule) return manual();
     try {
-      const have = await api.listSchedules(kb);
-      for (const w of wanted) {
-        const existing = have.find((h) => h.pipeline === w.pipeline);
-        if (existing?.enabled) continue;
-        if (existing) await api.enableSchedule(kb, existing.uuid);
-        else
-          await api.createSchedule(kb, {
-            pipeline: w.pipeline,
-            branch: base,
-            cron: bitbucketCron(w.cron),
-          });
-        ctx.say(
-          `  ${ctx.paint("green", "✓")} ${existing ? "enabled" : "scheduled"} ${w.pipeline} (${w.cron} UTC)`,
-        );
-      }
+      await ctx.withAdmin(async (api) => {
+        if (!api.listSchedules || !api.createSchedule || !api.enableSchedule)
+          throw new Error("this client cannot manage schedules");
+        const have = await api.listSchedules(kb);
+        for (const w of wanted) {
+          if (ctx.scheduledNow.has(w.pipeline)) continue;
+          const existing = have.find((h) => h.pipeline === w.pipeline);
+          if (!existing?.enabled) {
+            if (existing) await api.enableSchedule(kb, existing.uuid);
+            else
+              await api.createSchedule(kb, {
+                pipeline: w.pipeline,
+                branch: base,
+                cron: bitbucketCron(w.cron),
+              });
+            ctx.ok(`${existing ? "enabled" : "scheduled"} ${w.pipeline} (${w.cron} UTC)`);
+          }
+          ctx.scheduledNow.add(w.pipeline);
+        }
+      });
     } catch (e) {
-      ctx.say(`  ${ctx.paint("red", "✗")} ${describeError(e)}`);
+      ctx.bad(describeError(e));
       if (errorStatus(e) === 400)
         ctx.say(
           `  Bitbucket schedules only pipelines that exist on ${base}: merge the setup commit, then rerun homeostat setup --step schedules.`,

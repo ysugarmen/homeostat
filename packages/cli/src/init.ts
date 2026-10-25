@@ -139,7 +139,10 @@ jobs:
       # - run: ${INSTALL_CLAUDE}
       - run: ${command}
         env:
-          GITHUB_TOKEN: \${{ secrets.HOMEOSTAT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          # The git-host token (HOMEOSTAT_GITHUB_TOKEN is its old name, still read). Without
+          # either, the workflow's own GITHUB_TOKEN, which reaches this repo only.
+          HOMEOSTAT_GIT_TOKEN: \${{ secrets.HOMEOSTAT_GIT_TOKEN || secrets.HOMEOSTAT_GITHUB_TOKEN }}
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
           # A Claude Console API key (agents.runtime: api, the default).
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
           # Or, with agents.runtime: claude-code, a token from \`claude setup-token\`:
@@ -179,6 +182,9 @@ pipelines:
   branches:
     main:
       - step: *homeostat-validate
+  # The agents read the repository variables HOMEOSTAT_GIT_TOKEN (with HOMEOSTAT_GIT_EMAIL for an
+  # Atlassian API token; the old names HOMEOSTAT_BITBUCKET_TOKEN and _EMAIL still work) and
+  # ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.
   custom:
     # Scheduled in Repository settings > Pipelines > Schedules (daily).
     homeostat-curator:
@@ -258,30 +264,94 @@ jobs:
   ],
 };
 
+/** The setup guide; `guide("anchor")` links one section of it. */
+export const GUIDE_URL = "https://github.com/ysugarmen/homeostat/blob/main/docs/guide/setup.md";
+export const guide = (anchor: string) => `${GUIDE_URL}#${anchor}`;
+
+/** Which token to create and its scopes, in two lines; the guide has the rest. */
+export const TOKEN_SCOPES: Record<Host, string> = {
+  bitbucket: `Create an Atlassian API token (your own account works) with the scopes read:repository:bitbucket, write:repository:bitbucket, read:pullrequest:bitbucket, write:pullrequest:bitbucket, read:workspace:bitbucket, and admin:pipeline:bitbucket if setup should store it for you.
+Or, on Bitbucket Premium, a workspace access token. More: ${guide("git-host-token")}`,
+  github: `Create a fine-grained token (your own account works): Contents and Pull requests, read on the code repos and read and write on the KB repo; Members read on the org.
+More: ${guide("git-host-token")}`,
+};
+
 const TOKEN_HELP: Record<Host, string> = {
   bitbucket: `The daily run (the homeostat-curator pipeline) reads PRs from your code repos and opens one
-PR per developer on this repo each day.
-It needs one token that reaches all of them: a workspace access token on Bitbucket Premium, or
-on other plans an API token of a bot account in the workspace (a repository access token reaches
-one repo only). Give it:
-  code repos:  pullrequest:read, repository:read
-  this repo:   pullrequest:write, repository:write
-  workspace:   read:workspace (to ask reviewers by their Bitbucket nickname)
-Store it as the secured repository variable HOMEOSTAT_BITBUCKET_TOKEN; for an API token, also store
-the email of the account it belongs to as HOMEOSTAT_BITBUCKET_EMAIL. Add a Claude Console API key
-as ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-commercial use
-only; a team KB needs a Console key or a Team/Enterprise plan.) Then schedule the homeostat-curator pipeline daily, and homeostat-deep-dive and homeostat-digest
-weekly, under Repository settings > Pipelines > Schedules, and add a sources section to homeostat.yaml.`,
-  github: `The daily run (homeostat-curator.yml) reads PRs from your code repos and opens one PR per
-developer on this repo each day.
-The workflow's GITHUB_TOKEN covers this repo. To read other repos, create a fine-grained
-token or GitHub App with:
-  code repos:  Pull requests: read, Contents: read
-  this repo:   Pull requests: write, Contents: write
-Store it as the Actions secret HOMEOSTAT_GITHUB_TOKEN, and a Claude Console API key as
+PR per developer on this repo each day. It needs one token that reaches all of them.
+${TOKEN_SCOPES.bitbucket}
+Store it as the secured repository variable HOMEOSTAT_GIT_TOKEN; for an API token, also store the
+email of the account that created it as HOMEOSTAT_GIT_EMAIL. Add a Claude Console API key as
 ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-commercial use only;
-a team KB needs a Console key or a Team/Enterprise plan.) Then add a sources section to homeostat.yaml.`,
+a team KB needs a Console key or a Team/Enterprise plan.) Then schedule the homeostat-curator
+pipeline daily, and homeostat-deep-dive and homeostat-digest weekly, under
+Repository settings > Pipelines > Schedules, and add a sources section to homeostat.yaml.
+homeostat setup does all of this.`,
+  github: `The daily run (homeostat-curator.yml) reads PRs from your code repos and opens one PR per
+developer on this repo each day. The workflow's GITHUB_TOKEN covers this repo; to read other repos:
+${TOKEN_SCOPES.github}
+Store it as the Actions secret HOMEOSTAT_GIT_TOKEN, and a Claude Console API key as
+ANTHROPIC_API_KEY. (A personal Claude subscription token is for personal, non-commercial use only;
+a team KB needs a Console key or a Team/Enterprise plan.) Then add a sources section to homeostat.yaml.
+homeostat setup does all of this.`,
 };
+
+/** The three branch-protection settings, short, for `homeostat setup`; the guide explains them. */
+export const PROTECTION_SHORT: Record<Host, string> = {
+  bitbucket: `Protect main in Repository settings > Branch restrictions: require 1 approval, require a
+passing build, and let only the daily run's token merge without approval.
+More: ${guide("branch-protection")}`,
+  github: `Protect main in Settings > Rules > Rulesets: require a pull request with 1 approval from Code
+Owners, require the "validate" check, and let only the daily run's token or App bypass.
+More: ${guide("branch-protection")}`,
+};
+
+const CLAUDE_INSTALL_COMMENTED: Record<Host, string> = {
+  github: `      # - run: ${INSTALL_CLAUDE}`,
+  bitbucket: `# With agents.runtime: claude-code, also: - ${INSTALL_CLAUDE}`,
+};
+const CLAUDE_INSTALL_ON: Record<Host, string> = {
+  github: `      - run: ${INSTALL_CLAUDE}`,
+  bitbucket: `- ${INSTALL_CLAUDE}`,
+};
+const CLAUDE_FILES: Record<Host, string[]> = {
+  github: [".github/workflows/homeostat-curator.yml", ".github/workflows/homeostat-deep-dive.yml"],
+  bitbucket: ["bitbucket-pipelines.yml"],
+};
+
+/**
+ * With agents.runtime: claude-code, the agents' CI jobs install Claude Code and, on GitHub, pass
+ * CLAUDE_CODE_OAUTH_TOKEN: the lines `init` wrote commented out are turned on. `edited` lists the
+ * files changed; `manual` the ones whose lines were not found, with the line to add by hand.
+ */
+export function useClaudeCodeInCi(
+  root: string,
+  host: Host,
+): { edited: string[]; manual: { path: string; line: string }[] } {
+  const edited: string[] = [];
+  const manual: { path: string; line: string }[] = [];
+  for (const path of CLAUDE_FILES[host]) {
+    const full = join(root, path);
+    const text = existsSync(full) ? readFileSync(full, "utf8") : "";
+    let next = text.split(CLAUDE_INSTALL_COMMENTED[host]).join(CLAUDE_INSTALL_ON[host]);
+    if (host === "github")
+      next = next
+        .replace(
+          /^ *# With agents\.runtime: claude-code \(Team\/Enterprise plans only, for a team KB\), uncomment:\n/m,
+          "      # agents.runtime: claude-code (Team/Enterprise plans only, for a team KB):\n",
+        )
+        .replace(/^( *)# (CLAUDE_CODE_OAUTH_TOKEN: )/m, "$1$2");
+    if (!next.includes(INSTALL_CLAUDE) || next.includes(CLAUDE_INSTALL_COMMENTED[host])) {
+      manual.push({ path, line: CLAUDE_INSTALL_ON[host].trim() });
+      continue;
+    }
+    if (next !== text) {
+      writeFileSync(full, next);
+      edited.push(path);
+    }
+  }
+  return { edited, manual };
+}
 
 /**
  * Auto-merge is safe only if nothing else can merge unreviewed: protect the base branch, require
@@ -300,7 +370,7 @@ export const PROTECTION_HELP: Record<Host, string> = {
   - require a pull request with 1 approval, review from Code Owners, and the "validate" check
   - add the daily run's GitHub App (or token user) to the bypass list. It merges an entry unreviewed
     only when every gate in scoring.autoMerge passes, after validating the whole knowledge base
-    itself; everything else waits for a reviewer. Use the App or HOMEOSTAT_GITHUB_TOKEN, not the
+    itself; everything else waits for a reviewer. Use the App or HOMEOSTAT_GIT_TOKEN, not the
     workflow's GITHUB_TOKEN: PRs opened with GITHUB_TOKEN do not trigger the validate check.`,
 };
 

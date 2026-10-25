@@ -52,13 +52,13 @@ describe("the Setup card", () => {
     writeSetupRecord(
       kb,
       {
-        token: { state: "done", reason: "HOMEOSTAT_GITHUB_TOKEN is stored" },
+        token: { state: "done", reason: "HOMEOSTAT_GIT_TOKEN is stored" },
         model: { state: "missing", reason: "ANTHROPIC_API_KEY is not stored" },
       },
       new Date("2026-10-20T08:00:00Z"),
     );
     const html = setupPanel(setupRows(kb, readKbFiles(kb), readSetupRecord(kb)));
-    expect(html).toContain("HOMEOSTAT_GITHUB_TOKEN is stored · checked 20 Oct");
+    expect(html).toContain("HOMEOSTAT_GIT_TOKEN is stored · checked 20 Oct");
     expect(html).toContain("homeostat setup --step model");
   });
 

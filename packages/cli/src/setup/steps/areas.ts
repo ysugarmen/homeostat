@@ -33,13 +33,14 @@ export const areasStep: Step = {
       ? Object.entries(config.repos).map(([key, r]) => ({ key, label: key, sources: [r.source] }))
       : [{ key: undefined, label: "the code repos", sources: config.sources?.repos ?? [] }];
     const edits: ConfigEdit[] = [];
+    ctx.say("  An area is a top-level folder whose rules apply only to files in it.");
     for (const g of groups) {
       const folders = new Set<string>();
       for (const source of g.sources)
         for (const f of await foldersOf(ctx, source, api)) folders.add(f);
       const proposed = [...folders].filter((f) => !f.startsWith(".") && !NOT_AREAS.has(f));
       const answer = await ctx.ask(
-        `  Areas for ${g.label} (top-level folders, comma-separated; - for none)`,
+        `  Areas for ${g.label}, comma-separated, or - for none (example: services, apps)`,
         proposed.join(", "),
       );
       if (!answer || answer === "-") continue;

@@ -140,7 +140,7 @@ describe("a day of use produces a readable log", () => {
       expect.objectContaining({
         agent: "curator",
         ok: false,
-        summary: expect.stringContaining("set HOMEOSTAT_BITBUCKET_TOKEN"),
+        summary: expect.stringContaining("set HOMEOSTAT_GIT_TOKEN"),
       }),
     ]);
   });

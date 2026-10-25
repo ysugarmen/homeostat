@@ -4,6 +4,7 @@ import {
   CONFIG_FILE,
   memberFromGit,
   parseConfig,
+  readSetupRecord,
   SETUP_STEPS,
   type SetupCheck,
   writeSetupRecord,
@@ -75,7 +76,7 @@ function line(ctx: Ctx, step: Step, c: SetupCheck): string {
 
 async function detectAll(ctx: Ctx): Promise<Map<Step, SetupCheck>> {
   const out = new Map<Step, SetupCheck>();
-  for (const step of STEPS) out.set(step, await safeDetect(ctx, step));
+  for (const step of STEPS) out.set(step, recalled(ctx, step, await safeDetect(ctx, step)));
   return out;
 }
 
@@ -87,10 +88,41 @@ async function safeDetect(ctx: Ctx, step: Step): Promise<SetupCheck> {
   }
 }
 
+/** Results taken from the record rather than checked now; they are never recorded again. */
+const fromRecord = new WeakSet<SetupCheck>();
+
+const EARLIER: Partial<Record<string, string>> = {
+  token: "stored earlier",
+  model: "stored earlier",
+  slack: "stored earlier",
+  schedules: "scheduled earlier",
+};
+
+/**
+ * A remote step nothing can check from here (no token in the environment) that the record says
+ * was done: shown as done earlier, with the date, so a rerun does not ask for it again. Only
+ * `--step <name>` redoes it.
+ */
+function recalled(ctx: Ctx, step: Step, c: SetupCheck): SetupCheck {
+  if (c.state !== "unknown" || !step.info.remote) return c;
+  const r = readSetupRecord(ctx.root)[step.info.name];
+  if (r?.state !== "done") return c;
+  const out: SetupCheck = {
+    state: "done",
+    reason: `${EARLIER[step.info.name] ?? "done earlier"} (checked ${r.checkedAt.slice(0, 10)})`,
+  };
+  fromRecord.add(out);
+  return out;
+}
+
 /** Records every settled result for the dashboard; an "unknown" never overwrites a real check. */
 function record(ctx: Ctx, results: Map<Step, SetupCheck>, now: Date) {
   const settled: Record<string, SetupCheck> = {};
-  for (const [step, c] of results) if (c.state !== "unknown") settled[step.info.name] = c;
+  for (const [step, c] of results) {
+    if (c.state === "unknown" || fromRecord.has(c)) continue;
+    // "Stored just now" reads wrong on a later day; the record carries its own date.
+    settled[step.info.name] = c.reason ? { ...c, reason: c.reason.replace(/ just now$/, "") } : c;
+  }
   if (!existsSync(join(ctx.root, CONFIG_FILE))) return;
   try {
     writeSetupRecord(ctx.root, settled, now);
@@ -158,13 +190,16 @@ export async function runSetup(opts: SetupOptions, io: Io): Promise<number> {
   ctx.say(`homeostat setup in ${root}\n`);
   const results = new Map<Step, SetupCheck>();
   for (const step of STEPS) {
-    let c = await safeDetect(ctx, step);
+    let c = recalled(ctx, step, await safeDetect(ctx, step));
     ctx.say(line(ctx, step, c));
     let go = isOpen(c);
-    if (c.state === "optional")
-      go = await ctx.yes(`  ${step.info.title} is optional. Set it up now?`);
+    // A required step defaults to yes; an optional one to no.
+    if (c.state === "optional") go = await ctx.yes(`  Set up ${step.info.title} now?`);
     else if (c.state === "unknown")
-      go = await ctx.yes(`  ${step.info.title}: cannot check it from here. Set it up now?`);
+      go = await ctx.yes(
+        `  Set up ${step.info.title} now? (it may be done already; doing it again is safe)`,
+        step.info.required,
+      );
     if (go) {
       await step.run(ctx);
       c = await safeDetect(ctx, step);

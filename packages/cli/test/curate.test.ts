@@ -339,6 +339,6 @@ describe("homeostat curate", () => {
       drafter: new FakeDrafter(),
     });
     expect(code).toBe(1);
-    expect(stderr).toContain("set HOMEOSTAT_GITHUB_TOKEN or GITHUB_TOKEN");
+    expect(stderr).toContain("set HOMEOSTAT_GIT_TOKEN or GITHUB_TOKEN");
   });
 });

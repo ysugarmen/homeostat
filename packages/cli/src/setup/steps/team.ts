@@ -8,8 +8,9 @@ import {
   setupStep,
   slugify,
 } from "@homeostat/core";
+import { plural } from "../../format.ts";
 import { git } from "../../git.ts";
-import { describeError, type SetupContext, type Step } from "../context.ts";
+import { describeError, HOST_NAME, type SetupContext, type Step } from "../context.ts";
 
 const allAreas = (ctx: SetupContext): string[] => {
   const c = ctx.config();
@@ -50,12 +51,16 @@ export const teamStep: Step = {
         ctx.say(`  could not list the members: ${describeError(e)}`);
       }
     }
+    const host = ctx.host() ?? "github";
+    const login = host === "bitbucket" ? "nickname" : "username";
     const handleOf = (p: Person) => `@${p.id}`;
     const label = (p: Person) => (p.name ? `${p.name} (${handleOf(p)})` : handleOf(p));
     const taken = new Set(config.team.members.map((m) => m.handle && loginKey(m.handle)));
     const ids = new Set(config.team.members.map((m) => m.id));
     if (people.length) {
-      ctx.say(`  ${people.length} people on the host:`);
+      ctx.say(
+        `  ${plural(people.length, "person", "people")} in the ${host === "bitbucket" ? "workspace" : "organization"}:`,
+      );
       people.forEach((p, i) => {
         ctx.say(`    ${String(i + 1).padStart(2)}. ${label(p)}`);
       });
@@ -80,8 +85,8 @@ export const teamStep: Step = {
       const you = pick(
         await ctx.ask(
           people.length
-            ? "  Which one is you? (number or handle)"
-            : "  Your handle on the host (login or nickname)",
+            ? "  Which number is you? (example: 2)"
+            : `  Your ${HOST_NAME[host]} ${login} (example: @ada)`,
         ),
       );
       if (!you) return;
@@ -98,7 +103,13 @@ export const teamStep: Step = {
     // Members still without a handle (added by hand earlier).
     for (const [i, m] of config.team.members.entries()) {
       if (m.handle || m.id === myId) continue;
-      const h = pick(await ctx.ask(`  Handle for ${m.id} (number or login)`));
+      const h = pick(
+        await ctx.ask(
+          people.length
+            ? `  Which number is ${m.id}? (or their ${login}, example: @ada)`
+            : `  ${HOST_NAME[host]} ${login} of ${m.id} (example: @ada)`,
+        ),
+      );
       if (!h) continue;
       taken.add(loginKey(handleOf(h)));
       edits.push({ path: ["team", "members", i, "handle"], set: handleOf(h) });
@@ -107,10 +118,12 @@ export const teamStep: Step = {
     const others = people.filter((p) => !taken.has(loginKey(handleOf(p))));
     if (others.length || !people.length) {
       ctx.say(
-        "  Only members' review comments become lessons; anyone can be added later with setup --step team.",
+        "  Only members' review comments become lessons. Add more people any time with homeostat setup --step team.",
       );
       const answer = await ctx.ask(
-        "  Who else joins? (numbers or handles, comma-separated; all; empty for nobody)",
+        people.length
+          ? "  Who else joins? Numbers, comma-separated, or all (example: 1, 3; empty for nobody)"
+          : `  Who else joins? ${HOST_NAME[host]} ${login}s, comma-separated (example: @dana, @lee; empty for nobody)`,
       );
       const chosen =
         answer.toLowerCase() === "all"
@@ -125,7 +138,10 @@ export const teamStep: Step = {
       for (const p of chosen) {
         taken.add(loginKey(handleOf(p)));
         const roleAnswer = (
-          await ctx.ask(`  Role for ${label(p)}: ${ROLES.join(", ")}`, "member")
+          await ctx.ask(
+            `  Role for ${label(p)}: ${ROLES.slice(0, -1).join(", ")} or ${ROLES.at(-1)}`,
+            "member",
+          )
         ).toLowerCase();
         const role: Role = (ROLES as readonly string[]).includes(roleAnswer)
           ? (roleAnswer as Role)
@@ -133,7 +149,7 @@ export const teamStep: Step = {
         const owned = areas.length
           ? (
               await ctx.ask(
-                `  Areas ${label(p)} owns (${areas.join(", ")}; comma-separated, empty for none)`,
+                `  Areas ${label(p)} owns, comma-separated, from ${areas.join(", ")} (example: ${areas[0]}; empty for none)`,
               )
             )
               .split(/[,\s]+/)

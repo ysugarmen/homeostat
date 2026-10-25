@@ -9,9 +9,11 @@ git clone git@github.com:your-org/team-kb.git && cd team-kb   # or git@bitbucket
 npx --yes homeostat@0.3.2 setup
 ```
 
-`setup` walks a checklist and checks each step as it goes:
+Cloning a Bitbucket repo over HTTPS? Your account password won't work: use an API token as the password, with the username `x-bitbucket-api-token-auth` ([details](setup.md#clone-over-https)).
+
+`setup` walks a checklist and checks each step as it goes. Each question shows an example answer and its default; secrets are pasted at a prompt that shows nothing while you paste.
 - the KB repo and host
-- a CI token, verified and stored as a CI variable
+- a git-host token (your own works; [which one](setup.md#git-host-token)), verified and stored as the CI variable `HOMEOSTAT_GIT_TOKEN`
 - your code repos and their areas
 - the team and reviewers
 - the model credential
@@ -124,6 +126,6 @@ Or capture it from a review comment: `homeostat learn <comment URL>`. Commit on 
 
 ### 6. Turn on the daily run
 
-Add the secrets `init` printed: a git-host token and a Claude credential, or use your cloud account ([runtimes](../runtimes.md)). Run `homeostat curate --show-prompts` once to see exactly what would be sent, and `homeostat daily --dry-run` to see what it would decide. From then on, each morning, every developer's lessons and what their reviewers taught them arrive in one PR per developer. Confident lessons merge themselves; only the uncertain ones wait for a reviewer ([how it decides](agents.md#daily)). Developers need nothing beyond the plugin: their sessions sync in the background.
+Add the secrets `init` printed: a git-host token as `HOMEOSTAT_GIT_TOKEN` (on Bitbucket, with `HOMEOSTAT_GIT_EMAIL` for an Atlassian API token; [which token](setup.md#git-host-token)) and a Claude credential, or use your cloud account ([runtimes](../runtimes.md)). Run `homeostat curate --show-prompts` once to see exactly what would be sent, and `homeostat daily --dry-run` to see what it would decide. From then on, each morning, every developer's lessons and what their reviewers taught them arrive in one PR per developer. Confident lessons merge themselves; only the uncertain ones wait for a reviewer ([how it decides](agents.md#daily)). Developers need nothing beyond the plugin: their sessions sync in the background.
 
 Before you invite the team, run `homeostat doctor --security`.

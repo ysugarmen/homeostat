@@ -231,6 +231,9 @@ export function scheduledCiPresent(root: string, host: "bitbucket" | "github"): 
   return existsSync(path) && readFileSync(path, "utf8").includes("homeostat-curator:");
 }
 
+/** "1 member", "2 members": a count with its noun agreeing. */
+const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
 /** Whether the KB holds any document yet (a first base). */
 export const hasDocuments = (files: KbFiles): boolean =>
   Object.keys(files).some((p) => /^knowledge\/(.+\/)?docs\/[^/]+\.md$/.test(p));
@@ -269,12 +272,14 @@ export function localSetupChecks(
   const areaCount =
     Object.keys(config.areas).length +
     Object.values(config.repos ?? {}).reduce((n, r) => n + Object.keys(r.areas).length, 0);
-  out.areas = areaCount ? { state: "done", reason: `${areaCount} areas` } : { state: "optional" };
+  out.areas = areaCount
+    ? { state: "done", reason: count(areaCount, "area") }
+    : { state: "optional" };
 
   const noHandle = config.team.members.filter((m) => !m.handle).map((m) => m.id);
   out.team = noHandle.length
     ? { state: "missing", reason: `no handle for ${noHandle.join(", ")}` }
-    : { state: "done", reason: `${config.team.members.length} members` };
+    : { state: "done", reason: count(config.team.members.length, "member") };
 
   out.reviewers = config.team.reviewers?.length
     ? { state: "done", reason: config.team.reviewers.join(", ") }

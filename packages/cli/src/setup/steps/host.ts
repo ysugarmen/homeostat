@@ -1,7 +1,13 @@
 import { remoteRepo, setupStep } from "@homeostat/core";
 import { git } from "../../git.ts";
-import { detectHost, HOSTS, runInit } from "../../init.ts";
-import { type Host, parseRepoRef, type SetupContext, type Step } from "../context.ts";
+import { detectHost, guide, HOSTS, runInit } from "../../init.ts";
+import { HOST_NAME, type Host, parseRepoRef, type SetupContext, type Step } from "../context.ts";
+
+/** An https remote on bitbucket.org, which takes an API token, not the account password. */
+export const httpsBitbucket = (remote: string | undefined) =>
+  Boolean(remote && /^https:\/\/([^@/]+@)?bitbucket\.org\//i.test(remote.trim()));
+
+export const HTTPS_BITBUCKET_HINT = `Over HTTPS, Bitbucket takes an API token as the password, with the username x-bitbucket-api-token-auth. More: ${guide("clone-over-https")}`;
 
 /** Step 1: homeostat.yaml (from `init` when there is none), the host and the KB repo. */
 export const hostStep: Step = {
@@ -16,11 +22,14 @@ export const hostStep: Step = {
       (ctx.flags.host as Host | undefined) ??
       ctx.host() ??
       (remote ? detectHost(remote) : undefined);
-    while (!host || !HOSTS.includes(host)) {
-      const answer = await ctx.ask("  Git host of the KB repo: github or bitbucket");
-      if (!ctx.interactive) return;
-      host = answer.toLowerCase() as Host;
+    if (!host || !HOSTS.includes(host)) {
+      host = await ctx.choose<Host>("Where is the KB repo hosted?", [
+        { value: "github", label: "GitHub" },
+        { value: "bitbucket", label: "Bitbucket" },
+      ]);
+      if (!host) return;
     }
+    if (host === "bitbucket" && httpsBitbucket(remote)) ctx.say(`  ${HTTPS_BITBUCKET_HINT}`);
 
     if (ctx.configText() === undefined) {
       const code = runInit(ctx.root, { host, guide: false }, ctx.io);
@@ -34,7 +43,7 @@ export const hostStep: Step = {
 
     let kb = ctx.config()?.sources?.kbRepo ?? (remote ? remoteRepo(remote) : undefined);
     if (!kb) {
-      kb = await askRepo(ctx, `  The KB repo on ${host} (owner/name)`);
+      kb = await askRepo(ctx, `  KB repo on ${HOST_NAME[host]} (example: acme/team-kb)`);
       if (!kb) return;
     }
     const base = git(ctx.root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")?.replace(
@@ -54,7 +63,7 @@ async function askRepo(ctx: SetupContext, question: string): Promise<string | un
     const answer = await ctx.ask(question);
     const ref = remoteRepo(answer) ?? answer;
     if (parseRepoRef(ref)) return ref;
-    ctx.say("  write it as owner/name, or paste the repo's URL");
+    ctx.say("  Write it as owner/name (example: acme/team-kb), or paste the repo's URL.");
   }
   return undefined;
 }

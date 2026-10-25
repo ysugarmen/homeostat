@@ -2,24 +2,56 @@ import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 import type { Config } from "./config.ts";
 
+/** Path segments that open a page inside a repo on the web (`/src/main/`, `/tree/main`, `/pulls`). */
+const REPO_PAGES = new Set([
+  "src",
+  "tree",
+  "blob",
+  "raw",
+  "commits",
+  "commit",
+  "branches",
+  "pull-requests",
+  "pulls",
+  "pull",
+  "issues",
+  "pipelines",
+  "actions",
+  "wiki",
+  "downloads",
+  "settings",
+  "admin",
+  "-",
+]);
+
+/** The hosts where a repo is always the two path segments right after the host. */
+const KNOWN_HOST = /(^|\.)(github\.com|bitbucket\.org)$/i;
+
 /**
- * `owner/name` from a git remote URL, whatever its form: `git@host:owner/name.git`,
- * `ssh://git@host/owner/name`, `https://user:token@host/owner/name.git`. Lowercased.
+ * `owner/name` from a git remote or a repo's web address, whatever its form:
+ * `git@host:owner/name.git`, `ssh://git@host/owner/name`, `https://user:token@host/owner/name.git`,
+ * or a browser URL such as `https://bitbucket.org/owner/name/src/main/` or
+ * `github.com/owner/name/tree/main`. On GitHub and Bitbucket the repo is the first two path
+ * segments after the host; elsewhere, the last two before any page segment. Lowercased.
  */
 export function remoteRepo(url: string): string | undefined {
-  const path = /^[\w.-]+@[^:/]+:(.+)$/.exec(url.trim())?.[1] ?? safeUrlPath(url.trim());
-  const parts = path
-    ?.replace(/\.git\/?$/, "")
-    .replace(/\/+$/, "")
-    .split("/")
-    .filter(Boolean);
-  if (!parts || parts.length < 2) return undefined;
-  return parts.slice(-2).join("/").toLowerCase();
+  let text = url.trim();
+  if (/^(www\.)?(github\.com|bitbucket\.org)\//i.test(text)) text = `https://${text}`;
+  const scp = /^[\w.-]+@([^:/]+):(.+)$/.exec(text);
+  const where = scp ? { host: scp[1] ?? "", path: scp[2] ?? "" } : safeUrl(text);
+  if (!where) return undefined;
+  const parts = where.path.split("/").filter(Boolean);
+  const page = parts.findIndex((p, i) => i >= 2 && REPO_PAGES.has(p.toLowerCase()));
+  const repo = page >= 0 ? parts.slice(0, page) : parts;
+  const [owner, name] = KNOWN_HOST.test(where.host) ? repo.slice(0, 2) : repo.slice(-2);
+  const bare = name?.replace(/\.git$/i, "");
+  return owner && bare ? `${owner}/${bare}`.toLowerCase() : undefined;
 }
 
-function safeUrlPath(url: string): string | undefined {
+function safeUrl(url: string): { host: string; path: string } | undefined {
   try {
-    return new URL(url).pathname;
+    const u = new URL(url);
+    return { host: u.hostname, path: u.pathname };
   } catch {
     return undefined;
   }

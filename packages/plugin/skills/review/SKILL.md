@@ -16,7 +16,7 @@ Nobody approves lessons one by one. Each morning the daily run scores every less
 
 Use the first that applies: the plugin setting `${user_config.kb_dir}` if it is not empty; the `HOMEOSTAT_DIR` environment variable; the current repository if it has a `homeostat.yaml`; otherwise ask the user for the path to their KB checkout. Pass it to every command below as `--dir <kb>`.
 
-`homeostat review` works the same on GitHub and Bitbucket and only ever acts on homeostat's own PRs. It needs the KB's git-host token (`HOMEOSTAT_GITHUB_TOKEN` or `GITHUB_TOKEN`, or `HOMEOSTAT_BITBUCKET_TOKEN`); if it says one is missing, tell the user which variable to set rather than retrying.
+`homeostat review` works the same on GitHub and Bitbucket and only ever acts on homeostat's own PRs. It needs the KB's git-host token (`HOMEOSTAT_GIT_TOKEN`, or on GitHub `GITHUB_TOKEN`; the old `HOMEOSTAT_GITHUB_TOKEN` and `HOMEOSTAT_BITBUCKET_TOKEN` also work); if it says one is missing, tell the user which variable to set rather than retrying.
 
 ## 2. Build the queue
 

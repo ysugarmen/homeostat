@@ -12,22 +12,16 @@ export const slackStep: Step = {
     const config = ctx.config();
     const name = config?.notifications.slackWebhookEnv;
     if (!config || !name) return { state: "optional" };
-    const exists = await ctx.secretExists(name);
-    if (exists === true) return { state: "done", reason: `${name} is stored` };
-    if (exists === false) return { state: "missing", reason: `${name} is not stored` };
-    return {
-      state: "unknown",
-      reason: `cannot tell whether ${name} is stored: ${ctx.ciUnreadable}`,
-    };
+    return ctx.secretState(name);
   },
   async run(ctx) {
     const config = ctx.config();
     if (!config) return;
     const name = config.notifications.slackWebhookEnv ?? DEFAULT_SLACK_VAR;
     ctx.say(
-      "  Make an incoming webhook for the team's channel (a Slack app > Incoming Webhooks > Add New Webhook).",
+      "  Create an incoming webhook for the team's channel: in a Slack app, Incoming Webhooks > Add New Webhook.",
     );
-    const url = await ctx.secret("  Webhook URL", name);
+    const url = await ctx.secret("the webhook URL", name);
     if (!url) return;
     if (!WEBHOOK.test(url)) {
       ctx.say(
@@ -52,11 +46,11 @@ export const slackStep: Step = {
     for (const m of asked) {
       if (m.slack) continue;
       const id = await ctx.ask(
-        `  Slack member ID for ${m.id} (their Slack profile > ⋯ > Copy member ID; empty skips)`,
+        `  Slack member ID of ${m.id} (example: U0123ABCD, from their Slack profile > ⋯ > Copy member ID; empty to skip)`,
       );
       if (!id) continue;
       if (!MEMBER_ID.test(id)) {
-        ctx.say("  not a member ID (like U0123ABCD); skipped");
+        ctx.say("  Not a member ID (they look like U0123ABCD); skipped.");
         continue;
       }
       const i = config.team.members.indexOf(m);

@@ -36,7 +36,7 @@ export const reposStep: Step = {
     for (let attempt = 0; attempt < 3; attempt++) {
       if (!wanted.length) {
         const answer = await ctx.ask(
-          "  Code repos the daily run reads (owner/name or URL, comma-separated)",
+          "  Code repos to learn from, comma-separated (example: acme/api, acme/web)",
           known.join(", "),
         );
         wanted = answer.split(/[,\s]+/).filter(Boolean);
@@ -57,7 +57,10 @@ export const reposStep: Step = {
           }
         }
       }
-      if (bad.length) ctx.say(`  not owner/name: ${bad.join(", ")}`);
+      if (bad.length)
+        ctx.say(
+          `  Not understood: ${bad.join(", ")}. Write each as owner/name (example: acme/api), or paste its URL.`,
+        );
       if (!bad.length && !failed.length && refs.length) {
         save(ctx, refs);
         return;
