@@ -12,7 +12,7 @@ import {
   readKbFiles,
   validate,
 } from "@homeostat/core";
-import { askerFor } from "./agents.ts";
+import { askerFor, formatRunUse, newRunStats } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
 import { git } from "./git.ts";
@@ -53,7 +53,8 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
 
     const now = io.now?.() ?? new Date();
     const today = now.toISOString().slice(0, 10);
-    const ask = askerFor(config, "deepDive", io, root);
+    const stats = newRunStats();
+    const ask = askerFor(config, "deepDive", io, root, stats);
     const useLlm = opts.llm !== false;
     const merger = useLlm ? (io.merger ?? new ClaudeMerger(ask)) : undefined;
     const judge = useLlm ? (io.judge ?? new ClaudeConflictJudge(ask)) : undefined;
@@ -70,6 +71,7 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
       for (const a of c.actions) io.stdout(`${c.path}: ${a.action} (${a.note})\n`);
     }
     for (const n of notes) io.stdout(`note: ${n}\n`);
+    io.stdout(formatRunUse(stats));
     logEvent(root, {
       ts: now.toISOString(),
       type: "agent-run",

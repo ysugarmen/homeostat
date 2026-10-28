@@ -77,6 +77,7 @@ export {
   type ClaudeClient,
   ClaudeUnavailableError,
   type Effort,
+  type Usage,
 } from "./claude.ts";
 export {
   AGENT_ENV,

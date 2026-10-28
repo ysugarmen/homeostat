@@ -49,7 +49,7 @@ import {
   type Verdict,
   validate,
 } from "@homeostat/core";
-import { askerFor } from "./agents.ts";
+import { askerFor, formatRunUse, newRunStats } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
 import { commitTree, forcePush, git, mergeText, showFile } from "./git.ts";
@@ -147,7 +147,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   const kbRepo = repoRef(sources.kbRepo);
   const now = io.now?.() ?? new Date();
   const today = now.toISOString().slice(0, 10);
-  const stats = { calls: 0, chars: 0, failed: 0 };
+  const stats = newRunStats();
   const provider = providerFor(sources.host, io, "read pull requests and open the daily PRs");
   const remote = (ref: string) => `refs/remotes/origin/${ref}`;
 
@@ -901,6 +901,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     modelCalls: stats.calls,
     chars: stats.chars,
     failedCalls: stats.failed,
+    ...(stats.byAgent && Object.keys(stats.byAgent).length ? { byAgent: stats.byAgent } : {}),
   };
   if (!opts.dryRun) {
     const state: Record<string, string> = {
@@ -924,6 +925,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     summary: `${report.members.reduce((n, m) => n + m.merged, 0)} merged, ${report.members.reduce((n, m) => n + m.review, 0)} to review, ${report.members.reduce((n, m) => n + m.declined, 0)} declined, ${settled} settled`,
   });
   if (lessons.length === 0) io.stdout("no new lessons\n");
+  io.stdout(formatRunUse(stats));
   if (opts.dryRun) io.stdout("dry run: nothing committed, opened or merged\n");
   return 0;
 }

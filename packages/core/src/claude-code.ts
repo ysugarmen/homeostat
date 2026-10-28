@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { z } from "zod";
-import { type Asker, ClaudeUnavailableError, type Effort } from "./claude.ts";
+import { type Asker, ClaudeUnavailableError, type Effort, type Usage } from "./claude.ts";
 
 export interface RunResult {
   code: number | null;
@@ -43,6 +43,8 @@ export interface ClaudeCodeAskerOptions {
   /** Injected for tests. */
   run?: CommandRunner;
   env?: NodeJS.ProcessEnv;
+  /** Called after each call with what it used, and Claude Code's own cost estimate. */
+  onUsage?: (usage: Usage) => void;
 }
 
 /** Set on the child so the homeostat plugin's own hooks never fire inside an agent call. */
@@ -86,6 +88,15 @@ const resultSchema = z.object({
   stop_reason: z.string().nullable().optional(),
   result: z.string().optional(),
   structured_output: z.unknown().optional(),
+  total_cost_usd: z.number().optional(),
+  usage: z
+    .object({
+      input_tokens: z.number().optional(),
+      output_tokens: z.number().optional(),
+      cache_read_input_tokens: z.number().optional(),
+      cache_creation_input_tokens: z.number().optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -120,6 +131,14 @@ export function claudeCodeAsker(opts: ClaudeCodeAskerOptions): Asker {
       const detail = (out.stderr || out.stdout).trim().split("\n").slice(-3).join(" ");
       throw new ClaudeUnavailableError(`Claude Code failed (exit ${out.code}): ${detail}`);
     }
+    if (parsed.usage || parsed.total_cost_usd !== undefined)
+      opts.onUsage?.({
+        inputTokens: parsed.usage?.input_tokens ?? 0,
+        outputTokens: parsed.usage?.output_tokens ?? 0,
+        cacheReadTokens: parsed.usage?.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: parsed.usage?.cache_creation_input_tokens ?? 0,
+        ...(parsed.total_cost_usd !== undefined ? { costUsd: parsed.total_cost_usd } : {}),
+      });
     if (parsed.is_error || parsed.subtype !== "success") {
       const detail = parsed.result ?? parsed.subtype ?? "unknown error";
       const login = /log ?in|auth|credential|token|api key/i.test(detail)

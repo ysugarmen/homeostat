@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { type Asker, ClaudeUnavailableError, type Effort } from "./claude.ts";
+import { type Asker, ClaudeUnavailableError, type Effort, type Usage } from "./claude.ts";
 
 /**
  * Claude through the team's own cloud account, so prompts stay inside its contracts and region
@@ -27,6 +27,8 @@ export interface CloudAskerOptions {
   projectId?: string;
   /** Defaults to the SDK client, loaded only when this runtime is used. */
   client?: CloudClient;
+  /** Called after each call with what it used. */
+  onUsage?: (usage: Usage) => void;
 }
 
 const TOOL = "answer";
@@ -87,6 +89,13 @@ function cloudAsker(
       }
       throw e;
     }
+    const u = (response as { usage?: Record<string, number | null | undefined> }).usage;
+    opts.onUsage?.({
+      inputTokens: u?.input_tokens ?? 0,
+      outputTokens: u?.output_tokens ?? 0,
+      cacheReadTokens: u?.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: u?.cache_creation_input_tokens ?? 0,
+    });
     if (response.stop_reason === "refusal") return null;
     const call = response.content.find((b) => b.type === "tool_use" && b.name === TOOL);
     const parsed = schema.safeParse(call?.input);

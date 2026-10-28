@@ -68,6 +68,31 @@ describe("claudeCodeAsker", () => {
     expect(call?.env).toMatchObject({ PATH: "/bin", [AGENT_ENV]: "1" });
   });
 
+  test("reports each call's tokens and Claude Code's cost estimate", async () => {
+    const { run } = runner({
+      ...ok,
+      total_cost_usd: 0.0123,
+      usage: {
+        input_tokens: 900,
+        output_tokens: 120,
+        cache_read_input_tokens: 40,
+        cache_creation_input_tokens: 10,
+      },
+    });
+    const seen: unknown[] = [];
+    const ask = claudeCodeAsker({ model: "m", effort: "low", run, onUsage: (u) => seen.push(u) });
+    expect(await ask("s", "u", schema)).toEqual({ city: "Paris" });
+    expect(seen).toEqual([
+      {
+        inputTokens: 900,
+        outputTokens: 120,
+        cacheReadTokens: 40,
+        cacheWriteTokens: 10,
+        costUsd: 0.0123,
+      },
+    ]);
+  });
+
   test("output that does not fit the schema is null", async () => {
     const { run } = runner({ ...ok, structured_output: { town: "Paris" } });
     expect(await claudeCodeAsker({ model: "m", effort: "low", run })("s", "u", schema)).toBeNull();

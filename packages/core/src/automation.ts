@@ -119,6 +119,19 @@ export interface RunReport {
     modelCalls: number;
     chars: number;
     failedCalls: number;
+    /** Per agent (curator, judge): model, calls, tokens, and the runtime's cost estimate. */
+    byAgent?: Record<
+      string,
+      {
+        model: string;
+        calls: number;
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens: number;
+        cacheWriteTokens: number;
+        costUsd?: number;
+      }
+    >;
   };
   /** The KB's health after the run's merges, for the trend over runs. */
   kb?: KbSnapshot;

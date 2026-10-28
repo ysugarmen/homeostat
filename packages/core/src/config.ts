@@ -44,16 +44,19 @@ export const DEFAULT_AGENT_MODEL = "claude-opus-5-5";
 
 /**
  * The model that judges the daily run's drafts. A model grading its own output agrees with
- * itself, so the default is a different model from the drafter's: the current Sonnet, or Opus
- * when the drafter already runs on Sonnet (see `judgeModelFor`).
+ * itself, so the default is a different model from the drafter's, and never a dearer one: the
+ * current Sonnet under an Opus drafter, Haiku under a Sonnet one (see `judgeModelFor`). The judge
+ * checks a short rule against its thread, a narrow task a smaller model does well, and it runs up
+ * to `judgeCalls` times a day.
  */
 export const DEFAULT_JUDGE_MODEL = "claude-sonnet-5-5";
+export const SMALL_JUDGE_MODEL = "claude-haiku-4-5-20251001";
 
 /** The judge's model: `agents.curator.judgeModel`, else a default that differs from the drafter's. */
 export function judgeModelFor(config: Config): string {
   const { judgeModel, model } = config.agents.curator;
   if (judgeModel) return judgeModel;
-  return model === DEFAULT_JUDGE_MODEL ? DEFAULT_AGENT_MODEL : DEFAULT_JUDGE_MODEL;
+  return /sonnet|haiku/.test(model) ? SMALL_JUDGE_MODEL : DEFAULT_JUDGE_MODEL;
 }
 
 const agentSchema = (schedule: string, lookbackHours: number) =>

@@ -14,6 +14,15 @@ export type Asker = <S extends z.ZodType>(
   schema: S,
 ) => Promise<z.infer<S> | null>;
 
+/** What one call used, as the runtime reports it. `costUsd` only where the runtime gives one. */
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd?: number;
+}
+
 /** Claude could not be reached or refused the credentials; the agent run cannot continue. */
 export class ClaudeUnavailableError extends Error {}
 
@@ -30,6 +39,8 @@ export interface ApiAskerOptions {
    * a caller's environment (or a test's empty one) is never bypassed. Defaults to the SDK's own.
    */
   env?: Readonly<Record<string, string | undefined>>;
+  /** Called after each call with what it used. */
+  onUsage?: (usage: Usage) => void;
 }
 
 // The SDK reports missing credentials with a plain Error, so match its message.
@@ -72,6 +83,13 @@ export function apiAsker(opts: ApiAskerOptions): Asker {
       }
       throw e;
     }
+    const u = response.usage;
+    opts.onUsage?.({
+      inputTokens: u?.input_tokens ?? 0,
+      outputTokens: u?.output_tokens ?? 0,
+      cacheReadTokens: u?.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: u?.cache_creation_input_tokens ?? 0,
+    });
     if (response.stop_reason === "refusal") return null;
     const parsed = schema.safeParse(response.parsed_output);
     return parsed.success ? parsed.data : null;

@@ -229,7 +229,7 @@ areas:
   test("the judge defaults to a different model from the drafter", () => {
     expect(judgeModelFor(config())).toBe("claude-sonnet-5-5");
     const sonnet = parseConfig(`${yaml}agents:\n  curator: { model: claude-sonnet-5-5 }\n`).config;
-    expect(sonnet && judgeModelFor(sonnet)).toBe("claude-opus-5-5");
+    expect(sonnet && judgeModelFor(sonnet)).toBe("claude-haiku-4-5-20251001");
     const set = parseConfig(`${yaml}agents:\n  curator: { judgeModel: claude-haiku-4-5 }\n`).config;
     expect(set && judgeModelFor(set)).toBe("claude-haiku-4-5");
   });
