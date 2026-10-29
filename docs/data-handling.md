@@ -2,6 +2,23 @@
 
 What Homeostat reads, what leaves your network, where it goes, what it keeps, and how to turn each part off. For the threat model behind it, see [security.md](security.md); to check a real setup, run `homeostat doctor --security`.
 
+## No service in between
+
+Homeostat is software you run, not a service you send data to. There is no Homeostat server, account or telemetry, and nobody but you operates any part of it:
+
+| Part | Runs on | With whose credentials |
+| --- | --- | --- |
+| The knowledge base | Your git host (GitHub or Bitbucket), in a repo you own | Your team's access rules |
+| Daily run, deep dive, digest | Your KB repo's CI, or `homeostat up` on a box of yours | A git-host token and a model credential stored as your CI secrets |
+| Session hooks, MCP server, dashboard | Each developer's machine, inside their Claude Code, on a local clone | The developer's own git credentials |
+| Model calls | The provider you choose: Anthropic's API, Amazon Bedrock, Google Vertex AI, or a Claude Code login | Your key, your cloud account, or your login |
+
+What follows from that:
+- **The only places your data goes** are your git host, your model provider and, if you configure it, your Slack webhook. The code makes no other network calls.
+- **The agreements that apply** are the ones you already have with those providers: your git host's terms, and your model provider's data and retention terms (for Bedrock and Vertex, your own cloud account's). There is no third party in between to review.
+- **Deleting the KB repo removes everything Homeostat stored,** apart from what lives with those providers under their terms (CI logs, model-provider retention) and each machine's local `.homeostat/` folder (the event log and handoff state), which deletes with the clone.
+- **Cost and limits are yours to see:** each run prints its calls, tokens and cost, and `agents.maxCostUsd` caps it. A Claude Code login spends that person's own usage limits.
+
 ## What it reads
 
 | Part | Runs | Reads | Never reads |

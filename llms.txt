@@ -1,6 +1,6 @@
 # Homeostat
 
-> Homeostat turns a team's accepted code-review feedback into short, scored coding rules that every coding agent follows. Rules live as Markdown files in a git repo (the knowledge base), arrive by pull request, and reach agents through a Claude Code plugin, an MCP server, and exported rules files for Cursor, Copilot and AGENTS.md.
+> Homeostat is a team knowledge base for coding agents that keeps itself current. It learns rules and documents from code review, from what developers teach their agents and from the code, scores every change and retires what goes stale. The knowledge base is Markdown in a git repo the team owns; changes arrive by pull request; agents get it through a Claude Code plugin, an MCP server, and exported rules files for Cursor, Copilot and AGENTS.md. It runs in the team's own CI and sessions with the team's own credentials: there is no Homeostat service.
 
 When working in a repo whose team uses Homeostat:
 

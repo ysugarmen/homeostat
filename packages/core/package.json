@@ -1,11 +1,16 @@
 {
   "name": "@homeostat/core",
   "version": "0.4.1",
-  "description": "Schemas, validation, scoring and agents behind homeostat, the team knowledge base for coding agents.",
+  "description": "Schemas, validation, scoring and agents behind homeostat, the self-maintaining team knowledge base for coding agents.",
   "keywords": [
     "homeostat",
     "knowledge-base",
-    "coding-rules"
+    "coding-rules",
+    "knowledge-management",
+    "self-hosted",
+    "coding-agents",
+    "claude-code",
+    "mcp"
   ],
   "homepage": "https://github.com/ysugarmen/homeostat#readme",
   "bugs": {

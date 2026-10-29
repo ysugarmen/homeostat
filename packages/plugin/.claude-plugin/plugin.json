@@ -2,12 +2,20 @@
   "name": "homeostat",
   "displayName": "homeostat",
   "version": "0.4.1",
-  "description": "Capture, explain and review your team's knowledge base entries from inside Claude Code.",
+  "description": "Your team's knowledge base in Claude Code: the rules and documents for what you are working on, and the lessons you teach saved for the team. Runs locally on your clone.",
   "author": {
     "name": "homeostat contributors"
   },
   "license": "Apache-2.0",
-  "keywords": ["knowledge-base", "code-review", "team", "rules"],
+  "keywords": [
+    "knowledge-base",
+    "code-review",
+    "team",
+    "rules",
+    "knowledge-management",
+    "self-hosted",
+    "coding-agents"
+  ],
   "userConfig": {
     "kb_dir": {
       "type": "directory",

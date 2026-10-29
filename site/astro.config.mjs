@@ -8,7 +8,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Homeostat",
-      description: "Your team's code-review lessons, as rules every coding agent follows.",
+      description: "A team knowledge base for coding agents that keeps itself current. Runs on your repos, CI and tokens.",
       logo: { src: "./src/assets/mark.svg", replacesTitle: false },
       favicon: "/favicon.svg",
       social: [{ icon: "github", label: "GitHub", href: REPO }],

@@ -16,12 +16,12 @@ const steps = [
     body: "homeostat bootstrap reads each repo you own: its docs, schemas, migrations, charts and pipelines. It drafts a first base for the team to correct in one pull request.",
   },
   {
-    title: "Capture what reviewers teach",
-    body: "Each morning a CI job reads yesterday's merged pull requests. Where a review comment was followed by a fix, it drafts one short rule, with a link to the comment.",
+    title: "Learn from the team's work",
+    body: "Code review is one source: each morning a CI job drafts a rule wherever a reviewer's comment led to a fix, and proposes one-section updates to the documents it touches. Developers add what they teach their agents with homeostat learn.",
   },
   {
-    title: "Decide by confidence",
-    body: "Every lesson gets a 0 to 100 score from its source, who vouched for it and how specific it is. Confident ones merge themselves; only the uncertain ones wait for your reviewers.",
+    title: "Decide, then correct itself",
+    body: "Every change gets a 0 to 100 confidence score. Confident ones merge themselves; only the uncertain ones wait for your reviewers. A weekly deep dive merges duplicates, marks contradictions and retires stale rules, and a rule flagged as wrong goes back to review.",
   },
   {
     title: "Deliver to every agent",
@@ -39,12 +39,19 @@ const lessons = [
   { score: 29, label: "A note an agent left at the end of a session", decision: "declined" },
 ];
 
+// Where each part runs, and whose it is: the point of the section is that none of it is ours.
+const own = [
+  ["Knowledge", "Markdown in a git repo you own, on GitHub or Bitbucket. Every change is a pull request you can read"],
+  ["Runs", "Jobs in that repo's CI: GitHub Actions or Bitbucket Pipelines, once a day and once a week"],
+  ["Sessions", "Hooks and an MCP server in each developer's Claude Code, reading a local clone. Nothing scheduled on laptops"],
+  ["Model calls", "Your credential, to the provider you choose: Anthropic's API, Amazon Bedrock, Google Vertex AI or a Claude Code login"],
+  ["Our servers", "None. No account, no hosted service, no telemetry. The code talks only to your git host, your model provider and, if you add it, Slack"],
+];
+
 const spec = [
-  ["Storage", "Markdown in your own git repo, one folder per code repo, rules grouped by topic"],
+  ["Storage", "One folder per code repo, rules grouped by topic, documents in sections"],
   ["Changes", "Pull requests only. Confident lessons merge on their own; the rest go to named reviewers"],
-  ["Runs", "In the knowledge base's CI, once a day, on GitHub Actions or Bitbucket Pipelines"],
-  ["Developer machines", "Session hooks and an MCP server. Nothing scheduled, no daemon"],
-  ["Model", "Claude, through the API, Amazon Bedrock, Google Vertex AI or Claude Code. It reads review threads, never code"],
+  ["Model", "Claude reads review threads and the KB's own text. Code only when you run bootstrap by hand, after a preview"],
   ["Cost", "Every run reports its calls, tokens and cost per agent. A spending cap per run stops it cleanly and leaves the rest for tomorrow"],
   ["Session start", "Under a second on a 600-rule knowledge base (median 0.9 s)"],
   ["Measured", "homeostat bench runs the same tasks from your own review history with the plugin off and on"],
@@ -59,7 +66,7 @@ const spec = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Homeostat</title>
-    <meta name="description" content="Your team's code-review lessons, as rules every coding agent follows." />
+    <meta name="description" content="A team knowledge base for coding agents that keeps itself current. It runs on your repos, CI and tokens: there is no Homeostat service." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin />
   </head>
@@ -78,12 +85,13 @@ const spec = [
     <main id="main">
       <section class="hero">
         <div class="hero-copy">
-          <h1>Code review, remembered by every agent.</h1>
+          <h1>The team knowledge base that maintains itself.</h1>
           <p class="lede">
-            Your reviewers already teach your coding agents, one comment at a time, and the agents forget by the next session.
-            Homeostat turns the comments that led to a fix into reviewed rules in your git repo, and gives every session the
-            ones for the files it touches.
+            Homeostat keeps your team's conventions, decisions and system documents in a git repo you own, and gives every
+            coding agent the part that matters for its task. It keeps them current on its own: it learns from code review,
+            from what developers teach their agents and from the code, scores every change, and retires what goes stale.
           </p>
+          <p class="lede own-line">It runs in your CI and your sessions, with your tokens. There is no Homeostat service.</p>
           <div class="ctas">
             <a class="btn primary" href="/docs/guide/quickstart/">Read the quickstart</a>
             <a class="btn" href={repo}>View on GitHub</a>
@@ -134,6 +142,22 @@ const spec = [
             <span></span>
           </div>
         </div>
+      </section>
+
+      <section class="plate" aria-labelledby="own">
+        <h2 id="own">Runs on yours, not ours</h2>
+        <dl>
+          {own.map(([k, v]) => (
+            <div>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <p class="plate-note">
+          What is sent where, and how to turn each part off: <a href="/docs/data-handling/">data handling</a>. Who can change
+          what your agents are told: <a href="/docs/security/">security</a>.
+        </p>
       </section>
 
       <section class="plate" aria-labelledby="spec">
@@ -259,6 +283,7 @@ const spec = [
     max-width: 12ch;
   }
   .lede { color: var(--muted); font-size: 1.12rem; max-width: 34em; margin: 24px 0 32px; }
+  .lede.own-line { margin-top: -16px; color: var(--paper); font-size: 1rem; border-left: 2px solid var(--teal); padding-left: 12px; }
   .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
   .btn {
     display: inline-flex;

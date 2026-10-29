@@ -4,7 +4,7 @@ As of 2026-10-21, version 0.2.1. For the threat model see [security.md](security
 
 ## Overview
 
-Homeostat turns a team's accepted code-review feedback into short, scored rules and sectioned team documents. It stores them as Markdown in a git repo, changes them only by pull request, and gives every coding agent the ones that apply to the files it is touching. It is on npm as `homeostat`, Apache-2.0, TypeScript on Node 22.18+. 0.2 added knowledge bases for several code repos, rules grouped into topic files, and `homeostat bootstrap`.
+Homeostat is a team knowledge base for coding agents that keeps itself current. Its sources are code review (accepted feedback that led to a code change), lessons developers teach their agents, and the code and docs themselves (`bootstrap`). It keeps short, scored rules and sectioned team documents as Markdown in a git repo, changes them only by pull request, corrects them over time (confidence scores, a judge, a weekly deep dive, flags and disputes), and gives every coding agent the ones that apply to its task. Every part runs on the team's own infrastructure: the KB repo's CI, each developer's session, and the team's model credential. There is no hosted component. It is on npm as `homeostat`, Apache-2.0, TypeScript on Node 22.18+. 0.2 added knowledge bases for several code repos, rules grouped into topic files, and `homeostat bootstrap`.
 
 **Problem.** Reviewers teach agents the same lessons repeatedly, because agent memory is per session, per person and per tool. Claude Code's own memory is unreviewed, not shared across tools, and has no provenance.
 

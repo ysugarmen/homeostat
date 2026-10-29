@@ -62,7 +62,7 @@ const WRITE_TOOLS = new Set(["learn", "flag"]);
  * agents never look for a hidden tool.
  */
 const instructions = (writes: boolean) =>
-  `Homeostat holds your team's reviewed coding rules, learned from accepted code-review feedback, and its reference documents. Before changing code, call context with the files you will touch, or search for a subject, and follow what it returns. Look things up first when ${TRIGGER_MOMENTS.join("; ")}. search covers rules and document sections; docs lists documents and read returns one section; explain says why a rule exists. When something you used came from here, start that part of your reply with "> ${CREDIT_LABEL} (<rule-id or area/topic#section>)". ${
+  `Homeostat holds your team's knowledge base: reviewed coding rules, learned from code review, from developers and from the code, and the team's reference documents. Before changing code, call context with the files you will touch, or search for a subject, and follow what it returns. Look things up first when ${TRIGGER_MOMENTS.join("; ")}. search covers rules and document sections; docs lists documents and read returns one section; explain says why a rule exists. When something you used came from here, start that part of your reply with "> ${CREDIT_LABEL} (<rule-id or area/topic#section>)". ${
     writes
       ? "When the user teaches you a team convention, save it with learn. If a rule is wrong, flag it."
       : "Saving through MCP is off for this team: when the user teaches you a team convention, use the /homeostat:learn skill or the homeostat learn command; to dispute a rule, homeostat flag <id> --reason."

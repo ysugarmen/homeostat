@@ -1,6 +1,8 @@
 # Security and data handling: threat model and plan
 
-**Status:** draft for review, 2026-10-14. Nothing here is built yet unless marked ✅.
+**Status:** threat model and controls, first written 2026-10-14; ✅ marks what is built.
+
+Homeostat has no server of its own: it runs in your KB repo's CI and your developers' sessions, with your credentials (see [data handling](data-handling.md#no-service-in-between)). So the trust boundary is the one you already have, your git host, your CI and your model provider, and the questions are about what the KB tells your agents and who can change it.
 
 Teams will only connect Homeostat to their repos if they can answer four questions quickly: *what does it read, what leaves our network, who can change what our agents are told, and what happens if it is compromised?* This document answers them for the code as it stands, ranks the threats, and plans the controls. The plan is Phase T in [execution-plan.md](execution-plan.md).
 

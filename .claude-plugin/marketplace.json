@@ -8,7 +8,7 @@
     {
       "name": "homeostat",
       "source": "./packages/plugin",
-      "description": "Capture, explain and review your team's knowledge base entries from inside Claude Code."
+      "description": "Your team's knowledge base in Claude Code: the rules and documents for what you are working on, and the lessons you teach saved for the team. Runs locally on your clone."
     }
   ]
 }

@@ -1,11 +1,16 @@
 {
   "name": "@homeostat/mcp",
   "version": "0.4.1",
-  "description": "The homeostat team knowledge base as an MCP server.",
+  "description": "The homeostat team knowledge base as an MCP server, run locally on your own clone.",
   "keywords": [
     "homeostat",
     "mcp",
-    "model-context-protocol"
+    "model-context-protocol",
+    "knowledge-base",
+    "knowledge-management",
+    "self-hosted",
+    "coding-agents",
+    "claude-code"
   ],
   "homepage": "https://github.com/ysugarmen/homeostat#readme",
   "bugs": {

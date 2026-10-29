@@ -252,7 +252,9 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
   if (given.env?.HOMEOSTAT_NO_SYNC) delete io.background;
   let exitCode = 0;
   const program = new Command("homeostat")
-    .description("Team knowledge base for coding agents.")
+    .description(
+      "A team knowledge base for coding agents that keeps itself current. Runs on your repos, CI and tokens.",
+    )
     .version(VERSION, "-v, --version")
     .exitOverride()
     .configureOutput({ writeOut: io.stdout, writeErr: io.stderr });

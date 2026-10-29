@@ -1,8 +1,10 @@
 # Homeostat
 
-Your team already teaches its coding agents, one review comment at a time, and they forget it all by the next session. Homeostat keeps that knowledge.
+A team knowledge base for coding agents that keeps itself current. Homeostat keeps a team's conventions, decisions and system documents, gives every agent the part that matters for its task, and keeps them right: it learns from code review, from what developers teach their agents and from the code, scores every change, and retires what goes stale.
 
-It turns accepted code-review feedback into short, scored rules and team documents. They live as Markdown in a git repo (one folder per code repo when a team owns several, with rules grouped into topic files), change only by pull request, and reach every agent: Claude Code (plugin and hooks), any MCP client, and Cursor, Copilot and AGENTS.md through exported rules files.
+The knowledge lives as Markdown in a git repo you own (one folder per code repo when a team owns several, with rules grouped into topic files), changes only by pull request, and reaches every agent: Claude Code (plugin and hooks), any MCP client, and Cursor, Copilot and AGENTS.md through exported rules files.
+
+It runs on what you already have: your git host, your CI, your developers' sessions and your model credential. There is no Homeostat service, account or telemetry ([data handling](data-handling.md)).
 
 ## How it works
 

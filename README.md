@@ -1,13 +1,24 @@
 # Homeostat
 
-**Your team's code-review lessons, as rules every coding agent follows.**
+**A team knowledge base for coding agents that keeps itself current.**
 
-Your reviewers already teach your coding agents, one comment at a time: "use the retry helper", "never log the request body", "that service was renamed". Each agent forgets by the next session, so the same comment gets written again next week. Claude's own memory helps one person in one tool. It is unreviewed, and it is not shared with the rest of the team or with Cursor, Copilot and Codex.
+Every team knows things its coding agents don't: which helper to use, what was decided last quarter, how the services fit together, what the reviewer will flag. Agents start every session without it. One person's agent memory helps only them, in one tool, unreviewed. Homeostat keeps that knowledge in a git repo you own, gives every agent the part that matters for its task, and keeps it right on its own:
 
-Homeostat closes the loop:
-- It turns review feedback that led to a code change into short, scored rules and living team documents.
-- It keeps them in a git repo, one folder per code repo when a team owns several, with rules grouped into topic files. Every change arrives by pull request, and only the uncertain ones need a human.
-- It gives every agent the ones that matter for the files it is touching.
+- **It learns from the team's work.** Code review is one source: a daily run drafts a rule wherever a reviewer's comment led to a fix, and proposes one-section updates to the documents it touches. Developers add what they teach their agents (`homeostat learn`), and `bootstrap` drafts a first base from the code and its docs.
+- **It corrects itself.** Every change is scored for confidence. Confident ones merge by pull request on their own; only the uncertain ones reach a reviewer. A weekly deep dive merges duplicates, marks contradictions and retires stale rules, and a rule flagged as wrong goes back to review. `metrics`, `eval` and `bench` measure whether agents use it and whether it helps.
+- **It reaches every agent.** Claude Code through a plugin, any MCP client, and Cursor, Copilot and AGENTS.md through exported files.
+
+## Runs on yours, not ours
+
+There is no Homeostat service, account or server, and no telemetry.
+
+- **The knowledge** is Markdown in a git repo you own, on GitHub or Bitbucket. Every change is a pull request.
+- **The daily and weekly runs** are jobs in that repo's CI (GitHub Actions or Bitbucket Pipelines), or `homeostat up` on a box of yours.
+- **Sessions** read a local clone through hooks and an MCP server in each developer's Claude Code. Nothing is scheduled on laptops.
+- **Model calls** use your credential, with the provider you choose: Anthropic's API, Amazon Bedrock, Google Vertex AI, or a Claude Code login.
+- **The code talks to** your git host, your model provider and, if you add it, Slack. Nothing else.
+
+What is sent where, and how to turn each part off: [data handling](docs/data-handling.md). Who can change what your agents are told: [security](docs/security.md).
 
 <!-- demo.gif: render with `vhs docs/demo.tape` -->
 
