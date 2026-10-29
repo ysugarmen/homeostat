@@ -1522,7 +1522,7 @@ describe("homeostat daily: the spending cap", { timeout: 30_000 }, () => {
     t.g(t.ci, "commit", "-qam", "cap");
     t.g(t.ci, "push", "-q", "origin", "main");
 
-    // The judge (Sonnet under the Opus drafter) reports 10k tokens in, 2k out: $0.06 a call.
+    // The judge (Sonnet under the Opus drafter) reports 10k tokens in, 2k out: $0.04 a call.
     const provider = new TwoReviews();
     const { stdout } = await run(["daily", "--dir", t.ci], {
       provider,
@@ -1535,22 +1535,22 @@ describe("homeostat daily: the spending cap", { timeout: 30_000 }, () => {
     // Decided: the colour lesson. Left, not declined and not sent to review: the spacing one.
     expect(stdout).toContain("lee: 1 merged, 0 to review, 0 declined");
     expect(stdout).toContain(
-      "stopped at the spending cap: $0.06 of $0.01 (estimated from tokens); 1 lesson left for the next run",
+      "stopped at the spending cap: $0.04 of $0.01 (estimated from tokens); 1 lesson left for the next run",
     );
-    expect(stdout).toContain("about $0.06 at API prices, estimated from tokens");
+    expect(stdout).toContain("about $0.04 at API prices, estimated from tokens");
     expect(provider.merged).toHaveLength(1);
     const decided = stateFile(t, "decisions/lee.json").decided.map((d: { id: string }) => d.id);
     expect(decided).toEqual(["use-colour-tokens-instead-of-hex-values"]);
     const report = stateFile(t, "runs/2026-10-16T06-00-00Z.json");
     expect(report.capped).toEqual({
-      spentUsd: 0.06,
+      spentUsd: 0.04,
       maxCostUsd: 0.01,
       estimated: true,
       left: 1,
       since: "2026-10-15T04:00:00.000Z",
     });
     expect(report.notices).toContain(
-      "stopped at the spending cap: $0.06 of $0.01 (estimated from tokens); 1 lesson left for the next run",
+      "stopped at the spending cap: $0.04 of $0.01 (estimated from tokens); 1 lesson left for the next run",
     );
     expect(report.timing.byAgent.judge).toMatchObject({ calls: 1, estimated: true });
 

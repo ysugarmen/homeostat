@@ -42,7 +42,7 @@ test("past the spending cap no call starts; tokens without a cost are priced as 
   }
   const config = validate(files).config;
   if (!config) throw new Error("config");
-  const stats = newRunStats(0.25);
+  const stats = newRunStats(0.05);
   let sent = 0;
   const ask = askerFor(
     config,
@@ -52,7 +52,7 @@ test("past the spending cap no call starts; tokens without a cost are priced as 
       stderr: () => {},
       color: false,
       env: {},
-      // Opus: 10k in and 2k out is $0.30, a reported cost is taken as given.
+      // Opus 5.5: 10k in and 2k out is $0.08, a reported cost is taken as given.
       runtime:
         ({ onUsage }) =>
         async () => {
@@ -71,13 +71,13 @@ test("past the spending cap no call starts; tokens without a cost are priced as 
     stats,
   );
   await ask("s", "u", {} as never);
-  expect(runCost(stats)).toEqual({ usd: 0.3, estimated: true });
+  expect(runCost(stats)).toEqual({ usd: 0.08, estimated: true });
   await expect(ask("s", "u", {} as never)).rejects.toBeInstanceOf(SpendingCapError);
   expect(sent).toBe(1);
   expect(stats.capped).toBe(true);
   expect(stats.calls).toBe(1);
   expect(capLine(stats, 3)).toBe(
-    "stopped at the spending cap: $0.30 of $0.25 (estimated from tokens); 3 lessons left for the next run",
+    "stopped at the spending cap: $0.08 of $0.05 (estimated from tokens); 3 lessons left for the next run",
   );
 });
 

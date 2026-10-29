@@ -309,7 +309,11 @@ export const configSchema = z.strictObject({
       /** Session handoff notes, asked for by the plugin's Stop hook. Runs in sessions, not on a schedule. */
       handoff: z
         .strictObject({
-          enabled: z.boolean().default(true),
+          /**
+           * Off by default: Claude Code shows the question as a "Stop hook error", it adds a turn,
+           * and it cannot tell a finished session from one waiting on background work.
+           */
+          enabled: z.boolean().default(false),
           /** File edits in a session before the agent is asked for a note. */
           minEdits: z.int().positive().default(5),
         })

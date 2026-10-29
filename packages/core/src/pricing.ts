@@ -13,23 +13,29 @@ export interface Price {
  * Approximate: update it when prices change. Figures from it are labelled estimates.
  */
 const MODEL_PRICES: Record<string, Price> = {
-  "claude-opus-5-5": { input: 15, output: 75 },
-  "claude-sonnet-5-5": { input: 3, output: 15 },
+  "claude-opus-5-5": { input: 4, output: 20 },
+  "claude-sonnet-5-5": { input: 2, output: 10 },
+  "claude-haiku-4-5": { input: 1, output: 5 },
   "claude-haiku-4-5-20251001": { input: 1, output: 5 },
 };
+/** Older or unlisted models by family, at the family's dearest current price. */
 const FAMILY_PRICES: [RegExp, Price][] = [
   [/haiku/i, { input: 1, output: 5 }],
   [/sonnet/i, { input: 3, output: 15 }],
-  [/opus|fable/i, { input: 15, output: 75 }],
+  [/opus/i, { input: 5, output: 25 }],
+  [/fable|mythos/i, { input: 10, output: 50 }],
 ];
-/** Cache reads and writes, as a share of the input price. */
+/** What an unknown model is priced as: the dearest family, so a cap is never under-counted. */
+const DEAREST: Price = { input: 10, output: 50 };
+/** Cache reads and writes, as a share of the input price (reads are 0.05-0.1x; 0.1x errs high). */
 const CACHE_READ = 0.1;
 const CACHE_WRITE = 1.25;
 
 /** The model's price, or undefined for a model the table does not know. */
 export function priceFor(model: string | undefined): Price | undefined {
   if (!model) return undefined;
-  return MODEL_PRICES[model] ?? FAMILY_PRICES.find(([re]) => re.test(model))?.[1];
+  const known = Object.entries(MODEL_PRICES).find(([id]) => model.includes(id))?.[1];
+  return MODEL_PRICES[model] ?? known ?? FAMILY_PRICES.find(([re]) => re.test(model))?.[1];
 }
 
 /**
@@ -40,7 +46,7 @@ export function estimateCostUsd(
   model: string,
   usage: Pick<Usage, "inputTokens" | "outputTokens"> & Partial<Usage>,
 ): number {
-  const p = priceFor(model) ?? { input: 15, output: 75 };
+  const p = priceFor(model) ?? DEAREST;
   const input =
     usage.inputTokens +
     (usage.cacheReadTokens ?? 0) * CACHE_READ +

@@ -122,9 +122,9 @@ describe("homeostat bootstrap", () => {
     const config = join(kb, "homeostat.yaml");
     writeFileSync(
       config,
-      readFileSync(config, "utf8").replace("agents:\n", "agents:\n  maxCostUsd: 0.1\n"),
+      readFileSync(config, "utf8").replace("agents:\n", "agents:\n  maxCostUsd: 0.05\n"),
     );
-    // Each call reports 10k tokens in and 2k out on the Opus drafter, priced at $0.30.
+    // Each call reports 10k tokens in and 2k out on the Opus drafter, priced at $0.08.
     let calls = 0;
     const draft = new FakeSeeder();
     const runtime: Io["runtime"] =
@@ -145,7 +145,7 @@ describe("homeostat bootstrap", () => {
     expect(r.code).toBe(0);
     expect(calls).toBe(1);
     expect(r.stdout).toContain(
-      "stopped at the spending cap: $0.30 of $0.10 (estimated from tokens); 4 documents left for the next run",
+      "stopped at the spending cap: $0.08 of $0.05 (estimated from tokens); 4 documents left for the next run",
     );
     expect(existsSync(join(kb, "knowledge/api/core/docs/architecture.md"))).toBe(true);
     expect(existsSync(join(kb, "knowledge/api/core/docs/data.md"))).toBe(false);

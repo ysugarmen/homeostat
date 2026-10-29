@@ -82,7 +82,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `agents.deepDive.lookbackHours` | `168` | Which rules count as "this week's" for the contradiction check |
 | `agents.deepDive.staleAfterDays` | `180` | Accepted rules not confirmed for this long are retired; older document sections are flagged |
 | `agents.deepDive.retractCalls` | `10` | Most model calls per deep dive that rewrite a document section citing a rule it retires as stale ([details](agents.md#retract)). `0` lists the sections instead |
-| `agents.handoff.enabled` | `true` | Ask for a handoff note at the end of sessions with real edits |
+| `agents.handoff.enabled` | `false` | Ask for a handoff note at the end of sessions with real edits. Opt-in: Claude Code shows the question as a "Stop hook error", and it costs one more turn |
 | `agents.handoff.minEdits` | `5` | File edits before the note is asked for |
 
 ## `distribution`
