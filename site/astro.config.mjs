@@ -53,10 +53,6 @@ export default defineConfig({
           items: [
             { label: "Architecture", link: "/docs/architecture/" },
             { label: "End-to-end demo", link: "/docs/demo/" },
-            { label: "Design (historical)", link: "/docs/design/" },
-            { label: "Execution plan (historical)", link: "/docs/execution-plan/" },
-            { label: "Knowledge documents (historical)", link: "/docs/knowledge-docs/" },
-            { label: "Survival levers (historical)", link: "/docs/levers/" },
           ],
         },
       ],
