@@ -18,7 +18,7 @@ import {
   readPendingFiles,
   removePendingFile,
   repoNames,
-  STATE_BRANCH,
+  stateBranch,
   usageCounts,
   VERSION,
   validate,
@@ -144,7 +144,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
     "fetch",
     "--quiet",
     "origin",
-    `+refs/heads/${STATE_BRANCH}:refs/remotes/origin/${STATE_BRANCH}`,
+    `+refs/heads/${stateBranch(base)}:refs/remotes/origin/${stateBranch(base)}`,
   );
   // Teammates' heartbeats, for the dashboard's sync health (each branch is small and shares main).
   gitNet(
@@ -156,7 +156,11 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   );
 
   // 2. Clear what the daily run has decided.
-  const raw = git(root, "show", `refs/remotes/origin/${STATE_BRANCH}:${decisionsPath(member)}`);
+  const raw = git(
+    root,
+    "show",
+    `refs/remotes/origin/${stateBranch(base)}:${decisionsPath(member)}`,
+  );
   const decided = new Map<string, DecisionRecord>();
   if (raw) {
     try {

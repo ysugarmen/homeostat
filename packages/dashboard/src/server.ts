@@ -120,7 +120,7 @@ export interface DashboardView {
 export function dashboardView(kbRoot: string, snap: Snapshot): DashboardView {
   // One read of the state branch: twice the window of runs, so trends have a previous window.
   // The Automation page keeps its view of the last 30.
-  const state = readAutomation(kbRoot, 2 * DEFAULT_WINDOW.runs);
+  const state = readAutomation(kbRoot, 2 * DEFAULT_WINDOW.runs, snap.config?.sources?.baseBranch);
   const autoState = { ...state, runs: state.runs.slice(-DEFAULT_WINDOW.runs) };
   const auto = automationView(autoState, snap.config, snap.now);
   const kbHealth = health(snap);

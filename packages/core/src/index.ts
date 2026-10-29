@@ -11,6 +11,7 @@ export {
   type RunReport,
   STALE_HEARTBEAT_HOURS,
   STATE_BRANCH,
+  stateBranch,
   type UsageDay,
 } from "./automation.ts";
 export {

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { STATE_BRANCH } from "@homeostat/core";
+import { stateBranch } from "@homeostat/core";
 
 export interface RefreshResult {
   /** Whether anything the dashboard reads moved: the checkout or a fetched branch. */
@@ -48,7 +48,7 @@ export async function refreshCheckout(dir: string, base: string): Promise<Refres
     "--prune",
     "origin",
     `+refs/heads/${base}:refs/remotes/origin/${base}`,
-    `+refs/heads/${STATE_BRANCH}:refs/remotes/origin/${STATE_BRANCH}`,
+    `+refs/heads/${stateBranch(base)}:refs/remotes/origin/${stateBranch(base)}`,
     "+refs/heads/candidates/*:refs/remotes/origin/candidates/*",
   );
   // A state branch that does not exist yet (no daily run so far) fails the fetch; try without it.

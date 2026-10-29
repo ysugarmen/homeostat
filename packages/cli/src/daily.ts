@@ -44,8 +44,8 @@ import {
   resolveDispute,
   retiredRule,
   retractCitations,
-  STATE_BRANCH,
   sameLesson,
+  stateBranch,
   type Verdict,
   validate,
 } from "@homeostat/core";
@@ -159,8 +159,10 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     "origin",
     "+refs/heads/candidates/*:refs/remotes/origin/candidates/*",
   );
-  git(root, "fetch", "--quiet", "origin", `+refs/heads/${STATE_BRANCH}:${remote(STATE_BRANCH)}`);
-  const onState = (path: string) => git(root, "show", `${remote(STATE_BRANCH)}:${path}`);
+  // This KB branch's own history: another branch's run never settles or counts these PRs.
+  const STATE = stateBranch(base);
+  git(root, "fetch", "--quiet", "origin", `+refs/heads/${STATE}:${remote(STATE)}`);
+  const onState = (path: string) => git(root, "show", `${remote(STATE)}:${path}`);
   // A rule's path reads through its topic file when the KB groups rules by topic.
   const onBase = (path: string) => showRule(root, remote(base), path);
   // Each PR is folded onto the latest base: an earlier PR of this run may have merged since.
@@ -911,9 +913,9 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     for (const [m, d] of decisions)
       if (d.decided.length) state[decisionsPath(m)] = `${JSON.stringify(d, null, 1)}\n`;
     for (const [m, hb] of Object.entries(heartbeats)) state[`heartbeats/${m}.json`] = `${hb}\n`;
-    const parent = git(root, "rev-parse", "--verify", "--quiet", remote(STATE_BRANCH));
+    const parent = git(root, "rev-parse", "--verify", "--quiet", remote(STATE));
     const commit = commitTree(root, parent, state, `homeostat: daily run ${today}`);
-    forcePush(root, commit, STATE_BRANCH);
+    forcePush(root, commit, STATE);
     await notifyReviewQueue(config, report, [...decisions.values()], now, io);
   }
 

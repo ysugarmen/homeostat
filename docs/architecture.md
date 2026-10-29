@@ -141,7 +141,7 @@ The goal: no per-lesson PRs, no per-lesson approvals, no per-developer setup, an
 | --- | --- | --- |
 | `main` | daily-run PRs, reviewers | the team KB |
 | `candidates/<member>` | that developer's sync, force-pushed | `main` + their pending lessons + a heartbeat; transport only, never merged |
-| `homeostat/state` | the daily run | `decisions/<member>.json` (with when each review opened and settled), `heartbeats/<member>.json`, `runs/<date>.json` (with the run's timing and the KB's health counts) |
+| `homeostat/state` (`homeostat/state-<branch>` for a KB on another `sources.baseBranch`) | the daily run | `decisions/<member>.json` (with when each review opened and settled), `heartbeats/<member>.json`, `runs/<date>.json` (with the run's timing and the KB's health counts). One history per KB branch, so a trial KB on a branch never settles or counts the main KB's review PRs |
 
 **On the laptop: sync rides on session hooks.** `homeostat sync` runs detached in the background from the plugin's hooks: at SessionStart, on UserPromptSubmit at most every 3 hours (so a session left open for days still syncs), and at Stop when the pending set changed. Each sync:
 

@@ -229,7 +229,7 @@ function pinnedVersions(root: string): Check[] {
 /** Members whose heartbeat carries usage counts: by config, or by their last heartbeat. */
 function sharingUsage(root: string, config: Config): string[] {
   const byConfig = config.team.members.filter((m) => m.usage).map((m) => m.id);
-  const byHeartbeat = readState(root)
+  const byHeartbeat = readState(root, 30, config.sources?.baseBranch)
     .heartbeats.filter((h) => h.usage)
     .map((h) => h.member);
   return [...new Set([...byConfig, ...byHeartbeat])].sort();

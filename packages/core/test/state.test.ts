@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
+import { stateBranch } from "../src/automation.ts";
 import { readState } from "../src/state.ts";
 
 const starter = new URL("../../../examples/starter-kb", import.meta.url).pathname;
@@ -77,4 +78,13 @@ test("reads runs, decisions and the freshest heartbeat per member from the clone
 
 test("a clone without the state branch is not present", () => {
   expect(readState(clone())).toEqual({ present: false, runs: [], heartbeats: [], decisions: [] });
+});
+
+test("each KB branch keeps its own history: main's is not read for a trial branch", () => {
+  expect(stateBranch()).toBe("homeostat/state");
+  expect(stateBranch("main")).toBe("homeostat/state");
+  expect(stateBranch("demo/fresh")).toBe("homeostat/state-demo-fresh");
+  const kb = clone({ "runs/2026-10-16T06-00-00Z.json": run("2026-10-16T06:00:00Z") });
+  expect(readState(kb).runs).toHaveLength(1);
+  expect(readState(kb, 30, "demo/fresh").present).toBe(false);
 });

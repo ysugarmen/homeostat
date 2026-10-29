@@ -12,6 +12,16 @@ import type { KbSnapshot } from "./metrics/health-trend.ts";
  *   and one report per run. Laptops read their decisions from it; the dashboard reads all of it.
  */
 export const STATE_BRANCH = "homeostat/state";
+
+/**
+ * The branch a KB branch's daily run keeps its history on (decisions, runs, heartbeats). One per
+ * base branch: a trial KB on another branch must neither settle nor count the main KB's review
+ * PRs, which it once did and marked lessons merged elsewhere as declined. `main` keeps the
+ * original name, so existing KBs keep their history.
+ */
+export function stateBranch(base = "main"): string {
+  return base === "main" ? STATE_BRANCH : `${STATE_BRANCH}-${base.replace(/[^\w.-]+/g, "-")}`;
+}
 export const candidatesBranch = (member: string) => `candidates/${member}`;
 export const HEARTBEAT_PATH = ".homeostat-sync/heartbeat.json";
 export const decisionsPath = (member: string) => `decisions/${member}.json`;

@@ -4,7 +4,7 @@ import {
   HEARTBEAT_PATH,
   type Heartbeat,
   type RunReport,
-  STATE_BRANCH,
+  stateBranch,
 } from "./automation.ts";
 
 /**
@@ -21,7 +21,6 @@ export interface StateView {
   decisions: DecisionsFile[];
 }
 
-const REF = `refs/remotes/origin/${STATE_BRANCH}`;
 const CANDIDATES = "refs/remotes/origin/candidates/";
 
 function git(dir: string, ...args: string[]): string | undefined {
@@ -36,15 +35,17 @@ function git(dir: string, ...args: string[]): string | undefined {
   }
 }
 
-function json<T>(dir: string, path: string): T | undefined {
+function json<T>(dir: string, ref: string, path: string): T | undefined {
   try {
-    return JSON.parse(git(dir, "show", `${REF}:${path}`) ?? "") as T;
+    return JSON.parse(git(dir, "show", `${ref}:${path}`) ?? "") as T;
   } catch {
     return undefined;
   }
 }
 
-export function readState(kbRoot: string, maxRuns = 30): StateView {
+/** `base`: the KB branch (`sources.baseBranch`), whose own history is read (see `stateBranch`). */
+export function readState(kbRoot: string, maxRuns = 30, base = "main"): StateView {
+  const REF = `refs/remotes/origin/${stateBranch(base)}`;
   const listing = git(kbRoot, "ls-tree", "-r", "--name-only", REF);
   if (listing === undefined) return { present: false, runs: [], heartbeats: [], decisions: [] };
   const paths = listing.split("\n").filter(Boolean);
@@ -53,7 +54,7 @@ export function readState(kbRoot: string, maxRuns = 30): StateView {
   const runs = under("runs")
     .sort()
     .slice(-maxRuns)
-    .flatMap((p) => json<RunReport>(kbRoot, p) ?? []);
+    .flatMap((p) => json<RunReport>(kbRoot, REF, p) ?? []);
   // The daily run's copy of each heartbeat is as old as the run; each developer's candidates
   // branch has the latest one their sync pushed (sync fetches them all). Keep the newer.
   const latest = new Map<string, Heartbeat>();
@@ -62,7 +63,7 @@ export function readState(kbRoot: string, maxRuns = 30): StateView {
     const known = latest.get(h.member);
     if (!known || h.at > known.at) latest.set(h.member, h);
   };
-  for (const p of under("heartbeats")) fresher(json<Heartbeat>(kbRoot, p));
+  for (const p of under("heartbeats")) fresher(json<Heartbeat>(kbRoot, REF, p));
   const branches = git(kbRoot, "for-each-ref", "--format=%(refname)", CANDIDATES) ?? "";
   for (const ref of branches.split("\n").filter(Boolean)) {
     try {
@@ -72,6 +73,6 @@ export function readState(kbRoot: string, maxRuns = 30): StateView {
     }
   }
   const heartbeats = [...latest.values()];
-  const decisions = under("decisions").flatMap((p) => json<DecisionsFile>(kbRoot, p) ?? []);
+  const decisions = under("decisions").flatMap((p) => json<DecisionsFile>(kbRoot, REF, p) ?? []);
   return { present: true, runs, heartbeats, decisions };
 }
