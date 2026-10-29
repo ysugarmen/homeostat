@@ -1,0 +1,143 @@
+---
+// "How it works" as a live schematic: sources in, one scored knowledge base with its own
+// correction loop, every agent out. Pulses run along the signal lines; reduced motion shows the
+// settled schematic. Narrow screens get the same nodes as a stacked list.
+const sources = [
+  { title: "Code review", sub: "a comment, then a fix", y: 50 },
+  { title: "Developers", sub: "homeostat learn", y: 174 },
+  { title: "Code & docs", sub: "bootstrap", y: 298 },
+];
+const agents = [
+  { title: "Claude Code", sub: "plugin and hooks", y: 66 },
+  { title: "Any MCP client", sub: "local server", y: 146 },
+  { title: "Cursor · Copilot", sub: "exported rules", y: 226 },
+  { title: "AGENTS.md", sub: "exported rules", y: 306 },
+];
+const inY = [170, 210, 250];
+const outY = [160, 195, 230, 265];
+const lanes = [
+  { label: "merge", note: "70+", cls: "merge", w: 0.92, y: 186 },
+  { label: "review", note: "35–69", cls: "review", w: 0.55, y: 222 },
+  { label: "decline", note: "<35", cls: "decline", w: 0.24, y: 258 },
+];
+const inPath = (i: number) => {
+  const cy = sources[i].y + 36;
+  return `M 250 ${cy} C 335 ${cy}, 335 ${inY[i]}, 420 ${inY[i]}`;
+};
+const outPath = (i: number) => {
+  const cy = agents[i].y + 28;
+  return `M 680 ${outY[i]} C 765 ${outY[i]}, 765 ${cy}, 850 ${cy}`;
+};
+const loop = "M 640 324 C 640 404, 460 404, 460 324";
+---
+
+<figure class="flow" aria-label="Three sources feed one scored knowledge base, which corrects itself and reaches every agent.">
+  <svg class="flow-wide" viewBox="0 0 1100 440" role="img" aria-hidden="true">
+    <g class="wires">
+      {sources.map((_, i) => <path d={inPath(i)} />)}
+      {agents.map((_, i) => <path d={outPath(i)} />)}
+      <path d={loop} />
+    </g>
+    <g class="pulses">
+      {sources.map((_, i) => <path d={inPath(i)} pathLength="100" style={`--d:${i * 0.9}s`} />)}
+      {agents.map((_, i) => <path d={outPath(i)} pathLength="100" style={`--d:${1.6 + i * 0.5}s`} />)}
+      <path class="loop" d={loop} pathLength="100" style="--d:0.4s" />
+    </g>
+
+    {sources.map((s) => (
+      <g class="node">
+        <rect x="40" y={s.y} width="210" height="72" rx="10" />
+        <text x="60" y={s.y + 32} class="t">{s.title}</text>
+        <text x="60" y={s.y + 54} class="s">{s.sub}</text>
+      </g>
+    ))}
+
+    <g class="kb">
+      <rect x="420" y="96" width="260" height="228" rx="12" />
+      <text x="442" y="130" class="t">Knowledge base</text>
+      <text x="442" y="152" class="s">your git repo · pull requests</text>
+      {lanes.map((l) => (
+        <g class={`lane ${l.cls}`}>
+          <text x="442" y={l.y + 4} class="lane-label">{l.label}</text>
+          <text x="660" y={l.y + 4} class="lane-note" text-anchor="end">{l.note}</text>
+          <rect class="track" x="512" y={l.y - 5} width="106" height="8" rx="4" />
+          <rect class="fill" x="512" y={l.y - 5} width={106 * l.w} height="8" rx="4" />
+        </g>
+      ))}
+    </g>
+    <text x="550" y="424" class="loop-label" text-anchor="middle">corrects itself · deep dive · judge · flags</text>
+
+    {agents.map((a) => (
+      <g class="node out">
+        <rect x="850" y={a.y} width="210" height="56" rx="10" />
+        <text x="870" y={a.y + 25} class="t">{a.title}</text>
+        <text x="870" y={a.y + 44} class="s">{a.sub}</text>
+      </g>
+    ))}
+  </svg>
+
+  <ol class="flow-narrow">
+    <li><span class="k">In</span>{sources.map((s) => <span class="chip">{s.title}</span>)}</li>
+    <li class="mid"><span class="k">Kept</span><span class="chip kb-chip">Knowledge base</span><span class="bands"><i class="merge">merge</i><i class="review">review</i><i class="decline">decline</i></span><span class="chip loop-chip">corrects itself</span></li>
+    <li><span class="k">Out</span>{agents.map((a) => <span class="chip">{a.title}</span>)}</li>
+  </ol>
+</figure>
+
+<style>
+  .flow { margin: 0; }
+  .flow-wide { display: block; width: 100%; height: auto; overflow: visible; }
+  .wires path { fill: none; stroke: var(--line); stroke-width: 1.5; }
+  .pulses path {
+    fill: none;
+    stroke: var(--amber);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 5 100;
+    stroke-dashoffset: 105;
+    filter: drop-shadow(0 0 4px rgb(240 165 65 / 0.7));
+    animation: run 3.6s linear infinite;
+    animation-delay: var(--d);
+  }
+  .pulses path.loop { stroke: var(--teal); filter: drop-shadow(0 0 4px rgb(108 196 168 / 0.7)); animation-duration: 4.8s; }
+  @keyframes run { to { stroke-dashoffset: 0; } }
+
+  .node rect, .kb > rect { fill: var(--panel); stroke: var(--line); }
+  .kb > rect { stroke: rgb(240 165 65 / 0.45); filter: drop-shadow(0 18px 40px rgb(0 0 0 / 0.45)); }
+  .t { fill: var(--paper); font: 700 15px "Archivo", sans-serif; letter-spacing: 0.01em; }
+  .kb .t { font-size: 18px; }
+  .s { fill: var(--faint); font: 400 11.5px "JetBrains Mono", monospace; }
+  .lane-label { fill: var(--muted); font: 600 11px "IBM Plex Sans", sans-serif; text-transform: uppercase; letter-spacing: 0.08em; }
+  .lane-note { fill: var(--faint); font: 400 10.5px "JetBrains Mono", monospace; }
+  .lane .track { fill: rgb(255 255 255 / 0.05); }
+  .lane .fill { transform-box: fill-box; transform-origin: left center; animation: fill 5s ease-in-out infinite; }
+  .merge .fill { fill: var(--teal); }
+  .review .fill { fill: var(--gold); animation-delay: 0.6s; }
+  .decline .fill { fill: var(--coral); animation-delay: 1.2s; }
+  @keyframes fill {
+    0% { transform: scaleX(0.05); }
+    35%, 85% { transform: scaleX(1); }
+    100% { transform: scaleX(0.05); }
+  }
+  .loop-label { fill: var(--teal); font: 500 12px "JetBrains Mono", monospace; letter-spacing: 0.02em; }
+
+  .flow-narrow { display: none; list-style: none; margin: 0; padding: 0; }
+  .flow-narrow li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+  .flow-narrow .k { width: 100%; color: var(--faint); font: 500 0.72rem "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: 0.1em; }
+  .chip { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--paper); font-size: 0.88rem; }
+  .kb-chip { border-color: rgb(240 165 65 / 0.5); }
+  .loop-chip { border-color: rgb(108 196 168 / 0.5); color: var(--teal); }
+  .bands { display: flex; gap: 6px; }
+  .bands i { font-style: normal; font-size: 0.75rem; padding: 3px 7px; border-radius: 999px; border: 1px solid; }
+  .bands .merge { color: var(--teal); }
+  .bands .review { color: var(--gold); }
+  .bands .decline { color: var(--coral); }
+
+  @media (max-width: 720px) {
+    .flow-wide { display: none; }
+    .flow-narrow { display: block; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pulses { display: none; }
+    .lane .fill { animation: none; }
+  }
+</style>

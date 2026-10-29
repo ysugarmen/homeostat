@@ -1,0 +1,105 @@
+---
+// "Runs on yours, not ours" as a schematic: every part inside the team's own perimeter, signals
+// moving between them, and a ghost box outside for the Homeostat servers that do not exist, joined
+// by a cut line. Narrow screens get the same parts as a list.
+const parts = [
+  { title: "Git host", sub: "the KB repo · every change a PR", x: 50, y: 80 },
+  { title: "CI", sub: "daily and weekly runs", x: 50, y: 212 },
+  { title: "Sessions", sub: "hooks · MCP · local clone", x: 330, y: 80 },
+  { title: "Model provider", sub: "your key, cloud or login", x: 560, y: 146 },
+];
+const wires = [
+  "M 150 156 L 150 212",
+  "M 250 118 L 330 118",
+  "M 250 250 C 400 250, 450 196, 560 190",
+  "M 530 118 C 548 118, 548 172, 560 178",
+];
+---
+
+<figure class="boundary" aria-label="Every part runs inside your own infrastructure: git host, CI, developer sessions and your model provider. There are no Homeostat servers.">
+  <svg class="b-wide" viewBox="0 0 1100 340" role="img" aria-hidden="true">
+    <rect class="perimeter" x="16" y="16" width="784" height="308" rx="18" />
+    <text x="42" y="48" class="zone">YOUR INFRASTRUCTURE</text>
+
+    <g class="wires">{wires.map((d) => <path d={d} />)}</g>
+    <g class="pulses">{wires.map((d, i) => <path d={d} pathLength="100" style={`--d:${i * 0.7}s`} />)}</g>
+
+    {parts.map((p) => (
+      <g class="part">
+        <rect x={p.x} y={p.y} width="200" height="76" rx="10" />
+        <text x={p.x + 18} y={p.y + 32} class="t">{p.title}</text>
+        <text x={p.x + 18} y={p.y + 54} class="s">{p.sub}</text>
+      </g>
+    ))}
+
+    <g class="cut">
+      <path d="M 800 170 L 832 170" />
+      <path d="M 848 170 L 880 170" />
+      <path class="x" d="M 834 162 L 846 178 M 846 162 L 834 178" />
+      <text x="840" y="200" class="zero" text-anchor="middle">0 requests</text>
+    </g>
+    <g class="ghost">
+      <rect x="880" y="112" width="204" height="116" rx="12" />
+      <text x="982" y="150" class="s" text-anchor="middle">Homeostat servers</text>
+      <text x="982" y="200" class="none" text-anchor="middle">none</text>
+    </g>
+  </svg>
+
+  <ul class="b-narrow">
+    {parts.map((p) => (
+      <li><strong>{p.title}</strong><span>{p.sub}</span></li>
+    ))}
+    <li class="ghost-li"><strong>Homeostat servers</strong><span>none · 0 requests</span></li>
+  </ul>
+</figure>
+
+<style>
+  .boundary { margin: 28px 0 0; }
+  .b-wide { display: block; width: 100%; height: auto; overflow: visible; }
+  .perimeter { fill: rgb(108 196 168 / 0.03); stroke: rgb(108 196 168 / 0.55); stroke-width: 1.5; stroke-dasharray: 6 6; }
+  .zone { fill: var(--teal); font: 600 11.5px "JetBrains Mono", monospace; letter-spacing: 0.16em; }
+  .wires path { fill: none; stroke: var(--line); stroke-width: 1.5; }
+  .pulses path {
+    fill: none;
+    stroke: var(--teal);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 6 100;
+    stroke-dashoffset: 106;
+    filter: drop-shadow(0 0 4px rgb(108 196 168 / 0.7));
+    animation: run 2.8s linear infinite;
+    animation-delay: var(--d);
+  }
+  @keyframes run { to { stroke-dashoffset: 0; } }
+  .part rect { fill: var(--panel); stroke: var(--line); }
+  .t { fill: var(--paper); font: 700 15px "Archivo", sans-serif; }
+  .s { fill: var(--faint); font: 400 11.5px "JetBrains Mono", monospace; }
+  .cut path { stroke: rgb(217 112 92 / 0.6); stroke-width: 1.5; fill: none; }
+  .cut .x { stroke: var(--coral); stroke-width: 2; }
+  .zero { fill: var(--coral); font: 500 11px "JetBrains Mono", monospace; }
+  .ghost rect { fill: none; stroke: rgb(217 112 92 / 0.45); stroke-dasharray: 3 5; }
+  .none {
+    fill: var(--coral);
+    font: 800 38px "Archivo", sans-serif;
+    font-stretch: 125%;
+    letter-spacing: 0.02em;
+    animation: flicker 6s steps(1) infinite;
+  }
+  @keyframes flicker { 0%, 92%, 100% { opacity: 0.9; } 94%, 97% { opacity: 0.35; } }
+
+  .b-narrow { display: none; list-style: none; margin: 0; padding: 0; }
+  .b-narrow li { display: grid; gap: 2px; padding: 12px 14px; margin: 0 0 8px; border: 1px dashed rgb(108 196 168 / 0.45); border-radius: 10px; }
+  .b-narrow strong { color: var(--paper); font-family: "Archivo", sans-serif; }
+  .b-narrow span { color: var(--faint); font: 0.8rem "JetBrains Mono", monospace; }
+  .b-narrow .ghost-li { border-color: rgb(217 112 92 / 0.5); }
+  .b-narrow .ghost-li span { color: var(--coral); }
+
+  @media (max-width: 720px) {
+    .b-wide { display: none; }
+    .b-narrow { display: block; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pulses { display: none; }
+    .none { animation: none; }
+  }
+</style>

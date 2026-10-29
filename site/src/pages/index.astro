@@ -1,6 +1,8 @@
 ---
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import Boundary from "../components/Boundary.astro";
+import Flow from "../components/Flow.astro";
 import Loop from "../components/Loop.astro";
 import mark from "../assets/mark.svg?raw";
 import "../styles/fonts.css";
@@ -9,25 +11,6 @@ import "../styles/fonts.css";
 const versionFile = readFileSync(join(process.cwd(), "../packages/core/src/version.ts"), "utf8");
 const version = /"(\d+\.\d+\.\d+[^"]*)"/.exec(versionFile)?.[1] ?? "latest";
 const repo = "https://github.com/ysugarmen/homeostat";
-
-const steps = [
-  {
-    title: "Start from what you have",
-    body: "homeostat bootstrap reads each repo you own: its docs, schemas, migrations, charts and pipelines. It drafts a first base for the team to correct in one pull request.",
-  },
-  {
-    title: "Learn from the team's work",
-    body: "Code review is one source: each morning a CI job drafts a rule wherever a reviewer's comment led to a fix, and proposes one-section updates to the documents it touches. Developers add what they teach their agents with homeostat learn.",
-  },
-  {
-    title: "Decide, then correct itself",
-    body: "Every change gets a 0 to 100 confidence score. Confident ones merge themselves; only the uncertain ones wait for your reviewers. A weekly deep dive merges duplicates, marks contradictions and retires stale rules, and a rule flagged as wrong goes back to review.",
-  },
-  {
-    title: "Deliver to every agent",
-    body: "When a session starts, the agent gets the rules for the files it is touching, within a token budget. Each message also brings the rules and document sections its words match, so a question that names no file still gets them. Claude Code, any MCP client, Cursor, Copilot and AGENTS.md all read the same rules.",
-  },
-];
 
 const lessons = [
   // Default weights: 50 for a comment followed by a fix, 45 by hand, 25 from an agent; +20 lead,
@@ -39,22 +22,12 @@ const lessons = [
   { score: 29, label: "A note an agent left at the end of a session", decision: "declined" },
 ];
 
-// Where each part runs, and whose it is: the point of the section is that none of it is ours.
-const own = [
-  ["Knowledge", "Markdown in a git repo you own, on GitHub or Bitbucket. Every change is a pull request you can read"],
-  ["Runs", "Jobs in that repo's CI: GitHub Actions or Bitbucket Pipelines, once a day and once a week"],
-  ["Sessions", "Hooks and an MCP server in each developer's Claude Code, reading a local clone. Nothing scheduled on laptops"],
-  ["Model calls", "Your credential, to the provider you choose: Anthropic's API, Amazon Bedrock, Google Vertex AI or a Claude Code login"],
-  ["Our servers", "None. No account, no hosted service, no telemetry. The code talks only to your git host, your model provider and, if you add it, Slack"],
-];
-
 const spec = [
-  ["Storage", "One folder per code repo, rules grouped by topic, documents in sections"],
-  ["Changes", "Pull requests only. Confident lessons merge on their own; the rest go to named reviewers"],
-  ["Model", "Claude reads review threads and the KB's own text. Code only when you run bootstrap by hand, after a preview"],
-  ["Cost", "Every run reports its calls, tokens and cost per agent. A spending cap per run stops it cleanly and leaves the rest for tomorrow"],
-  ["Session start", "Under a second on a 600-rule knowledge base (median 0.9 s)"],
-  ["Measured", "homeostat bench runs the same tasks from your own review history with the plugin off and on"],
+  ["Changes", "Pull requests only"],
+  ["Model reads", "Review threads and the KB. Code only via bootstrap, after a preview"],
+  ["Cost", "Reported per run, capped by agents.maxCostUsd"],
+  ["Session start", "Under a second, 600 rules"],
+  ["Measured", "homeostat bench: plugin off vs on"],
   ["Agents", "Claude Code, any MCP client, Cursor, GitHub Copilot, AGENTS.md"],
   ["Licence", "Apache-2.0"],
 ];
@@ -87,9 +60,8 @@ const spec = [
         <div class="hero-copy">
           <h1>The team knowledge base that maintains itself.</h1>
           <p class="lede">
-            Homeostat keeps your team's conventions, decisions and system documents in a git repo you own, and gives every
-            coding agent the part that matters for its task. It keeps them current on its own: it learns from code review,
-            from what developers teach their agents and from the code, scores every change, and retires what goes stale.
+            Your team's conventions, decisions and system docs, in a repo you own. Learned from code review, developers and
+            the code; kept current on its own; given to every agent.
           </p>
           <p class="lede own-line">It runs in your CI and your sessions, with your tokens. There is no Homeostat service.</p>
           <div class="ctas">
@@ -105,24 +77,13 @@ const spec = [
 
       <section class="steps" aria-labelledby="how">
         <h2 id="how">How it works</h2>
-        <ol>
-          {steps.map((s) => (
-            <li>
-              <h3>{s.title}</h3>
-              <p>{s.body}</p>
-            </li>
-          ))}
-        </ol>
+        <Flow />
       </section>
 
       <section class="scale" aria-labelledby="confidence">
         <div class="scale-head">
           <h2 id="confidence">Humans decide only the middle band</h2>
-          <p>
-            Nobody approves lessons one by one. The daily run scores each one and settles it: merged at 70 or more,
-            declined below 35, and only what falls between goes to the reviewers you name. Every weight and line is yours to
-            tune in <code>homeostat.yaml</code>.
-          </p>
+          <p>Every change is scored. Only the middle band waits for a person. The lines are yours to move.</p>
         </div>
         <div class="bars" role="list">
           {lessons.map((l) => (
@@ -146,14 +107,7 @@ const spec = [
 
       <section class="plate" aria-labelledby="own">
         <h2 id="own">Runs on yours, not ours</h2>
-        <dl>
-          {own.map(([k, v]) => (
-            <div>
-              <dt>{k}</dt>
-              <dd>{v}</dd>
-            </div>
-          ))}
-        </dl>
+        <Boundary />
         <p class="plate-note">
           What is sent where, and how to turn each part off: <a href="/docs/data-handling/">data handling</a>. Who can change
           what your agents are told: <a href="/docs/security/">security</a>.
@@ -170,9 +124,6 @@ const spec = [
             </div>
           ))}
         </dl>
-        <p class="plate-note">
-          What leaves your network, and how to turn each part off: <a href="/docs/data-handling/">data handling</a>.
-        </p>
       </section>
 
       <section class="setup" aria-labelledby="start">
@@ -304,34 +255,6 @@ const spec = [
 
   .steps { padding: 32px 0 96px; border-top: 1px solid var(--line); }
   .steps h2 { margin: 48px 0 36px; }
-  .steps ol {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0;
-    counter-reset: step;
-  }
-  .steps li {
-    counter-increment: step;
-    padding: 0 28px 0 0;
-    margin-right: 28px;
-    border-right: 1px solid var(--line);
-  }
-  .steps li:last-child { border-right: 0; margin-right: 0; }
-  .steps li::before {
-    content: counter(step);
-    display: block;
-    margin-bottom: 18px;
-    font-family: "Archivo", sans-serif;
-    font-stretch: 125%;
-    font-weight: 800;
-    font-size: 2.6rem;
-    line-height: 1;
-    color: var(--amber);
-  }
-  .steps p { color: var(--muted); font-size: 0.96rem; margin: 10px 0 0; }
 
   .scale { padding: 80px 0 96px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 56px; }
   .scale-head p { color: var(--muted); margin: 20px 0 0; }
@@ -404,8 +327,6 @@ const spec = [
 
   @media (max-width: 960px) {
     .hero { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-top: 32px; }
-    .steps ol { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 40px; }
-    .steps li:nth-child(2) { border-right: 0; margin-right: 0; }
     .scale { grid-template-columns: minmax(0, 1fr); }
     .plate dl { grid-template-columns: 1fr; }
     .setup-grid { grid-template-columns: 1fr; }
@@ -416,8 +337,6 @@ const spec = [
     .nav nav { gap: 14px; font-size: 0.88rem; }
     .nav nav a:not(.gh):nth-child(n + 2) { display: none; }
     main { padding: 0 16px; }
-    .steps ol { grid-template-columns: 1fr; }
-    .steps li { border-right: 0; margin-right: 0; padding-right: 0; }
     .bar-row { grid-template-columns: minmax(0, 1fr) 6.5em; }
     .bar-label { grid-column: 1 / -1; }
     .bar-row.axis { display: none; }
