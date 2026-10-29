@@ -1,4 +1,5 @@
 import { type Doc, type DocSection, formatDoc, type Provenance, parseProvenance } from "./doc.ts";
+import { normalizeDoc } from "./doc-normalize.ts";
 import { slugify } from "./slug.ts";
 
 export interface ConvertOptions {
@@ -19,7 +20,8 @@ const EVIDENCE = /^\s*<!--\s*EVIDENCE:\s*(.*?)\s*-->\s*$/i;
 /**
  * Turns a plain markdown document (a `#` title, `##` sections, "Last updated" lines, EVIDENCE
  * comments) into a Homeostat document: frontmatter, `{#id}` on every section, and per-section
- * provenance. It fixes only what is mechanical; real defects such as two sections with the same
+ * provenance, with any body `#` heading demoted and over-long sections split (`normalizeDoc`).
+ * It fixes only what is mechanical; real defects such as two sections with the same
  * heading are kept, so `validate` reports them for a person to merge.
  */
 export function convertDoc(text: string, opts: ConvertOptions): { text: string; notes: string[] } {
@@ -94,7 +96,7 @@ export function convertDoc(text: string, opts: ConvertOptions): { text: string; 
   for (const [h, n] of titles)
     if (n > 1) notes.push(`heading "${h}" appears ${n} times; validate will ask you to merge them`);
 
-  const doc: Doc = {
+  const converted: Doc = {
     frontmatter: {
       title: title.slice(0, 80),
       area: opts.area,
@@ -105,5 +107,8 @@ export function convertDoc(text: string, opts: ConvertOptions): { text: string; 
     intro: intro.join("\n").trim(),
     sections,
   };
+  // A leftover # heading and an over-long section are mechanical too: fixed here, not reported.
+  const { doc, changes } = normalizeDoc(converted);
+  notes.push(...changes);
   return { text: formatDoc(doc), notes };
 }

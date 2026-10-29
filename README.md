@@ -46,7 +46,7 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat learn [comment-url]` | Save one lesson from flags, prompts or a PR review comment; it applies to your sessions now and goes to tomorrow's daily run |
 | `homeostat codeowners [--check]` | Generate CODEOWNERS from members, areas and entry owners |
 | `homeostat daily` | The daily run (CI): one scored PR per developer, merged, declined or sent to a reviewer |
-| `homeostat review list`, `show`, `merge`, `close`, `comment` | Work the review queue on GitHub or Bitbucket: merge a review PR to accept its lessons, close it to decline them |
+| `homeostat review list`, `show`, `merge`, `close`, `comment` | Work the review queue on GitHub or Bitbucket: merge a review PR to accept its lessons, close it to decline them; `merge --all` merges the whole queue after a preview |
 | `homeostat sync` | Pull the team KB and send your pending lessons (the plugin runs it in the background) |
 | `homeostat curate` | Draft rules from review comments on their own, without the daily decisions |
 | `homeostat deep-dive` | The deep-dive run (CI) |
@@ -60,7 +60,8 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat bench run`, `bench report` | Before/after benchmark: the same tasks through headless Claude Code with the plugin off and on, under a `--budget`, resumable; compares accuracy, corrections, cost, time and turns (`--json` aggregates for a public page). Spends usage: see [the guide](docs/guide/bench.md) |
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |
 | `homeostat mcp` | Serve the KB to any agent over MCP (stdio) |
-| `homeostat docs convert <file...>` | Bring existing markdown documents into `knowledge/[<repo>/]<area>/docs/`, with section ids and provenance |
+| `homeostat docs convert <file...>` | Bring existing markdown documents into `knowledge/[<repo>/]<area>/docs/`, with section ids and provenance; `# ` headings demoted and long sections split |
+| `homeostat docs fix [--dry-run]` | Apply the same clean-up to the documents already in the KB |
 | `homeostat bootstrap` | A first base for each repo: its existing docs, plus code, data and infrastructure documents drafted from its checkout (manual only; one PR per repo) |
 | `homeostat seed <checkout>` | Draft first documents from one local repo (manual only: with `bootstrap`, the only commands that send code to a model) |
 | `homeostat migrate` | Move a 0.1 KB into repo folders, and with `--topics` into topic files |

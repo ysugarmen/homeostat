@@ -28,7 +28,12 @@ import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DailyOptions, runDaily } from "./daily.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
 import { type DigestOptions, runDigest } from "./digest.ts";
-import { type ConvertDocsOptions, runConvertDocs } from "./docs.ts";
+import {
+  type ConvertDocsOptions,
+  type FixDocsOptions,
+  runConvertDocs,
+  runFixDocs,
+} from "./docs.ts";
 import { runDoctor } from "./doctor.ts";
 import { runEval } from "./eval-command.ts";
 import { runEvents } from "./events-command.ts";
@@ -398,6 +403,16 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .action((files: string[], opts: ConvertDocsOptions) => {
       exitCode = runConvertDocs(files, opts, io);
     });
+  docs
+    .command("fix")
+    .description(
+      "Clean up the KB's documents: demote a # heading in the body, split sections over 400 words.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--dry-run", "list what would change; write nothing")
+    .action((opts: FixDocsOptions) => {
+      exitCode = runFixDocs(opts, io);
+    });
 
   program
     .command("seed")
@@ -506,12 +521,18 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     });
   review
     .command("merge")
-    .description("Squash-merge a PR: every lesson still in it is accepted.")
-    .argument("<pr>", "PR number or URL")
+    .description(
+      "Squash-merge a PR: every lesson still in it is accepted. --all merges every open review PR, oldest first, after a preview.",
+    )
+    .argument("[pr]", "PR number or URL")
     .option(...kbDir)
+    .option("--all", "every open review PR (and daily PR the host refused), oldest first")
+    .option("--except <prs>", "with --all: leave these open (comma-separated numbers or URLs)")
+    .option("--include-disputes", "with --all: merge dispute PRs too, putting each fix in force")
+    .option("--yes", "with --all: merge without asking")
     .option("--json", "print JSON")
-    .action(async (pr: string, opts: ReviewOptions) => {
-      exitCode = await runReview("merge", [pr], opts, io);
+    .action(async (pr: string | undefined, opts: ReviewOptions) => {
+      exitCode = await runReview("merge", pr ? [pr] : [], opts, io);
     });
   review
     .command("close")

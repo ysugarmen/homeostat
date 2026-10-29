@@ -27,6 +27,14 @@ export interface ReviewOptions {
   reviewer?: string;
   /** `close`: why the lessons are declined; posted on the PR. */
   reason?: string;
+  /** `merge`: every open review PR, oldest first, after a preview. */
+  all?: boolean;
+  /** `merge --all`: merge without asking. */
+  yes?: boolean;
+  /** `merge --all`: PRs to leave open, comma-separated numbers or URLs. */
+  except?: string;
+  /** `merge --all`: merge dispute PRs too (each puts a flagged rule's fix in force). */
+  includeDisputes?: boolean;
 }
 
 /**
@@ -161,7 +169,12 @@ export async function runReview(
       case "show":
         return await show(ctx, args[0] ?? "", opts, io);
       case "merge":
-        return await merge(ctx, args[0] ?? "", opts, io);
+        if (opts.all) {
+          if (args[0]) throw new CliError("give a PR number or --all, not both");
+          return await mergeAll(ctx, opts, io);
+        }
+        if (!args[0]) throw new CliError("give the PR to merge, or --all for every open one");
+        return await merge(ctx, args[0], opts, io);
       case "close":
         return await close(ctx, args[0] ?? "", opts, io);
       case "comment":
@@ -176,11 +189,16 @@ export async function runReview(
   }
 }
 
-async function list(ctx: Context, opts: ReviewOptions, io: Io): Promise<number> {
+/** The open homeostat PRs into the base branch, with their details. */
+async function openPrs(ctx: Context): Promise<PullRequestDetails[]> {
   const open = (await ctx.provider.listOpenPullRequests(ctx.kbRepo)).filter(
     (p) => BRANCH.test(p.sourceBranch) && p.targetBranch === ctx.base,
   );
-  const details = await Promise.all(open.map((p) => ctx.provider.getPullRequest(ctx.kbRepo, p.id)));
+  return Promise.all(open.map((p) => ctx.provider.getPullRequest(ctx.kbRepo, p.id)));
+}
+
+async function list(ctx: Context, opts: ReviewOptions, io: Io): Promise<number> {
+  const details = await openPrs(ctx);
   const me = opts.reviewer?.replace(/^@/, "").toLowerCase();
   const asksMe = (q: Queued) => (me && q.reviewers.some((r) => r.toLowerCase() === me) ? 0 : 1);
   const queue = details
@@ -342,4 +360,131 @@ async function comment(ctx: Context, ref: string, text: string, io: Io): Promise
   await ctx.provider.commentOnPullRequest(ctx.kbRepo, pr.id, text.trim());
   io.stdout(`commented on #${pr.id}; it stays open\n`);
   return 0;
+}
+
+/** A lesson row of a PR's table: its id, title and confidence score. */
+interface Row {
+  id: string;
+  title: string;
+  score?: number;
+}
+
+/** The lessons a PR's table lists, and the ids the judge found problems in. */
+function lessonsOf(
+  pr: PullRequestDetails,
+  kind: Queued["kind"],
+): { rows: Row[]; judged: string[] } {
+  const decision = kind === "review" ? "review" : "merged";
+  const rows: Row[] = [];
+  for (const line of pr.body.split("\n")) {
+    if (!line.startsWith(`| ${decision} |`)) continue;
+    const [, , lesson = "", score = ""] = line.split("|").map((c) => c.trim());
+    const m = /^(.*) \(`([^`]+)`\)$/.exec(lesson.trim());
+    const n = Number.parseFloat(score);
+    rows.push({
+      id: m?.[2] ?? lesson.trim(),
+      title: (m?.[1] ?? lesson).replace(/^Update: /, "").trim(),
+      ...(Number.isFinite(n) ? { score: n } : {}),
+    });
+  }
+  // The daily run lists the judge's findings as "- `id` (tally):" bullets under "The judge ...".
+  const at = pr.body.indexOf("The judge");
+  const judged =
+    at < 0 ? [] : [...pr.body.slice(at).matchAll(/^- `([^`]+)` \(/gm)].map((m) => m[1] ?? "");
+  return { rows, judged };
+}
+
+/**
+ * `homeostat review merge --all`: every open review PR, oldest first, through the same merge as
+ * one PR (a conflicting one is rebuilt on the base). It previews first: each PR's lesson count and
+ * the lessons the judge flagged or that scored below the accept line, then asks.
+ */
+async function mergeAll(ctx: Context, opts: ReviewOptions, io: Io): Promise<number> {
+  const except = new Set(
+    (opts.except ?? "")
+      .split(",")
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map(prNumber),
+  );
+  const all = (await openPrs(ctx))
+    .flatMap((pr) => {
+      const q = queued(pr);
+      return q ? [{ pr, q }] : [];
+    })
+    .sort((a, b) => a.q.createdAt.localeCompare(b.q.createdAt));
+  const skipped = (x: { q: Queued }) =>
+    except.has(x.q.id) || (x.q.kind === "dispute" && !opts.includeDisputes);
+  const queue = all.filter((x) => !skipped(x));
+  const left = all
+    .filter(skipped)
+    .map(({ q }) =>
+      except.has(q.id)
+        ? `#${q.id} (--except)`
+        : `#${q.id} (dispute over ${q.member}; --include-disputes merges it)`,
+    );
+  if (queue.length === 0) {
+    io.stdout(
+      `nothing to merge${left.length ? `; left open: ${left.join(", ")}` : ": no homeostat PR is waiting"}\n`,
+    );
+    return 0;
+  }
+
+  const paint = painter(io);
+  const accept = ctx.config.scoring.confidence.accept;
+  const lessons = queue.reduce((n, x) => n + x.q.lessons, 0);
+  io.stdout(
+    `${plural(queue.length, "PR")} with ${plural(lessons, "lesson")} to merge into ${ctx.base}, oldest first:\n`,
+  );
+  for (const { pr, q } of queue) {
+    const what = q.kind === "dispute" ? `the fix for ${q.member}` : plural(q.lessons, "lesson");
+    const conflict = q.conflicts
+      ? ` · ${paint("yellow", `conflicts with ${ctx.base}; it is rebuilt first`)}`
+      : "";
+    io.stdout(`  #${q.id} ${q.title} (${what})${conflict}\n`);
+    const { rows, judged } = lessonsOf(pr, q.kind);
+    for (const r of rows) {
+      const why = [
+        judged.includes(r.id) ? "the judge found claims its review thread does not make" : "",
+        r.score !== undefined && r.score < accept
+          ? `confidence ${r.score}, below the accept line ${accept}`
+          : "",
+      ].filter(Boolean);
+      if (why.length)
+        io.stdout(`     ${paint("yellow", "!")} ${r.title} (${r.id}): ${why.join("; ")}\n`);
+    }
+  }
+  if (left.length) io.stdout(`left open: ${left.join(", ")}\n`);
+
+  if (!opts.yes) {
+    if (!io.ask)
+      throw new CliError(
+        "no terminal to confirm in: rerun with --yes to merge them, or merge them one at a time",
+      );
+    const answer = await io.ask(`Merge ${plural(queue.length, "PR")} into ${ctx.base}? [y/N]`);
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      io.stdout("nothing merged\n");
+      return 0;
+    }
+  }
+
+  const failed: number[] = [];
+  for (const { q } of queue) {
+    // One refusal (an approval missing, a conflict it cannot rebuild) does not stop the rest.
+    let code: number;
+    try {
+      code = await merge(ctx, String(q.id), opts, io);
+    } catch (e) {
+      if (!(e instanceof CliError || e instanceof ProviderError)) throw e;
+      io.stderr(`${e.message}\n`);
+      code = 1;
+    }
+    if (code !== 0) failed.push(q.id);
+  }
+  io.stdout(
+    failed.length
+      ? `merged ${queue.length - failed.length} of ${plural(queue.length, "PR")}; not merged: ${failed.map((id) => `#${id}`).join(", ")} (see above)\n`
+      : `merged ${plural(queue.length, "PR")}\n`,
+  );
+  return failed.length ? 1 : 0;
 }

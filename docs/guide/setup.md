@@ -17,7 +17,7 @@ It offers every optional step and never forces one. Each question shows an examp
 | Command | What it does |
 | --- | --- |
 | `homeostat setup` | Walks every step that isn't done, in order |
-| `homeostat setup --check` | Prints the checklist and asks nothing. Exits 1 while a required step is missing. Safe in CI |
+| `homeostat setup --check` | Prints the checklist, then any [quiet misconfigurations](#quiet-misconfigurations), and asks nothing. Exits 1 while a required step is missing. Safe in CI |
 | `homeostat setup --step <name>` | Runs one step, for example `--step slack` or `--step team`, even one that is already done |
 | `homeostat setup --join` | The developer side, run once by each teammate (below) |
 
@@ -132,6 +132,19 @@ To rename, first make sure the version in your CI file is newer than 0.3.2 (olde
           HOMEOSTAT_GIT_TOKEN: ${{ secrets.HOMEOSTAT_GIT_TOKEN || secrets.HOMEOSTAT_GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+## Quiet misconfigurations
+
+Some mistakes fail nothing: every run goes green and quietly does less. `homeostat setup --check` lists them under "Worth fixing" after the checklist, and `homeostat doctor` under "Is anything quietly misconfigured?". Each is a warning with its fix and never changes the exit code:
+
+| Warning | Fix |
+| --- | --- |
+| the variable named in `notifications.slackWebhookEnv` is not stored as a Bitbucket repository variable or a GitHub Actions secret, so nothing is posted | `homeostat setup --step slack` |
+| a Bitbucket schedule for a homeostat pipeline is on another branch than `sources.baseBranch`, or is disabled | `homeostat setup --step schedules`, or enable it in Repository settings > Pipelines > Schedules |
+| the last daily run reached `agents.curator.judgeCalls`, so lessons it would have merged went to a reviewer unjudged | raise `agents.curator.judgeCalls` in `homeostat.yaml` |
+| a CI file pins a homeostat older than the CLI you run | change the version to the CLI's and commit |
+
+Listing CI variables and schedules needs the token in the environment, and on Bitbucket admin on the KB repo; without it those two checks say nothing. The judge check reads the state branch as this clone last fetched it.
 
 ## Teammates: `setup --join`
 

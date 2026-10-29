@@ -20,6 +20,8 @@ Protect the base branch and let only the daily run's token bypass it (`init` pri
 
 In a KB with topic files, review PRs that share a file conflict once one of them merges. `homeostat review merge` rebuilds such a PR on the base branch, adding its rules beside the ones already there (and, in documents, combining additions to the same section), waits until the host shows the rebuilt commit (nudging Bitbucket, which can miss a force push, with an ordinary one), and merges it.
 
+To clear a queue you trust, `homeostat review merge --all` merges every open review PR (and any daily PR the host refused), oldest first, the same way. It first prints each PR's lesson count and the lessons worth a second look: those the judge found problems in, and those scored below `scoring.confidence.accept`. Then it asks; `--yes` skips the question, and without a terminal it refuses unless `--yes` is given. `--except 12,14` leaves those PRs open. Dispute PRs stay open unless you pass `--include-disputes`, since merging one puts a flagged rule's fix in force. A PR the host refuses does not stop the rest; the command lists what was not merged and exits 1.
+
 ### Lessons from reviews
 
 The daily run reads pull requests merged in the KB's code repos (`repos`, or `sources.repos` in a KB without repo folders) since its last run (`homeostat curate` does the same on its own). For each review thread that:

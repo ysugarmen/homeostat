@@ -252,3 +252,97 @@ describe("homeostat review on dispute PRs", () => {
     expect(closed.stdout).toContain("closed #8: use-with-retry is retired (obsolete)");
   });
 });
+
+describe("homeostat review merge --all", () => {
+  async function mergeAll(provider: Provider, args: string[], answer?: string) {
+    let stdout = "";
+    let stderr = "";
+    const asked: string[] = [];
+    const code = await runCli(
+      ["node", "homeostat", "review", "merge", "--all", ...args, "--dir", starter],
+      {
+        stdout: (s) => (stdout += s),
+        stderr: (s) => (stderr += s),
+        color: false,
+        provider,
+        ...(answer === undefined
+          ? {}
+          : {
+              ask: async (q: string) => {
+                asked.push(q);
+                return answer;
+              },
+            }),
+      },
+    );
+    return { code, stdout, stderr, asked };
+  }
+
+  const queue = () => [
+    pr(3, "homeostat/review-lee-2026-10-15", {
+      body: [
+        "| review | Use the retry helper (`use-retry`) | 62 | | why |",
+        "| review | Name queues by domain (`queue-names`) | 74 | | why |",
+        "",
+        "The judge (a second model) found claims these drafted rules make that their review threads do not; check them against the thread before merging:",
+        "- `queue-names` (1/2):",
+        "  - invents a rule",
+      ].join("\n"),
+    }),
+    pr(1, "homeostat/review-sam-2026-10-14"),
+    pr(2, "homeostat/review-dispute-use-with-retry-2026-10-14"),
+    pr(4, "homeostat/review-ada-2026-10-16"),
+  ];
+
+  test("previews each PR with its doubtful lessons, asks, then merges oldest first", async () => {
+    const { provider, writes } = host(queue());
+    const { code, stdout, asked } = await mergeAll(provider, ["--except", "4"], "y");
+    expect(code).toBe(0);
+    expect(stdout).toContain("2 PRs with 4 lessons to merge into main, oldest first:");
+    expect(stdout).toContain(
+      "! Use the retry helper (use-retry): confidence 62, below the accept line 70",
+    );
+    expect(stdout).toContain(
+      "! Name queues by domain (queue-names): the judge found claims its review thread does not make",
+    );
+    expect(stdout).toContain(
+      "left open: #2 (dispute over use-with-retry; --include-disputes merges it), #4 (--except)",
+    );
+    expect(asked).toEqual(["Merge 2 PRs into main? [y/N]"]);
+    expect(writes).toEqual(["merge 1", "merge 3"]);
+    expect(stdout).toContain("merged 2 PRs\n");
+  });
+
+  test("--include-disputes merges the dispute PRs too; --yes does not ask", async () => {
+    const { provider, writes } = host(queue());
+    const { asked } = await mergeAll(provider, ["--include-disputes", "--yes"], "n");
+    expect(asked).toEqual([]);
+    expect(writes).toEqual(["merge 1", "merge 2", "merge 3", "merge 4"]);
+  });
+
+  test("a no merges nothing; without a terminal it refuses unless --yes", async () => {
+    const declined = host(queue());
+    expect((await mergeAll(declined.provider, [], "n")).stdout).toContain("nothing merged");
+    expect(declined.writes).toEqual([]);
+    const headless = host(queue());
+    const r = await mergeAll(headless.provider, []);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("rerun with --yes");
+    expect(headless.writes).toEqual([]);
+  });
+
+  test("a refused merge does not stop the rest, and is reported", async () => {
+    const { provider } = host(queue(), { refuseMerge: "needs an approval" });
+    const { code, stdout, stderr } = await mergeAll(provider, ["--yes"]);
+    expect(code).toBe(1);
+    expect(stderr).toContain("the host refused to merge #1");
+    expect(stderr).toContain("the host refused to merge #4");
+    expect(stdout).toContain("merged 0 of 3 PRs; not merged: #1, #3, #4");
+  });
+
+  test("a PR number and --all together, or neither, is an error", async () => {
+    const { provider } = host(queue());
+    expect((await review(provider, "merge", "1", "--all")).stderr).toContain("not both");
+    expect((await review(provider, "merge")).stderr).toContain("or --all");
+  });
+});

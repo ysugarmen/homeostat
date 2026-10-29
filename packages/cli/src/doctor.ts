@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import {
   bitbucketAuth,
@@ -12,7 +12,9 @@ import {
 import { minimatch } from "minimatch";
 import type { Io } from "./cli.ts";
 import { painter } from "./format.ts";
+import { ciFiles, ciRuns, quietMisconfigurations } from "./misconfig.ts";
 import { CliError, envAuth, GIT_TOKEN_VAR, tokenHint } from "./provider.ts";
+import { SetupContext } from "./setup/context.ts";
 
 export type Level = "ok" | "warn" | "fail" | "info";
 export interface Check {
@@ -198,31 +200,15 @@ function codeownersCheck(root: string, config: Config): Check {
 
 /** CI files that run homeostat, and any floating version they use. */
 function pinnedVersions(root: string): Check[] {
-  const ci = [
-    ...(existsSync(join(root, ".github/workflows"))
-      ? readdirSync(join(root, ".github/workflows")).map((f) => `.github/workflows/${f}`)
-      : []),
-    ...(existsSync(join(root, "bitbucket-pipelines.yml")) ? ["bitbucket-pipelines.yml"] : []),
-  ];
-  const checks: Check[] = [];
-  for (const path of ci) {
-    const text = readFileSync(join(root, path), "utf8");
-    // Only command lines (npx, dlx, a run: step or a script list item): a job's `name:` or a
-    // `git config user.name "homeostat deep-dive"` line reads the same but runs nothing.
-    for (const m of text.matchAll(
-      /(?:\bnpx(?:\s+(?:--yes|-y))?|\bdlx|\brun:|^\s*-)\s+homeostat(@[^\s"']*)?\s+(validate|daily|curate|deep-dive|digest|export)\b/gm,
-    )) {
-      const version = m[1]?.slice(1);
-      if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
-        checks.push(
-          fail(
-            `${path} runs homeostat${m[1] ?? ""}: pin an exact version (homeostat@${VERSION}) so a new release cannot run unreviewed`,
-          ),
-        );
-      }
-    }
-  }
-  if (checks.length === 0 && ci.length) checks.push(ok("CI pins an exact homeostat version"));
+  const checks: Check[] = ciRuns(root)
+    .filter((r) => !r.version)
+    .map((r) =>
+      fail(
+        `${r.path} runs ${r.spec}: pin an exact version (homeostat@${VERSION}) so a new release cannot run unreviewed`,
+      ),
+    );
+  if (checks.length === 0 && ciFiles(root).length)
+    checks.push(ok("CI pins an exact homeostat version"));
   return checks;
 }
 
@@ -350,6 +336,15 @@ export async function runDoctor(opts: { dir?: string }, io: Io): Promise<number>
     info: "·",
   };
   const sections = await securityReport(root, config, io);
+  // Nothing here asks: doctor reads with the token in the environment only.
+  const { ask: _ask, secret: _secret, ...quiet } = io;
+  const quietly = await quietMisconfigurations(root, config, new SetupContext(root, quiet));
+  sections.push({
+    question: "Is anything quietly misconfigured?",
+    checks: quietly.length
+      ? quietly.map(warn)
+      : [ok("no quiet misconfiguration found (CI variables, schedules, judge budget, CI version)")],
+  });
   for (const section of sections) {
     io.stdout(`\n${section.question}\n`);
     for (const c of section.checks) io.stdout(`  ${mark[c.level]} ${c.message}\n`);
