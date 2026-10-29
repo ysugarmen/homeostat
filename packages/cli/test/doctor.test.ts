@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   cpSync,
   mkdirSync,
@@ -14,6 +15,8 @@ import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
 const starter = new URL("../../../examples/starter-kb", import.meta.url).pathname;
+/** An old release, spelled so the pinned-version check over this repo skips it. */
+const OLD_PIN = ["homeostat", "0.1.0"].join("@");
 
 /** The starter KB on GitHub, with a CI file running `homeostat@<version>`. */
 function kb(version: string) {
@@ -195,6 +198,82 @@ describe("homeostat doctor --security (T8)", () => {
     expect(stdout).toContain(
       "HOMEOSTAT_GITHUB_TOKEN works; consider renaming it to HOMEOSTAT_GIT_TOKEN",
     );
+  });
+
+  test("quiet misconfigurations are warnings with their fix: an old CI version, a missing Slack secret, the judge cap", async () => {
+    const dir = kb(OLD_PIN);
+    // The last daily run, on the state branch as a sync fetches it.
+    const g = (cwd: string, ...a: string[]) =>
+      execFileSync("git", ["-C", cwd, "-c", "user.name=t", "-c", "user.email=t@example.com", ...a]);
+    const work = mkdtempSync(join(tmpdir(), "homeostat-doc-state-"));
+    g(work, "init", "-q", "-b", "homeostat/state");
+    mkdirSync(join(work, "runs"));
+    const lesson = (id: string, reason: string) => ({
+      member: "lee",
+      id,
+      decision: "review",
+      reason,
+    });
+    writeFileSync(
+      join(work, "runs/2026-10-27.json"),
+      JSON.stringify({ at: "2026-10-27T06:00:00Z", members: [], settled: 0, lessons: [] }),
+    );
+    writeFileSync(
+      join(work, "runs/2026-10-28.json"),
+      JSON.stringify({
+        at: "2026-10-28T06:00:00Z",
+        members: [],
+        settled: 0,
+        lessons: [
+          lesson(
+            "a",
+            "confidence 80; not judged (agents.curator.judgeCalls reached), so a person reads it",
+          ),
+          lesson(
+            "b",
+            "confidence 81; not judged (agents.curator.judgeCalls reached), so a person reads it",
+          ),
+          lesson("c", "confidence 50"),
+        ],
+      }),
+    );
+    g(work, "add", "-A");
+    g(work, "commit", "-qm", "state");
+    g(dir, "init", "-q", "-b", "main");
+    g(dir, "fetch", "-q", work, "homeostat/state:refs/remotes/origin/homeostat/state");
+
+    const { fetch } = github({
+      "/acme/team-kb/branches/main": { protected: true },
+      "/acme/integrations-api": { permissions: { push: false } },
+      "/acme/web-app": { permissions: { push: false } },
+      "/acme/team-kb/actions/secrets?per_page=100": { secrets: [{ name: "ANTHROPIC_API_KEY" }] },
+    });
+    const { code, stdout } = await doctor(dir, { fetch });
+    expect(code).toBe(0);
+    const section = stdout.slice(stdout.indexOf("Is anything quietly misconfigured?"));
+    expect(section).toContain(
+      `! .github/workflows/homeostat.yml runs ${OLD_PIN}, older than this CLI (${VERSION}): change it to homeostat@${VERSION}`,
+    );
+    expect(section).toContain(
+      "! notifications.slackWebhookEnv is HOMEOSTAT_SLACK_WEBHOOK, but HOMEOSTAT_SLACK_WEBHOOK is not stored as an Actions secret",
+    );
+    expect(section).toContain(
+      "! the last daily run (2026-10-28) reached agents.curator.judgeCalls (",
+    );
+    expect(section).toContain(
+      "2 lessons it would have merged went to a reviewer unjudged; raise agents.curator.judgeCalls",
+    );
+  });
+
+  test("with nothing misconfigured, the section says so", async () => {
+    const { fetch } = github({
+      "/acme/team-kb/branches/main": { protected: true },
+      "/acme/team-kb/actions/secrets?per_page=100": {
+        secrets: [{ name: "HOMEOSTAT_SLACK_WEBHOOK" }],
+      },
+    });
+    const { stdout } = await doctor(kb(`homeostat@${VERSION}`), { fetch });
+    expect(stdout).toContain("✓ no quiet misconfiguration found");
   });
 
   test("without a token it says what it could not check", async () => {

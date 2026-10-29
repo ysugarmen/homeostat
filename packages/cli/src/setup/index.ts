@@ -11,6 +11,7 @@ import {
 } from "@homeostat/core";
 import type { Io } from "../cli.ts";
 import { git } from "../git.ts";
+import { quietMisconfigurations } from "../misconfig.ts";
 import {
   adminNote,
   type SetupContext as Ctx,
@@ -146,6 +147,21 @@ function printChecklist(ctx: Ctx, results: Map<Step, SetupCheck>) {
     ctx.say(`\n${adminNote(ctx.host())}`);
 }
 
+/** What no step fails on but quietly does less than the team thinks; warnings, never errors. */
+async function printWarnings(ctx: Ctx) {
+  const config = ctx.config();
+  if (!config) return;
+  let found: string[];
+  try {
+    found = await quietMisconfigurations(ctx.root, config, ctx);
+  } catch {
+    return;
+  }
+  if (!found.length) return;
+  ctx.say("\nWorth fixing (nothing fails on these, but they quietly do less):");
+  for (const m of found) ctx.say(`  ${ctx.paint("yellow", "!")} ${m}`);
+}
+
 /** `homeostat setup`: the guided, re-runnable checklist for a team's knowledge base. */
 export async function runSetup(opts: SetupOptions, io: Io): Promise<number> {
   const root = resolve(opts.dir ?? io.env?.HOMEOSTAT_DIR ?? ".");
@@ -156,6 +172,7 @@ export async function runSetup(opts: SetupOptions, io: Io): Promise<number> {
   if (opts.check || !ctx.interactive) {
     const results = await detectAll(ctx);
     printChecklist(ctx, results);
+    await printWarnings(ctx);
     record(ctx, results, now);
     if (!opts.check) {
       ctx.say(

@@ -151,6 +151,7 @@ People adopt what they can inspect. For launch:
    - the pinned versions
    - the model runtime and its data terms
    - exclusions and retention
+   - and, as warnings, quiet misconfigurations: a Slack webhook variable CI does not have, schedules on the wrong branch or disabled, a judge budget the last run ran out of, an older homeostat pinned in CI ([setup guide](guide/setup.md#quiet-misconfigurations))
 4. **Safe defaults.** Guarded auto-merge only, scanner on, MCP writes off, team-only areas never exported, version pinned, retention on.
 5. **Later, only if a hosted tier appears:** an external penetration test, SOC 2. Self-hosted open source does not need them to start.
 

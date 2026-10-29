@@ -8,6 +8,7 @@ import {
   ProviderError,
   parseConfig,
   readSetupRecord,
+  VERSION,
 } from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type HostAuth, type Io, runCli, type SpawnResult } from "../src/cli.ts";
@@ -19,6 +20,8 @@ const API_KEY = "sk-ant-api03-test-0123456789";
 const OAUTH = "sk-ant-oat01-test0123456789abcdefghijklmnopqrstuvwxyz";
 const WEBHOOK = "https://hooks.slack.com/services/T000/B000/xyzSECRETxyz";
 const SECRETS = [TOKEN, GH_TOKEN, API_KEY, OAUTH, WEBHOOK];
+/** An old release, spelled so the pinned-version check over this repo skips it. */
+const OLD_PIN = ["homeostat", "0.1.0"].join("@");
 
 /** A KB checkout whose origin is on the host, pushing to a local bare repo instead. */
 function kbRepo(host: "bitbucket" | "github") {
@@ -747,6 +750,42 @@ describe("homeostat setup without a terminal, --check and --join", () => {
     expect(b.out.asked).toEqual([]);
     expect(b.out.stdout).toMatch(/✓ +2\. Git-host token for CI · HOMEOSTAT_GIT_TOKEN is stored/);
     expectNoSecret(b.out);
+  });
+
+  test("--check warns about quiet misconfigurations, with the fix, without failing", async () => {
+    const { repo, h: first } = await bitbucketDone();
+    const b = harness({ host: "bitbucket", state: first.state, env: envFor });
+    expect(await setup(b.io, repo.dir, "--check")).toBe(0);
+    expect(b.out.stdout).not.toContain("Worth fixing");
+
+    first.state.variables.delete("HOMEOSTAT_SLACK_WEBHOOK");
+    const [curator, deepDive] = first.state.schedules;
+    if (!curator || !deepDive) throw new Error("expected the schedules");
+    curator.branch = "trial";
+    deepDive.enabled = false;
+    const pipelines = join(repo.dir, "bitbucket-pipelines.yml");
+    writeFileSync(
+      pipelines,
+      readFileSync(pipelines, "utf8").replaceAll(`homeostat@${VERSION}`, OLD_PIN),
+    );
+    const c = harness({ host: "bitbucket", state: first.state, env: envFor });
+    // The schedules step itself is missing (nothing runs on main); the warnings say why.
+    expect(await setup(c.io, repo.dir, "--check")).toBe(1);
+    expect(c.out.stdout).toMatch(
+      /✗ +11\. Schedules · not scheduled: homeostat-curator, homeostat-deep-dive/,
+    );
+    const out = c.out.stdout.slice(c.out.stdout.indexOf("Worth fixing"));
+    expect(out).toContain(
+      "! notifications.slackWebhookEnv is HOMEOSTAT_SLACK_WEBHOOK, but HOMEOSTAT_SLACK_WEBHOOK is not stored as a Bitbucket repository variable",
+    );
+    expect(out).toContain(
+      "! homeostat-curator is scheduled on trial, not on main (sources.baseBranch)",
+    );
+    expect(out).toContain("! the homeostat-deep-dive schedule on main is disabled");
+    expect(out).toContain(
+      `! bitbucket-pipelines.yml runs ${OLD_PIN}, older than this CLI (${VERSION})`,
+    );
+    expectNoSecret(c.out);
   });
 
   test("--step runs one step", async () => {
