@@ -26,6 +26,8 @@ homeostat review list --dir <kb> --json [--reviewer <the user's handle>]
 
 It lists the open review PRs, plus any open daily PR the host refused to merge (for example, branch protection), whose lessons wait for a person too. It also lists dispute PRs (`kind: dispute`), one per flagged rule: merging puts the drafted fix in force, closing retires the rule. Say which it is before the user chooses. Each has its member, date, lesson count, reviewers and whether it conflicts with the base branch. With `--reviewer`, the PRs that ask the user come first; then the oldest. Filter by area or member if one was given. Say how many PRs and lessons there are before starting.
 
+If the user wants to accept the whole queue at once, run `homeostat review merge --all --dir <kb>` first: without a terminal it prints its preview (each PR's lesson count, and the lessons the judge flagged or that scored below the accept line) and stops without merging. Relay the preview. Only after the user confirms, run it again with `--yes`, adding `--except <n,...>` for any PRs they want left open and `--include-disputes` only if they also want the dispute PRs merged. Otherwise go one PR at a time.
+
 ## 3. One PR at a time
 
 `homeostat review show <n> --dir <kb>` shows the PR's table (each lesson with its decision, confidence and why it was not decided automatically), whether it merges cleanly, and the diff with the lessons themselves. For each lesson, show the title, rule, why, source (with link), author, confidence and the reason it waits, and point out anything that matters: a risky-content finding, a conflict with an existing rule, code it names that may not exist, a document section it changes. Then ask the user to choose for the whole PR:

@@ -521,12 +521,18 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     });
   review
     .command("merge")
-    .description("Squash-merge a PR: every lesson still in it is accepted.")
-    .argument("<pr>", "PR number or URL")
+    .description(
+      "Squash-merge a PR: every lesson still in it is accepted. --all merges every open review PR, oldest first, after a preview.",
+    )
+    .argument("[pr]", "PR number or URL")
     .option(...kbDir)
+    .option("--all", "every open review PR (and daily PR the host refused), oldest first")
+    .option("--except <prs>", "with --all: leave these open (comma-separated numbers or URLs)")
+    .option("--include-disputes", "with --all: merge dispute PRs too, putting each fix in force")
+    .option("--yes", "with --all: merge without asking")
     .option("--json", "print JSON")
-    .action(async (pr: string, opts: ReviewOptions) => {
-      exitCode = await runReview("merge", [pr], opts, io);
+    .action(async (pr: string | undefined, opts: ReviewOptions) => {
+      exitCode = await runReview("merge", pr ? [pr] : [], opts, io);
     });
   review
     .command("close")
