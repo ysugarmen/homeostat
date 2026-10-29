@@ -51,7 +51,7 @@ The checkout is found by its `origin` remote matching `repos.<name>.source`, the
 | `--yes` | Send without asking (for a run without a terminal) |
 | `--force` | Replace documents already in the KB |
 
-The model calls use `agents.curator` (its runtime and model). The cost estimate counts what is sent plus about 2,500 output tokens per document, at API prices; on a subscription runtime it is a size guide only.
+The model calls use `agents.curator` (its runtime and model). The cost estimate counts what is sent plus about 2,500 output tokens per document, at API prices; on a subscription runtime it is a size guide only. With `agents.maxCostUsd` set, no prompt is sent once the run has spent it: the topics left are listed (`stopped at the spending cap: ...`), and rerunning `bootstrap` drafts them, since documents already in the KB are skipped ([spending cap](agents.md#spending-cap)).
 
 ## What you get
 

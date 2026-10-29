@@ -21,11 +21,12 @@ import {
   repoNames,
   SEED_SYSTEM,
   type SeedTopic,
+  SpendingCapError,
   seedDoc,
   seedPrompt,
   validate,
 } from "@homeostat/core";
-import { askerFor } from "./agents.ts";
+import { askerFor, capLine, formatRunUse, newRunStats } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { formatIssues } from "./format.ts";
 import { git } from "./git.ts";
@@ -136,8 +137,11 @@ async function bootstrap(opts: BootstrapOptions, io: Io): Promise<number> {
     }
   }
 
-  const seeder = io.seeder ?? new ClaudeSeeder(askerFor(config, "curator", io, root));
+  const stats = newRunStats(config.agents.maxCostUsd);
+  const seeder = io.seeder ?? new ClaudeSeeder(askerFor(config, "curator", io, root, stats));
   let failed = false;
+  // Past agents.maxCostUsd no prompt is sent: the topics left are drafted by the next bootstrap.
+  let left = 0;
   for (const p of plans) {
     const changes: FileChange[] = [];
     const notes: string[] = [];
@@ -156,6 +160,10 @@ async function bootstrap(opts: BootstrapOptions, io: Io): Promise<number> {
       changes.push({ path: d.path, text, message: `homeostat: import ${d.from} from ${p.name}` });
     }
     for (const t of p.topics) {
+      if (stats.capped) {
+        left++;
+        continue;
+      }
       logEvent(root, {
         type: "seed-run",
         repo: p.name,
@@ -163,7 +171,15 @@ async function bootstrap(opts: BootstrapOptions, io: Io): Promise<number> {
         paths: t.snapshot.paths.length,
         chars: t.snapshot.files.reduce((n, f) => n + f.text.length, 0),
       });
-      const draft = await seeder.draft(t.snapshot, t.topic);
+      let draft: Awaited<ReturnType<typeof seeder.draft>>;
+      try {
+        draft = await seeder.draft(t.snapshot, t.topic);
+      } catch (e) {
+        if (!(e instanceof SpendingCapError)) throw e;
+        stats.capped = true;
+        left++;
+        continue;
+      }
       if (!draft) {
         notes.push(`${t.topic}: the model declined`);
         continue;
@@ -203,6 +219,9 @@ async function bootstrap(opts: BootstrapOptions, io: Io): Promise<number> {
       io,
     );
   }
+  // Documents already in the KB are skipped, so a rerun drafts only the rest.
+  if (stats.capped) io.stdout(`${capLine(stats, left, "document")}; rerun bootstrap for them\n`);
+  io.stdout(formatRunUse(stats));
   return failed ? 1 : 0;
 }
 

@@ -5,6 +5,7 @@ import type { Config } from "./config.ts";
 import { sameLesson, scopesOverlap } from "./conflicts.ts";
 import { type Entry, formatEntry } from "./entry.ts";
 import { comparable, repoOf } from "./layout.ts";
+import { SpendingCapError } from "./pricing.ts";
 import { findCitations, type Retractor, retiredRule, retractCitations } from "./retract.ts";
 import type { Frontmatter } from "./schema.ts";
 import { score } from "./score.ts";
@@ -62,6 +63,8 @@ export interface DeepDiveResult {
   changes: DeepDiveChange[];
   /** Things a human should look at that the agent did not change. */
   notes: string[];
+  /** Set when the run's spending cap stopped the model calls: the checks left for next week. */
+  capped?: { left: number; error: SpendingCapError };
 }
 
 export class DeepDiveError extends Error {}
@@ -134,6 +137,12 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
         );
     }
   }
+  // Past the spending cap no call starts: the pairs and checks left wait for the next deep dive.
+  let capped: DeepDiveResult["capped"];
+  const stopAt = (e: unknown) => {
+    if (!(e instanceof SpendingCapError)) throw e;
+    capped = { left: 1, error: e };
+  };
   for (const [a, b] of pairs) {
     if (a.fm.status !== "accepted" || b.fm.status !== "accepted") continue;
     const [keep, drop] = survivorFirst(a, b);
@@ -148,9 +157,20 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
       rule: keep.entry.sections.rule ?? "",
       why: keep.entry.sections.why ?? "",
     };
+    if (input.merger && capped) {
+      capped.left++;
+      continue;
+    }
     keep.text = own;
     if (input.merger) {
-      const merged = await input.merger.merge(keep.entry, drop.entry);
+      let merged: RuleText;
+      try {
+        merged = await input.merger.merge(keep.entry, drop.entry);
+      } catch (e) {
+        stopAt(e);
+        delete keep.text;
+        continue;
+      }
       const problems = [
         ...parseBody(`## Rule\n${merged.rule}\n\n## Why\n${merged.why}`).issues.map(
           (i) => i.message,
@@ -188,10 +208,20 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
       });
       for (const o of candidates) asked.add([w.fm.id, o.fm.id].sort().join("|"));
       if (candidates.length === 0) continue;
-      const found = await input.judge.conflicts(
-        w.entry,
-        candidates.map((c) => c.entry),
-      );
+      if (capped) {
+        capped.left++;
+        continue;
+      }
+      let found: Awaited<ReturnType<ConflictJudge["conflicts"]>>;
+      try {
+        found = await input.judge.conflicts(
+          w.entry,
+          candidates.map((c) => c.entry),
+        );
+      } catch (e) {
+        stopAt(e);
+        continue;
+      }
       for (const { id, reason } of found) {
         const other = work.get(id);
         if (!other || !candidates.includes(other)) continue;
@@ -264,7 +294,7 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
     );
   }
   notes.push(...documentNotes(kb, config, input.today, settings.staleAfterDays));
-  return { changes, notes };
+  return { changes, notes, ...(capped ? { capped } : {}) };
 }
 
 /**

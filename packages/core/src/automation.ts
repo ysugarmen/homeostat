@@ -145,9 +145,91 @@ export interface RunReport {
   };
   /** The KB's health after the run's merges, for the trend over runs. */
   kb?: KbSnapshot;
+  /**
+   * Set when the run stopped at `agents.maxCostUsd`: what it spent, and the lessons it left
+   * undecided. The next run reads reviews from `since` again, so the lessons cut off are drafted.
+   */
+  capped?: {
+    spentUsd: number;
+    maxCostUsd: number;
+    /** The spend was priced from tokens, not reported by the runtime. */
+    estimated: boolean;
+    left: number;
+    since: string;
+  };
+  /**
+   * Things a person should know about the run, as printed: the spending cap, a judge cap reached,
+   * a Slack webhook variable that is not set.
+   */
+  notices?: string[];
 }
 
 /** Review items older than this are repeated in the morning notice and marked on the dashboard. */
 export const REVIEW_REMINDER_DAYS = 2;
 /** A developer whose sync has not reported for this long is shown as not syncing. */
 export const STALE_HEARTBEAT_HOURS = 48;
+
+/** The most decision records kept per developer on the state branch. */
+export const MAX_DECISIONS = 500;
+
+const settled = (r: DecisionRecord) => r.decision !== "review";
+
+/** Of two records for one lesson version: the settled one, else the later one. */
+function newerRecord(a: DecisionRecord, b: DecisionRecord): DecisionRecord {
+  if (settled(a) !== settled(b)) return settled(a) ? a : b;
+  return a.at >= b.at ? a : b;
+}
+
+/** Two copies of a developer's decisions merged by lesson hash; neither run's records are lost. */
+export function mergeDecisions(ours: DecisionsFile, theirs: DecisionsFile): DecisionsFile {
+  const mine = new Map(ours.decided.map((r) => [r.hash, r]));
+  const decided = theirs.decided.map((r) => {
+    const o = mine.get(r.hash);
+    mine.delete(r.hash);
+    return o ? newerRecord(o, r) : r;
+  });
+  return { member: ours.member, decided: [...decided, ...mine.values()].slice(-MAX_DECISIONS) };
+}
+
+/**
+ * The state files one daily run writes, merged with what another run wrote to the branch since
+ * this one read it, so overlapping runs on one base never lose each other's history. Run
+ * reports are one file per run, so both stay (a clash of names gets a suffix); a heartbeat keeps
+ * the newer by `at`; a developer's decisions merge record by record (`mergeDecisions`). Any
+ * other file is this run's. `theirs` reads a file at the branch's current tip.
+ */
+export function mergeStateFiles(
+  ours: Record<string, string>,
+  theirs: (path: string) => string | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const json = <T>(text: string | undefined): T | undefined => {
+    try {
+      return text === undefined ? undefined : (JSON.parse(text) as T);
+    } catch {
+      return undefined;
+    }
+  };
+  for (const [path, text] of Object.entries(ours)) {
+    const other = theirs(path);
+    if (other === undefined || other === text) {
+      out[path] = text;
+    } else if (path.startsWith("runs/")) {
+      const stem = path.replace(/\.json$/, "");
+      let n = 2;
+      while (theirs(`${stem}-${n}.json`) !== undefined || `${stem}-${n}.json` in out) n++;
+      out[`${stem}-${n}.json`] = text;
+    } else if (path.startsWith("heartbeats/")) {
+      const a = json<Heartbeat>(text);
+      const b = json<Heartbeat>(other);
+      out[path] = b && (!a || b.at > a.at) ? other : text;
+    } else if (path.startsWith("decisions/")) {
+      const a = json<DecisionsFile>(text);
+      const b = json<DecisionsFile>(other);
+      out[path] = a && b ? `${JSON.stringify(mergeDecisions(a, b), null, 1)}\n` : text;
+    } else {
+      out[path] = text;
+    }
+  }
+  return out;
+}

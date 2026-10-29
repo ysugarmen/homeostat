@@ -7,6 +7,7 @@ import { formatEntry } from "../entry.ts";
 import { loginKey, memberForLogin } from "../handles.ts";
 import type { Issue } from "../issues.ts";
 import { areaMap, repoForSource, repoOf, ruleFilePath } from "../layout.ts";
+import { SpendingCapError } from "../pricing.ts";
 import type { Provider } from "../providers/types.ts";
 import type { Frontmatter } from "../schema.ts";
 import { score } from "../score.ts";
@@ -76,6 +77,11 @@ export interface CurateResult {
   /** Secrets removed from review threads before they were sent to a model. */
   redacted: number;
   docs: DocUpdate[];
+  /**
+   * Set when the run's spending cap stopped the drafting: the threads read but not drafted. Merged
+   * PRs after them are not read; the next run reads them again.
+   */
+  capped?: { threads: number; error: SpendingCapError };
 }
 
 export class CurateError extends Error {}
@@ -142,7 +148,9 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     const scanned = { repo: repoName, pullRequests: 0, threads: 0 };
     result.scanned.push(scanned);
 
+    if (result.capped) break;
     for (const pr of await input.provider.listMergedPullRequests(repo, input.since)) {
+      if (result.capped) break;
       scanned.pullRequests++;
       // Data controls (security plan T5): checked before anything is read or sent to a model.
       if (pr.skipRequested) {
@@ -169,6 +177,10 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
       }
 
       for (const thread of threads) {
+        if (result.capped) {
+          result.capped.threads++;
+          continue;
+        }
         scanned.threads++;
         const url = thread.root.url;
         const key = commentKey({
@@ -207,14 +219,22 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
 
         const { thread: safe, redacted } = redactThread(thread);
         result.redacted += redacted;
-        let draft = await input.drafter.draft(safe, { areas, ...(topics ? { topics } : {}) });
-        if (input.patcher) {
-          await docPatchStep(
-            { files, config, result, today: input.today, repo: kbRepo },
-            input.patcher,
-            safe,
-            url,
-          );
+        let draft: Draft | null;
+        try {
+          draft = await input.drafter.draft(safe, { areas, ...(topics ? { topics } : {}) });
+          if (input.patcher) {
+            await docPatchStep(
+              { files, config, result, today: input.today, repo: kbRepo },
+              input.patcher,
+              safe,
+              url,
+            );
+          }
+        } catch (e) {
+          if (!(e instanceof SpendingCapError)) throw e;
+          // A lesson the cap cut off is left to the next run, which reads this thread again.
+          result.capped = { threads: 1, error: e };
+          continue;
         }
         if (!draft) {
           skip("no lasting rule in the thread");
@@ -241,11 +261,18 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         // A draft over a length limit is worth one rewrite rather than losing the lesson.
         if (blocking.length > 0 && blocking.every(isLengthIssue)) {
           const problems = blocking.map((i) => i.message);
-          const second = await input.drafter.draft(safe, {
-            areas,
-            ...(topics ? { topics } : {}),
-            revise: { previous: draft, problems },
-          });
+          let second: Draft | null;
+          try {
+            second = await input.drafter.draft(safe, {
+              areas,
+              ...(topics ? { topics } : {}),
+              revise: { previous: draft, problems },
+            });
+          } catch (e) {
+            if (!(e instanceof SpendingCapError)) throw e;
+            result.capped = { threads: 1, error: e };
+            continue;
+          }
           if (second) {
             draft = second;
             ({ built: entry, errs: errors } = check(draft));

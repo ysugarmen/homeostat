@@ -1,9 +1,9 @@
 import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validate } from "@homeostat/core";
+import { SpendingCapError, validate } from "@homeostat/core";
 import { expect, test } from "vitest";
-import { askerFor, formatRunUse } from "../src/agents.ts";
+import { askerFor, capLine, formatRunUse, newRunStats, runCost } from "../src/agents.ts";
 
 const starter = new URL("../../../examples/starter-kb/", import.meta.url).pathname;
 
@@ -32,6 +32,53 @@ test("the asker counts its calls, their size and failures for the run report", a
     failed: 1,
     byAgent: { curator: { calls: 1 } },
   });
+});
+
+test("past the spending cap no call starts; tokens without a cost are priced as an estimate", async () => {
+  const files: Record<string, string> = {};
+  for (const f of readdirSync(starter, { recursive: true, encoding: "utf8" })) {
+    if ((f.endsWith(".md") || f.endsWith(".yaml")) && f !== "README.md")
+      files[f] = readFileSync(join(starter, f), "utf8");
+  }
+  const config = validate(files).config;
+  if (!config) throw new Error("config");
+  const stats = newRunStats(0.25);
+  let sent = 0;
+  const ask = askerFor(
+    config,
+    "curator",
+    {
+      stdout: () => {},
+      stderr: () => {},
+      color: false,
+      env: {},
+      // Opus: 10k in and 2k out is $0.30, a reported cost is taken as given.
+      runtime:
+        ({ onUsage }) =>
+        async () => {
+          sent++;
+          onUsage({
+            inputTokens: 10_000,
+            outputTokens: 2_000,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            ...(sent === 2 ? { costUsd: 0.01 } : {}),
+          });
+          return {} as never;
+        },
+    },
+    mkdtempSync(join(tmpdir(), "homeostat-asker-")),
+    stats,
+  );
+  await ask("s", "u", {} as never);
+  expect(runCost(stats)).toEqual({ usd: 0.3, estimated: true });
+  await expect(ask("s", "u", {} as never)).rejects.toBeInstanceOf(SpendingCapError);
+  expect(sent).toBe(1);
+  expect(stats.capped).toBe(true);
+  expect(stats.calls).toBe(1);
+  expect(capLine(stats, 3)).toBe(
+    "stopped at the spending cap: $0.30 of $0.25 (estimated from tokens); 3 lessons left for the next run",
+  );
 });
 
 test("a run ends with its model use per agent, and the cost where the runtime gives one", () => {

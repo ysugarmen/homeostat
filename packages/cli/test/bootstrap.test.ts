@@ -117,6 +117,40 @@ describe("homeostat bootstrap", () => {
     expect(again.stdout).toContain("knowledge/api/core/docs/data.md: already in the KB");
   });
 
+  test("past agents.maxCostUsd no prompt is sent: the documents drafted are written, the rest left", async () => {
+    const { kb, code } = workspace();
+    const config = join(kb, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("agents:\n", "agents:\n  maxCostUsd: 0.1\n"),
+    );
+    // Each call reports 10k tokens in and 2k out on the Opus drafter, priced at $0.30.
+    let calls = 0;
+    const draft = new FakeSeeder();
+    const runtime: Io["runtime"] =
+      ({ onUsage }) =>
+      async () => {
+        calls++;
+        onUsage({
+          inputTokens: 10_000,
+          outputTokens: 2_000,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        });
+        return (await draft.draft({} as RepoSnapshot, "architecture")) as never;
+      };
+    const r = await bootstrap(kb, ["--checkout", `api=${code}`, "--repo", "api", "--yes"], {
+      runtime,
+    });
+    expect(r.code).toBe(0);
+    expect(calls).toBe(1);
+    expect(r.stdout).toContain(
+      "stopped at the spending cap: $0.30 of $0.10 (estimated from tokens); 4 documents left for the next run",
+    );
+    expect(existsSync(join(kb, "knowledge/api/core/docs/architecture.md"))).toBe(true);
+    expect(existsSync(join(kb, "knowledge/api/core/docs/data.md"))).toBe(false);
+  });
+
   test("without a terminal it needs --yes", async () => {
     const { kb, code } = workspace();
     const r = await bootstrap(kb, ["--checkout", `api=${code}`, "--parts", "data"], {

@@ -254,6 +254,13 @@ export const SECTIONS: Section[] = [
         optional: true,
         help: "global, us, eu or a region",
       },
+      {
+        path: ["agents", "maxCostUsd"],
+        label: "Spending cap per run (USD)",
+        kind: "number",
+        optional: true,
+        help: "Daily run, deep dive and bootstrap stop making model calls once a run has spent this; what is left waits for the next run. Empty: no cap",
+      },
       ...agentFields("curator", "Daily run (curator)"),
       {
         path: ["agents", "curator", "consolidateCalls"],
