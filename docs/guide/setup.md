@@ -2,7 +2,7 @@
 
 ```sh
 cd team-kb                       # your clone of the KB repo, or an empty folder with an origin remote
-npx --yes homeostat@0.4.0 setup
+npx --yes homeostat@0.4.1 setup
 ```
 
 `homeostat setup` is a checklist you can run any number of times. It finds what is already done, asks only for what is missing or broken, and checks each step with a real call before it moves on. A step is marked:
@@ -138,7 +138,7 @@ To rename, first make sure the version in your CI file is newer than 0.3.2 (olde
 Each developer runs this once, in their clone of the KB:
 
 ```sh
-npx --yes homeostat@0.4.0 setup --join
+npx --yes homeostat@0.4.1 setup --join
 ```
 
 It does three things:

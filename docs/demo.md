@@ -5,7 +5,7 @@ One person runs it by hand on GitHub in under ten minutes: a reviewer's comment 
 ## Before you start
 
 - Node 22.18+, `git`, and the GitHub CLI logged in (`gh auth status`).
-- `homeostat` on your PATH: `npm install -g homeostat@0.4.0`.
+- `homeostat` on your PATH: `npm install -g homeostat@0.4.1`.
 - Claude Code logged in (`claude`). The demo runs the agents through it (`agents.runtime: claude-code`), so your own subscription is enough. That is fine for a personal sandbox; a team KB uses a Console API key instead (the default), because a personal subscription is for personal, non-commercial use only.
 - A **second GitHub account** for the reviewer. The daily run only learns from feedback by someone other than the PR author.
 - Claude Code with the homeostat plugin: `claude plugin marketplace add ysugarmen/homeostat` then `claude plugin install homeostat@homeostat`.

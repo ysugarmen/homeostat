@@ -47,7 +47,7 @@ Claude Desktop, Cursor and others:
   "mcpServers": {
     "homeostat": {
       "command": "npx",
-      "args": ["--yes", "homeostat@0.4.0", "mcp"],
+      "args": ["--yes", "homeostat@0.4.1", "mcp"],
       "env": { "HOMEOSTAT_DIR": "/path/to/your/kb-checkout" }
     }
   }

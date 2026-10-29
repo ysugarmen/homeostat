@@ -1,6 +1,6 @@
 {
   "name": "@homeostat/mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "The homeostat team knowledge base as an MCP server.",
   "keywords": [
     "homeostat",
