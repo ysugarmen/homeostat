@@ -25,7 +25,7 @@ const steps = [
   },
   {
     title: "Deliver to every agent",
-    body: "When a session starts, the agent gets the rules for the files it is touching, within a token budget. Claude Code, any MCP client, Cursor, Copilot and AGENTS.md all read the same rules.",
+    body: "When a session starts, the agent gets the rules for the files it is touching, within a token budget. Each message also brings the rules and document sections its words match, so a question that names no file still gets them. Claude Code, any MCP client, Cursor, Copilot and AGENTS.md all read the same rules.",
   },
 ];
 
@@ -45,7 +45,9 @@ const spec = [
   ["Runs", "In the knowledge base's CI, once a day, on GitHub Actions or Bitbucket Pipelines"],
   ["Developer machines", "Session hooks and an MCP server. Nothing scheduled, no daemon"],
   ["Model", "Claude, through the API, Amazon Bedrock, Google Vertex AI or Claude Code. It reads review threads, never code"],
-  ["Session start", "About half a second on a 280-rule knowledge base"],
+  ["Cost", "Every run reports its calls, tokens and cost per agent. A spending cap per run stops it cleanly and leaves the rest for tomorrow"],
+  ["Session start", "Under a second on a 600-rule knowledge base (median 0.9 s)"],
+  ["Measured", "homeostat bench runs the same tasks from your own review history with the plugin off and on"],
   ["Agents", "Claude Code, any MCP client, Cursor, GitHub Copilot, AGENTS.md"],
   ["Licence", "Apache-2.0"],
 ];
