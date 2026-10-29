@@ -24,13 +24,16 @@ import {
   flagEntry,
   HEARTBEAT_PATH,
   isDocPath,
+  JUDGE_CONFIRMATIONS,
   judgeDraft,
   judgeModelFor,
   kbSnapshot,
   lessonHash,
   logEvent,
   loginKey,
+  MAX_DECISIONS,
   mergeCandidates,
+  mergeStateFiles,
   type OpenPullRequest,
   overlayPending,
   type PoolRule,
@@ -44,15 +47,16 @@ import {
   resolveDispute,
   retiredRule,
   retractCitations,
+  SpendingCapError,
   sameLesson,
   stateBranch,
   type Verdict,
   validate,
 } from "@homeostat/core";
-import { askerFor, formatRunUse, newRunStats } from "./agents.ts";
+import { askerFor, capLine, formatRunUse, newRunStats, runCost } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
-import { commitTree, forcePush, git, mergeText, showFile } from "./git.ts";
+import { commitTree, git, mergeText, pushCommit, showFile } from "./git.ts";
 import { foldChanges, nudgeBranch, refFiles, showRule } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { type FileChange, publish } from "./publish.ts";
@@ -77,7 +81,12 @@ export interface DailyOptions {
   dryRun?: boolean;
   /** Skip drafting from review comments (no model calls): pending lessons only. */
   noReviews?: boolean;
+  /** `--max-cost <usd>`: this run's spending cap, over `agents.maxCostUsd`. */
+  maxCost?: string;
 }
+
+/** Tries at writing the state branch when other runs keep moving it, before the run fails. */
+export const STATE_PUSH_ATTEMPTS = 5;
 
 interface Lesson {
   member: string;
@@ -147,7 +156,16 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   const kbRepo = repoRef(sources.kbRepo);
   const now = io.now?.() ?? new Date();
   const today = now.toISOString().slice(0, 10);
-  const stats = newRunStats();
+  const maxCost = opts.maxCost === undefined ? config.agents.maxCostUsd : Number(opts.maxCost);
+  if (maxCost !== undefined && !(maxCost > 0))
+    throw new CliError("--max-cost must be a positive amount in US dollars, e.g. --max-cost 5");
+  const stats = newRunStats(maxCost);
+  // What the run prints that a person should act on, kept in the run report as well.
+  const notices: string[] = [];
+  const notice = (line: string) => {
+    notices.push(line.trim());
+    io.stdout(`${line}\n`);
+  };
   const provider = providerFor(sources.host, io, "read pull requests and open the daily PRs");
   const remote = (ref: string) => `refs/remotes/origin/${ref}`;
 
@@ -286,10 +304,28 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   // 1b. Lessons from review comments, filed under the developer whose PR it was.
   let drafted: CuratedEntry[] = [];
   let skipped: { url: string; reason: string }[] = [];
+  let since = opts.since
+    ? new Date(opts.since)
+    : new Date(now.getTime() - config.agents.curator.lookbackHours * 3_600_000);
+  // The spending cap: lessons left undecided wait for the next run, and review threads not drafted.
+  const held = new Set<Lesson>();
+  let undrafted = 0;
+  let capError: SpendingCapError | undefined;
+  const atCap = () => capError !== undefined || stats.capped === true;
+  const hitCap = (e: unknown) => {
+    if (!(e instanceof SpendingCapError)) return false;
+    capError ??= e;
+    return true;
+  };
   if (!opts.noReviews) {
-    const since = opts.since
-      ? new Date(opts.since)
-      : new Date(now.getTime() - config.agents.curator.lookbackHours * 3_600_000);
+    // A run that stopped at the cap left threads undrafted: read from where it started.
+    const last = lastRun(root, remote(STATE));
+    if (!opts.since && last?.capped && Date.parse(last.capped.since) < since.getTime()) {
+      since = new Date(last.capped.since);
+      io.stdout(
+        `reading reviews since ${last.capped.since}: the last run stopped at the spending cap\n`,
+      );
+    }
     const asker = askerFor(config, "curator", io, root, stats);
     const result = await curate({
       files,
@@ -302,6 +338,10 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     });
     drafted = result.entries;
     skipped = result.skipped.map((s) => ({ url: s.url, reason: s.reason }));
+    if (result.capped) {
+      capError ??= result.capped.error;
+      undrafted = result.capped.threads;
+    }
     for (const e of drafted) {
       const member = e.prAuthor ?? e.frontmatter.source.author;
       if (decidedHashes(member).has(lessonHash(e.text))) continue;
@@ -390,11 +430,20 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       unchecked++;
       continue;
     }
+    // Past the spending cap a lesson the model would check waits, rather than be decided by words.
+    if (atCap()) {
+      held.add(l);
+      continue;
+    }
     budget--;
     let verdict: Verdict | null;
     try {
       verdict = await consolidator.decide(entry, candidates);
     } catch (e) {
+      if (hitCap(e)) {
+        held.add(l);
+        continue;
+      }
       // Without the model the run still decides, by word overlap, as before.
       io.stdout(`  could not check ${l.id} against existing rules: ${(e as Error).message}\n`);
       budget = 0;
@@ -493,11 +542,28 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       `  the judge runs on the drafter's own model (${config.agents.curator.model}), which tends to agree with itself; set agents.curator.judgeModel to another\n`,
     );
   }
+  const toJudge = (l: Lesson) =>
+    l.decision === "merged" &&
+    l.origin === "review" &&
+    !!l.thread &&
+    (l.kind === "new" || l.kind === "update") &&
+    !held.has(l);
   let judgeBudget = judgeCalls;
+  // A backfill (--since) drafts weeks of reviews at once: the cap rises so that each confident
+  // draft can be judged, even when every one fails and is re-asked, instead of going to a
+  // person for want of calls. The spending cap still bounds it.
+  const confident = lessons.filter(toJudge).length;
+  const backfillCalls = confident * (1 + JUDGE_CONFIRMATIONS);
+  if (judge && opts.since && backfillCalls > judgeCalls) {
+    judgeBudget = backfillCalls;
+    io.stdout(
+      `  judge cap raised for the backfill: ${plural(confident, "confident draft")}, up to ${backfillCalls} calls (agents.curator.judgeCalls is ${judgeCalls})\n`,
+    );
+  }
   let judgeDown: string | undefined;
+  let overJudgeCap = 0;
   for (const l of lessons) {
-    if (!judge || l.decision !== "merged" || l.origin !== "review" || !l.thread) continue;
-    if (l.kind !== "new" && l.kind !== "update") continue;
+    if (!judge || !toJudge(l) || !l.thread) continue;
     const entry = parseEntry(l.text).entry;
     if (!entry) continue;
     const unjudged = (why: string) => {
@@ -508,8 +574,14 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       unjudged(judgeDown);
       continue;
     }
+    // Past the spending cap the draft is left undecided: the next run drafts and judges it.
+    if (atCap()) {
+      held.add(l);
+      continue;
+    }
     if (judgeBudget <= 0) {
       unjudged("agents.curator.judgeCalls reached");
+      overJudgeCap++;
       continue;
     }
     const base = l.update?.base;
@@ -534,6 +606,10 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
           : {}),
       });
     } catch (e) {
+      if (hitCap(e)) {
+        held.add(l);
+        continue;
+      }
       judgeDown = `the judge could not be reached: ${(e as Error).message}`;
       unjudged(judgeDown);
       continue;
@@ -558,6 +634,14 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       groups.get(l)?.length ?? 1,
     );
   }
+  if (overJudgeCap) {
+    notice(
+      `  ${plural(overJudgeCap, "confident draft")} went to review because agents.curator.judgeCalls (${judgeCalls}) was reached; raise it to have them judged instead`,
+    );
+  }
+  // A lesson left at the cap takes its copies with it: they are decided together next run.
+  for (const l of [...held]) for (const x of groups.get(l) ?? []) held.add(x);
+  for (const l of held) lessons.splice(lessons.indexOf(l), 1);
 
   // Flags on one rule from several developers go in as one change, or the second PR conflicts.
   const flagged = new Map<string, Lesson[]>();
@@ -672,12 +756,25 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     (opts.noReviews
       ? { fix: async () => null }
       : new ClaudeRuleFixer(askerFor(config, "curator", io, root, stats)));
+  let disputesLeft = 0;
   for (const { path, entry } of kb.entries) {
     const id = entry.frontmatter.id;
     if (entry.frontmatter.status !== "disputed") continue;
     if (lessons.some((l) => l.kind === "retire" && l.id === id)) continue;
     if ([...open].some((b) => b.startsWith(`${DISPUTE_PREFIX}${id}-`))) continue;
-    let fixed = await fixer.fix(entry);
+    // Past the spending cap the dispute PR waits: the next run drafts its fix and opens it.
+    if (atCap()) {
+      disputesLeft++;
+      continue;
+    }
+    let fixed: Awaited<ReturnType<typeof fixer.fix>>;
+    try {
+      fixed = await fixer.fix(entry);
+    } catch (e) {
+      if (!hitCap(e)) throw e;
+      disputesLeft++;
+      continue;
+    }
     const problems = fixed ? fixProblems(fixed) : [];
     if (problems.length) {
       io.stdout(`  the drafted fix for ${id} was unusable (${problems.join("; ")})\n`);
@@ -887,7 +984,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
       openedAt: now.toISOString(),
     };
     const d = decisions.get(l.member) ?? { member: l.member, decided: [] };
-    d.decided = [...d.decided.filter((r) => r.hash !== l.hash), record].slice(-500);
+    d.decided = [...d.decided.filter((r) => r.hash !== l.hash), record].slice(-MAX_DECISIONS);
     decisions.set(l.member, d);
   }
   // The run's own cost, and the KB's health after its merges, for the trend over runs.
@@ -905,6 +1002,21 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     failedCalls: stats.failed,
     ...(stats.byAgent && Object.keys(stats.byAgent).length ? { byAgent: stats.byAgent } : {}),
   };
+  if (atCap()) {
+    const left = held.size + undrafted + disputesLeft;
+    const { usd, estimated } = runCost(stats);
+    report.capped = {
+      spentUsd: Math.round(usd * 100) / 100,
+      maxCostUsd: stats.maxCostUsd ?? 0,
+      estimated,
+      left,
+      since: since.toISOString(),
+    };
+    notice(capLine(stats, left));
+  }
+  const slack = opts.dryRun ? undefined : slackProblem(config, io);
+  if (slack) notice(slack);
+  if (notices.length) report.notices = notices;
   if (!opts.dryRun) {
     const state: Record<string, string> = {
       // One file per run (a day can have several: the schedule, a manual run, a rerun).
@@ -913,9 +1025,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
     for (const [m, d] of decisions)
       if (d.decided.length) state[decisionsPath(m)] = `${JSON.stringify(d, null, 1)}\n`;
     for (const [m, hb] of Object.entries(heartbeats)) state[`heartbeats/${m}.json`] = `${hb}\n`;
-    const parent = git(root, "rev-parse", "--verify", "--quiet", remote(STATE));
-    const commit = commitTree(root, parent, state, `homeostat: daily run ${today}`);
-    forcePush(root, commit, STATE);
+    writeState(root, STATE, state, `homeostat: daily run ${today}`);
     await notifyReviewQueue(config, report, [...decisions.values()], now, io);
   }
 
@@ -958,6 +1068,61 @@ const excerpt = (text: string, max = 240) => {
 
 /** `2026-10-17T10-26-28Z`: sortable, and safe in a file name. */
 export const runName = (at: Date) => `${at.toISOString().slice(0, 19).replace(/:/g, "-")}Z`;
+
+/**
+ * Writes the run's state files on top of the branch as it is now, never over it: two runs on one
+ * base can overlap (a schedule and a manual run), and a force-push once lost a run report that
+ * way. Each try fetches the tip, merges this run's files into it (`mergeStateFiles`) and pushes
+ * without force; when another run moved the branch in between, git refuses and it tries again.
+ */
+function writeState(root: string, branch: string, files: Record<string, string>, message: string) {
+  const ref = `refs/remotes/origin/${branch}`;
+  let last = "";
+  for (let attempt = 1; attempt <= STATE_PUSH_ATTEMPTS; attempt++) {
+    git(root, "fetch", "--quiet", "origin", `+refs/heads/${branch}:${ref}`);
+    const tip = git(root, "rev-parse", "--verify", "--quiet", ref);
+    const merged = tip ? mergeStateFiles(files, (p) => showFile(root, tip, p)) : files;
+    const commit = commitTree(root, tip, merged, message);
+    try {
+      pushCommit(root, commit, branch);
+      return;
+    } catch (e) {
+      last = (e as Error).message;
+    }
+  }
+  throw new CliError(
+    `could not record this run on ${branch}: it kept moving under other runs (${STATE_PUSH_ATTEMPTS} tries; last: ${last}). Its PRs are open or merged; rerun homeostat daily to record the decisions`,
+  );
+}
+
+/** The latest run report on the state branch, if any. */
+function lastRun(root: string, ref: string): RunReport | undefined {
+  const runs = (git(root, "ls-tree", "--name-only", `${ref}:runs`) ?? "").split("\n");
+  const name = runs
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .at(-1);
+  try {
+    return name ? (JSON.parse(showFile(root, ref, `runs/${name}`) ?? "") as RunReport) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Why the configured Slack webhook cannot be used in this run, for a visible warning: the
+ * variable named in `notifications.slackWebhookEnv` is not set (a missing CI secret), or is not a
+ * webhook URL. Undefined when Slack is not configured, or is fine.
+ */
+export function slackProblem(config: Config, io: Io): string | undefined {
+  const variable = config.notifications.slackWebhookEnv;
+  if (!variable) return undefined;
+  const url = io.env?.[variable];
+  if (!url) return `Slack: ${variable} is not set in this CI; no notice was posted`;
+  if (!/^https:\/\/hooks\.slack\.com\//.test(url))
+    return `Slack: ${variable} is not a Slack incoming-webhook URL (https://hooks.slack.com/...); no notice was posted`;
+  return undefined;
+}
 
 function pendingLesson(
   member: string,

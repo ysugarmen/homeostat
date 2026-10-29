@@ -1,4 +1,5 @@
 import { minimatch } from "minimatch";
+import { priceFor } from "./pricing.ts";
 import { NEVER_READ, type RepoSnapshot, SEED_SYSTEM, type SeedTopic, seedPrompt } from "./seed.ts";
 import { slugify } from "./slug.ts";
 import { countTokens } from "./tokens.ts";
@@ -44,12 +45,6 @@ export function docTopic(path: string): string {
   return slugify(stem.replace(/\//g, "-")) ?? "document";
 }
 
-/** Approximate API prices in dollars per million tokens, input and output, by model family. */
-const PRICES: [RegExp, number, number][] = [
-  [/haiku/i, 1, 5],
-  [/sonnet/i, 3, 15],
-  [/opus|fable/i, 5, 25],
-];
 /** What a seed document's answer usually costs: a title, an intro and up to eight sections. */
 export const SEED_OUTPUT_TOKENS = 2_500;
 
@@ -71,9 +66,9 @@ export function estimate(
     0,
   );
   const outputTokens = prompts.length * SEED_OUTPUT_TOKENS;
-  const price = PRICES.find(([re]) => re.test(model ?? ""));
+  const price = priceFor(model);
   const dollars = price
-    ? (inputTokens * price[1] + outputTokens * price[2]) / 1_000_000
+    ? (inputTokens * price.input + outputTokens * price.output) / 1_000_000
     : undefined;
   return { inputTokens, outputTokens, ...(dollars === undefined ? {} : { dollars }) };
 }

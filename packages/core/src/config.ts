@@ -266,6 +266,12 @@ export const configSchema = z.strictObject({
           region: z.string().min(1).default("global"),
         })
         .optional(),
+      /**
+       * Most dollars one daily run, deep dive or bootstrap may spend on model calls; no cap when
+       * unset. No call starts once the run has spent it, and what is left waits for the next run.
+       * Runtimes that report no cost are priced from their tokens (an estimate, see pricing.ts).
+       */
+      maxCostUsd: z.number().positive().optional(),
       curator: agentSchema("0 6 * * *", 26)
         .extend({
           /**

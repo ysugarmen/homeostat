@@ -10,6 +10,7 @@ import {
   type Merger,
 } from "../src/deepdive.ts";
 import { type Entry, formatEntry, parseEntry } from "../src/entry.ts";
+import { SpendingCapError } from "../src/pricing.ts";
 import type { Frontmatter } from "../src/schema.ts";
 import { countTokens } from "../src/tokens.ts";
 import { validate } from "../src/validate.ts";
@@ -102,6 +103,17 @@ describe("deepDive: duplicates", () => {
       "Wrap every outbound HTTP call in withRetry() from @app/http-client.",
     );
     expect(keep?.sections.example).toContain("withRetry"); // the survivor's example is kept
+  });
+
+  test("past the spending cap a pair is left for next week, not merged on its own text", async () => {
+    const merger: Merger = {
+      merge: async () => {
+        throw new SpendingCapError(2, 2);
+      },
+    };
+    const result = await deepDive({ files: kb(), today: TODAY, merger });
+    expect(result.changes).toEqual([]);
+    expect(result.capped).toMatchObject({ left: 1, error: { spentUsd: 2, maxCostUsd: 2 } });
   });
 
   test("unusable merged text is ignored with a note", async () => {

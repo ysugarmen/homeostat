@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { buildDigest, readEvents, readKbFiles, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
+import { slackProblem } from "./daily.ts";
 
 export interface DigestOptions {
   dir?: string;
@@ -34,17 +35,15 @@ export async function runDigest(opts: DigestOptions, io: Io): Promise<number> {
     }
     return 0;
   }
-  const url = io.env?.[variable];
-  if (!url) {
+  // The same warning as the daily run's, then how to fix it; the digest fails, as it posted nothing.
+  const problem = slackProblem(kb.config, io);
+  if (problem) {
     io.stderr(
-      `set ${variable} to the Slack incoming-webhook URL (a CI secret) to post the digest\n`,
+      `${problem}\nset ${variable} to the Slack incoming-webhook URL (a CI secret) to post the digest\n`,
     );
     return 1;
   }
-  if (!/^https:\/\/hooks\.slack\.com\//.test(url)) {
-    io.stderr(`${variable} is not a Slack incoming-webhook URL (https://hooks.slack.com/...)\n`);
-    return 1;
-  }
+  const url = io.env?.[variable] ?? "";
   const res = await (io.fetch ?? fetch)(url, {
     method: "POST",
     headers: { "content-type": "application/json" },

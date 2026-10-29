@@ -7,6 +7,9 @@ export {
   HEARTBEAT_PATH,
   type Heartbeat,
   lessonHash,
+  MAX_DECISIONS,
+  mergeDecisions,
+  mergeStateFiles,
   REVIEW_REMINDER_DAYS,
   type RunReport,
   STALE_HEARTBEAT_HOURS,
@@ -360,6 +363,12 @@ export {
   TOPICS_SYSTEM,
   type TopicProposer,
 } from "./migrate.ts";
+export {
+  estimateCostUsd,
+  type Price,
+  priceFor,
+  SpendingCapError,
+} from "./pricing.ts";
 export * from "./providers/index.ts";
 export { detectRepo, remoteRepo, repoFor } from "./repo-detect.ts";
 export {

@@ -12,7 +12,7 @@ import {
   readKbFiles,
   validate,
 } from "@homeostat/core";
-import { askerFor, formatRunUse, newRunStats } from "./agents.ts";
+import { askerFor, capLine, formatRunUse, newRunStats } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
 import { git } from "./git.ts";
@@ -53,20 +53,22 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
 
     const now = io.now?.() ?? new Date();
     const today = now.toISOString().slice(0, 10);
-    const stats = newRunStats();
+    const stats = newRunStats(config.agents.maxCostUsd);
     const ask = askerFor(config, "deepDive", io, root, stats);
     const useLlm = opts.llm !== false;
     const merger = useLlm ? (io.merger ?? new ClaudeMerger(ask)) : undefined;
     const judge = useLlm ? (io.judge ?? new ClaudeConflictJudge(ask)) : undefined;
     const retractor = useLlm ? (io.retractor ?? new ClaudeRetractor(ask)) : undefined;
 
-    const { changes, notes } = await deepDive({
+    const { changes, notes, capped } = await deepDive({
       files,
       today,
       ...(merger ? { merger } : {}),
       ...(judge ? { judge } : {}),
       ...(retractor ? { retractor } : {}),
     });
+    // Listed with the notes, so the PR says what the cap left for next week's run.
+    if (capped) notes.push(capLine(stats, capped.left, "check"));
     for (const c of changes) {
       for (const a of c.actions) io.stdout(`${c.path}: ${a.action} (${a.note})\n`);
     }
@@ -77,7 +79,7 @@ export async function runDeepDive(opts: DeepDiveOptions, io: Io): Promise<number
       type: "agent-run",
       agent: "deepDive",
       ok: true,
-      summary: `${changes.length} changed, ${notes.length} notes`,
+      summary: `${changes.length} changed, ${notes.length} notes${capped ? "; stopped at the spending cap" : ""}`,
       entries: changes.map((c) => c.id),
     });
     if (changes.length === 0) {

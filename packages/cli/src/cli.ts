@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import type {
+  Asker,
   ConflictJudge,
   Consolidator,
   DocPatcher,
@@ -13,6 +14,7 @@ import type {
   RuleFixer,
   Seeder,
   TopicProposer,
+  Usage,
 } from "@homeostat/core";
 import { VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
@@ -86,6 +88,8 @@ export interface Io {
   draftJudge?: DraftJudge;
   retractor?: Retractor;
   topicProposer?: TopicProposer;
+  /** Test seam: a Claude runtime in place of the configured one, reporting usage as it goes. */
+  runtime?: (opts: { agent: string; model: string; onUsage: (u: Usage) => void }) => Asker;
 }
 
 export interface SpawnResult {
@@ -469,6 +473,10 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option(
       "--no-reviews",
       "skip drafting from review comments (no model calls): pending lessons only",
+    )
+    .option(
+      "--max-cost <usd>",
+      "stop making model calls once this run has spent this, in US dollars (default: agents.maxCostUsd)",
     )
     .action(async (opts: DailyOptions & { reviews?: boolean }) => {
       exitCode = await runDaily(

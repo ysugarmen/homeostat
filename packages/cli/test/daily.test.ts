@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  Asker,
   Consolidator,
   DocPatcher,
   Draft,
@@ -17,9 +18,16 @@ import type {
   Retractor,
   ReviewThread,
   RuleCandidate,
+  Usage,
   Verdict,
 } from "@homeostat/core";
-import { type Entry, formatTopicFile, parseEntry, ruleSection } from "@homeostat/core";
+import {
+  type Entry,
+  formatTopicFile,
+  parseEntry,
+  ruleSection,
+  SpendingCapError,
+} from "@homeostat/core";
 import { describe, expect, test } from "vitest";
 import { type Io, runCli } from "../src/cli.ts";
 
@@ -1461,5 +1469,289 @@ describe("homeostat daily in a topic KB", { timeout: 30_000 }, () => {
     expect(() =>
       t.g(t.origin, "show", `${branch}:knowledge/integrations/outbound-http-retry-helper.md`),
     ).toThrow();
+  });
+});
+
+/** Two review comments on Lee's PR, each drafted by `twoDrafts` into a confident lesson. */
+class TwoReviews extends FakeProvider {
+  override async listReviewComments() {
+    const [first] = await super.listReviewComments();
+    if (!first) return [];
+    return [
+      first,
+      {
+        ...first,
+        id: 9002,
+        body: "Use var(--space-2) instead of pixel margins; they ignore density settings.",
+        url: "https://github.com/acme/web-app/pull/120#discussion_r9002",
+        line: 9,
+      },
+    ];
+  }
+}
+const SPACING_DRAFT: Draft = {
+  title: "Use spacing tokens instead of pixel margins",
+  rule: "Set margins in apps/web styles with var(--space-*) tokens, never pixel values.",
+  why: "Pixel margins ignore the density settings.",
+  area: "frontend",
+};
+const twoDrafts: Drafter = {
+  draft: async (thread: ReviewThread) => (thread.root.id === 9002 ? SPACING_DRAFT : COLOUR_DRAFT),
+};
+
+/** A runtime that answers every judge call with a pass, reporting tokens but no cost (the API). */
+const passingRuntime =
+  (usage = { inputTokens: 10_000, outputTokens: 2_000 }) =>
+  ({ onUsage }: { onUsage: (u: Usage) => void }) =>
+    (async () => {
+      onUsage({ ...usage, cacheReadTokens: 0, cacheWriteTokens: 0 });
+      return PASS;
+    }) as unknown as Asker;
+
+const stateFile = (t: ReturnType<typeof team>, path: string) =>
+  JSON.parse(t.g(t.origin, "show", `homeostat/state:${path}`));
+
+describe("homeostat daily: the spending cap", { timeout: 30_000 }, () => {
+  test("past agents.maxCostUsd no call starts; the draft left is undecided and the next run takes it", async () => {
+    const t = team();
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("agents:\n", "agents:\n  maxCostUsd: 0.01\n"),
+    );
+    t.g(t.ci, "commit", "-qam", "cap");
+    t.g(t.ci, "push", "-q", "origin", "main");
+
+    // The judge (Sonnet under the Opus drafter) reports 10k tokens in, 2k out: $0.06 a call.
+    const provider = new TwoReviews();
+    const { stdout } = await run(["daily", "--dir", t.ci], {
+      provider,
+      drafter: twoDrafts,
+      draftJudge: undefined,
+      runtime: passingRuntime(),
+    });
+    expect(stdout).toContain("judge use-colour-tokens-instead-of-hex-values: ok (passed)");
+    expect(stdout).not.toContain("judge use-spacing-tokens");
+    // Decided: the colour lesson. Left, not declined and not sent to review: the spacing one.
+    expect(stdout).toContain("lee: 1 merged, 0 to review, 0 declined");
+    expect(stdout).toContain(
+      "stopped at the spending cap: $0.06 of $0.01 (estimated from tokens); 1 lesson left for the next run",
+    );
+    expect(stdout).toContain("about $0.06 at API prices, estimated from tokens");
+    expect(provider.merged).toHaveLength(1);
+    const decided = stateFile(t, "decisions/lee.json").decided.map((d: { id: string }) => d.id);
+    expect(decided).toEqual(["use-colour-tokens-instead-of-hex-values"]);
+    const report = stateFile(t, "runs/2026-10-16T06-00-00Z.json");
+    expect(report.capped).toEqual({
+      spentUsd: 0.06,
+      maxCostUsd: 0.01,
+      estimated: true,
+      left: 1,
+      since: "2026-10-15T04:00:00.000Z",
+    });
+    expect(report.notices).toContain(
+      "stopped at the spending cap: $0.06 of $0.01 (estimated from tokens); 1 lesson left for the next run",
+    );
+    expect(report.timing.byAgent.judge).toMatchObject({ calls: 1, estimated: true });
+
+    // The host merges the daily PR onto main (the fake one does not), so its thread is known.
+    t.g(t.origin, "update-ref", "refs/heads/main", "refs/heads/homeostat/daily-lee-2026-10-16");
+    t.g(t.ci, "pull", "-q", "origin", "main");
+    // The next day, with a higher cap for one run: reviews are read from where the capped run
+    // started, so the lesson it left is drafted, judged and merged.
+    const next = await run(["daily", "--dir", t.ci, "--max-cost", "5"], {
+      provider,
+      drafter: twoDrafts,
+      draftJudge: undefined,
+      runtime: passingRuntime(),
+      now: () => new Date("2026-10-17T06:00:00Z"),
+    });
+    expect(next.stdout).toContain(
+      "reading reviews since 2026-10-15T04:00:00.000Z: the last run stopped at the spending cap",
+    );
+    expect(next.stdout).toContain("judge use-spacing-tokens-instead-of-pixel-margins: ok (passed)");
+    expect(next.stdout).toContain("lee: 1 merged, 0 to review, 0 declined");
+    expect(next.stdout).not.toContain("stopped at the spending cap:");
+  });
+
+  test("a cap reached while drafting leaves the threads after it for the next run", async () => {
+    const t = team();
+    // Judged drafts would wait too, once the cap is reached: with no judge, the first one merges.
+    setCurator(t, "judgeCalls: 0");
+    const provider = new TwoReviews();
+    let drafts = 0;
+    const drafter: Drafter = {
+      draft: async () => {
+        // The second thread drafted is past the cap.
+        if (++drafts === 2) throw new SpendingCapError(0.5, 0.5);
+        return COLOUR_DRAFT;
+      },
+    };
+    const { stdout } = await run(["daily", "--dir", t.ci, "--max-cost", "0.5"], {
+      provider,
+      drafter,
+    });
+    expect(stdout).toContain("lee: 1 merged, 0 to review, 0 declined");
+    expect(stdout).toContain(
+      "stopped at the spending cap: $0.00 of $0.50; 1 lesson left for the next run",
+    );
+    expect(stateFile(t, "runs/2026-10-16T06-00-00Z.json").capped).toMatchObject({ left: 1 });
+  });
+
+  test("--max-cost must be a positive amount", async () => {
+    const t = team();
+    const { code, stdout } = await run(["daily", "--dir", t.ci, "--max-cost", "free"]);
+    expect(code).toBe(1);
+    expect(stdout).toContain("--max-cost must be a positive amount in US dollars");
+  });
+});
+
+describe("homeostat daily: backfills and notices", { timeout: 30_000 }, () => {
+  test("a backfill raises the judge cap so confident drafts are judged, not queued", async () => {
+    const t = team();
+    setCurator(t, "judgeCalls: 1");
+    const draftJudge = new FakeJudge(PASS);
+    const { stdout } = await run(["daily", "--dir", t.ci, "--since", "2026-10-01"], {
+      provider: new TwoReviews(),
+      drafter: twoDrafts,
+      draftJudge,
+    });
+    expect(stdout).toContain(
+      "judge cap raised for the backfill: 2 confident drafts, up to 6 calls (agents.curator.judgeCalls is 1)",
+    );
+    expect(draftJudge.calls).toHaveLength(2);
+    expect(stdout).toContain("lee: 2 merged, 0 to review");
+  });
+
+  test("drafts sent to review by the judge cap are counted, with a hint", async () => {
+    const t = team();
+    setCurator(t, "judgeCalls: 1");
+    const { stdout } = await run(["daily", "--dir", t.ci], {
+      provider: new TwoReviews(),
+      drafter: twoDrafts,
+      draftJudge: new FakeJudge(PASS),
+    });
+    expect(stdout).not.toContain("judge cap raised");
+    const line =
+      "1 confident draft went to review because agents.curator.judgeCalls (1) was reached; raise it to have them judged instead";
+    expect(stdout).toContain(line);
+    expect(stateFile(t, "runs/2026-10-16T06-00-00Z.json").notices).toContain(line);
+  });
+
+  test("a Slack webhook variable that is not set is printed and recorded, not skipped silently", async () => {
+    const t = team();
+    await leeLearns(t.lee);
+    const { stdout } = await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider: new FakeProvider(),
+    });
+    const line = "Slack: HOMEOSTAT_SLACK_WEBHOOK is not set in this CI; no notice was posted";
+    expect(stdout).toContain(line);
+    expect(stateFile(t, "runs/2026-10-16T06-00-00Z.json").notices).toEqual([line]);
+
+    const digest = await run(["digest", "--dir", t.ci]);
+    expect(digest.code).toBe(1);
+    expect(digest.stdout).toContain(line);
+  });
+});
+
+/**
+ * Makes the CI checkout's next pushes to the state branch race another run: a pre-push hook moves
+ * the branch on origin after the push has read it and before it lands, as a second run would.
+ * `script` is shell run in that window, with ORIGIN set; it runs on the first `times` pushes.
+ */
+function raceStatePushes(t: ReturnType<typeof team>, script: string, times = 1) {
+  const hook = join(t.ci, ".git/hooks/pre-push");
+  const count = join(t.ci, ".git/state-races");
+  writeFileSync(
+    hook,
+    [
+      "#!/bin/sh",
+      "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH",
+      `ORIGIN='${t.origin}'`,
+      "while read lref lsha rref rsha; do",
+      '  [ "$rref" = refs/heads/homeostat/state ] || continue',
+      `  n=$(cat '${count}' 2>/dev/null || echo 0)`,
+      `  [ "$n" -lt ${times} ] || continue`,
+      `  echo $((n + 1)) > '${count}'`,
+      `  ${script}`,
+      "done",
+      "exit 0",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(hook, 0o755);
+}
+
+describe("homeostat daily: overlapping runs", { timeout: 30_000 }, () => {
+  test("a run whose state push races another run merges onto it: no report or decision is lost", async () => {
+    const t = team();
+    await leeLearns(t.lee);
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider: new FakeProvider() });
+
+    // Another run's commit on the state branch: its own report, a decision and a newer heartbeat.
+    const other = mkdtempSync(join(tmpdir(), "homeostat-daily-other-"));
+    execFileSync("git", ["clone", "-q", "-b", "homeostat/state", t.origin, other]);
+    const lee = JSON.parse(readFileSync(join(other, "decisions/lee.json"), "utf8"));
+    lee.decided.push({
+      path: "knowledge/frontend/x.md",
+      id: "from-the-other-run",
+      hash: "feedfeedfeedfeed",
+      decision: "merged",
+      reason: "the other run",
+      at: "2026-10-17T05:59:00.000Z",
+    });
+    writeFileSync(join(other, "decisions/lee.json"), `${JSON.stringify(lee, null, 1)}\n`);
+    writeFileSync(join(other, "runs/2026-10-17T05-59-00Z.json"), '{"at":"other"}\n');
+    const hb = JSON.parse(readFileSync(join(other, "heartbeats/lee.json"), "utf8"));
+    writeFileSync(
+      join(other, "heartbeats/lee.json"),
+      `${JSON.stringify({ ...hb, at: "2099-01-01T00:00:00.000Z" })}\n`,
+    );
+    t.g(other, "add", "-A");
+    t.g(other, "commit", "-qm", "the other run");
+    t.g(other, "push", "-q", "origin", "HEAD:refs/heads/other-run");
+    const theirs = t.g(other, "rev-parse", "HEAD");
+    raceStatePushes(t, 'git --git-dir="$ORIGIN" update-ref refs/heads/homeostat/state other-run');
+
+    const { code } = await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider: new FakeProvider(),
+      now: () => new Date("2026-10-17T06:00:00Z"),
+    });
+    expect(code).toBe(0);
+    // Built on the other run's commit, not over it.
+    expect(t.g(t.origin, "rev-parse", "homeostat/state~1")).toBe(theirs);
+    const runs = t.g(t.origin, "ls-tree", "--name-only", "homeostat/state:runs").split("\n");
+    expect(runs).toEqual([
+      "2026-10-16T06-00-00Z.json",
+      "2026-10-17T05-59-00Z.json",
+      "2026-10-17T06-00-00Z.json",
+    ]);
+    const ids = stateFile(t, "decisions/lee.json").decided.map((d: { id: string }) => d.id);
+    expect(ids).toEqual(["use-the-shared-button-component", "from-the-other-run"]);
+    expect(stateFile(t, "heartbeats/lee.json").at).toBe("2099-01-01T00:00:00.000Z");
+  });
+
+  test("a state branch that keeps moving fails the run after 5 tries, saying so", async () => {
+    const t = team();
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider: new FakeProvider() });
+    // Every push races a run that adds an empty commit.
+    raceStatePushes(
+      t,
+      [
+        'tip=$(git --git-dir="$ORIGIN" rev-parse refs/heads/homeostat/state)',
+        'new=$(git --git-dir="$ORIGIN" -c user.name=x -c user.email=x@example.com commit-tree "$tip^{tree}" -p "$tip" -m other)',
+        'git --git-dir="$ORIGIN" update-ref refs/heads/homeostat/state "$new"',
+      ].join("; "),
+      99,
+    );
+    const { code, stdout } = await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider: new FakeProvider(),
+      now: () => new Date("2026-10-17T06:00:00Z"),
+    });
+    expect(code).toBe(1);
+    expect(stdout).toContain(
+      "could not record this run on homeostat/state: it kept moving under other runs (5 tries",
+    );
+    expect(readFileSync(join(t.ci, ".git/state-races"), "utf8").trim()).toBe("5");
   });
 });

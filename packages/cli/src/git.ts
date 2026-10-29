@@ -182,6 +182,14 @@ export function forcePush(dir: string, commit: string, branch: string, remote = 
   });
 }
 
+/** Pushes a commit to a branch on origin without force: git refuses it if the branch moved. */
+export function pushCommit(dir: string, commit: string, branch: string, remote = "origin") {
+  gitOrThrow(dir, ["push", "--quiet", remote, `${commit}:refs/heads/${branch}`], {
+    env: networkEnv(dir),
+    timeout: networkTimeout(),
+  });
+}
+
 /**
  * Three-way merge of two edits to one file (`git merge-file`), or undefined when they conflict.
  * Section edits to different sections of a document merge cleanly.
