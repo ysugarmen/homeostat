@@ -60,7 +60,8 @@ Every command also works under the short alias `homeo` (`homeo learn`, `homeo va
 | `homeostat bench run`, `bench report` | Before/after benchmark: the same tasks through headless Claude Code with the plugin off and on, under a `--budget`, resumable; compares accuracy, corrections, cost, time and turns (`--json` aggregates for a public page). Spends usage: see [the guide](docs/guide/bench.md) |
 | `homeostat flag <id>` | Report that an entry is wrong: it loses score and goes back to review |
 | `homeostat mcp` | Serve the KB to any agent over MCP (stdio) |
-| `homeostat docs convert <file...>` | Bring existing markdown documents into `knowledge/[<repo>/]<area>/docs/`, with section ids and provenance |
+| `homeostat docs convert <file...>` | Bring existing markdown documents into `knowledge/[<repo>/]<area>/docs/`, with section ids and provenance; `# ` headings demoted and long sections split |
+| `homeostat docs fix [--dry-run]` | Apply the same clean-up to the documents already in the KB |
 | `homeostat bootstrap` | A first base for each repo: its existing docs, plus code, data and infrastructure documents drafted from its checkout (manual only; one PR per repo) |
 | `homeostat seed <checkout>` | Draft first documents from one local repo (manual only: with `bootstrap`, the only commands that send code to a model) |
 | `homeostat migrate` | Move a 0.1 KB into repo folders, and with `--topics` into topic files |

@@ -28,7 +28,12 @@ import { type CurateOptions, runCurate } from "./curate.ts";
 import { type DailyOptions, runDaily } from "./daily.ts";
 import { type DeepDiveOptions, runDeepDive } from "./deep-dive.ts";
 import { type DigestOptions, runDigest } from "./digest.ts";
-import { type ConvertDocsOptions, runConvertDocs } from "./docs.ts";
+import {
+  type ConvertDocsOptions,
+  type FixDocsOptions,
+  runConvertDocs,
+  runFixDocs,
+} from "./docs.ts";
 import { runDoctor } from "./doctor.ts";
 import { runEval } from "./eval-command.ts";
 import { runEvents } from "./events-command.ts";
@@ -397,6 +402,16 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--shared", "multi-repo KB: shared documents, in knowledge/core/docs/")
     .action((files: string[], opts: ConvertDocsOptions) => {
       exitCode = runConvertDocs(files, opts, io);
+    });
+  docs
+    .command("fix")
+    .description(
+      "Clean up the KB's documents: demote a # heading in the body, split sections over 400 words.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .option("--dry-run", "list what would change; write nothing")
+    .action((opts: FixDocsOptions) => {
+      exitCode = runFixDocs(opts, io);
     });
 
   program

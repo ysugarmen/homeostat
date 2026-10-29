@@ -199,7 +199,12 @@ function bodyIssues(body: string, firstLine: number): Issue[] {
       message: `${updated.length > 1 ? `${updated.length} "Last updated" lines` : 'a "Last updated" line'} (line ${updated.map(([, i]) => firstLine + i).join(", ")}): dates belong in the frontmatter's updated and each section's provenance`,
     });
   }
-  const h1 = lines.filter((l) => /^#\s/.test(l)).length;
+  // A `# comment` in a shell code block is no heading.
+  let fence = false;
+  const h1 = lines.filter((l) => {
+    if (/^\s*(```|~~~)/.test(l)) fence = !fence;
+    return !fence && /^#\s/.test(l);
+  }).length;
   if (h1) {
     issues.push({
       code: "doc.heading.h1",

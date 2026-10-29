@@ -160,3 +160,5 @@ Partner calls time out after 10 seconds; booking confirmation waits up to 30.
   - conflict markers
   - sections over 400 words
 - Bring existing Markdown in with `homeostat docs convert <files> --area <area> --owner <member>`, or draft a new team's first documents with [`homeostat seed`](agents.md#seed).
+- `docs convert` and `bootstrap` also clean what they import: a `#` heading in the body is dropped when it repeats the title (the title lives in the frontmatter) and becomes a `##` section otherwise; a section over 400 words is split at its `###` subheadings into `##` sections, or, without subheadings, at paragraph boundaries into "Part 1/2" sections. A code block or a list is never split. The first part keeps the section's id, so links to it still work.
+- `homeostat docs fix` applies the same clean-up to the documents already in a KB and lists each change; `--dry-run` writes nothing. Review the diff and commit it.

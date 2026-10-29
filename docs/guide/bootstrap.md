@@ -8,7 +8,7 @@ For each repo in `repos` (or the one code repo of a KB without repo folders), in
 
 | Part | Reads | Writes | Model |
 | --- | --- | --- | --- |
-| `docs` | `docs/**/*.md`, `CLAUDE.md`, `AGENTS.md`, ADRs, READMEs up to two folders deep | the same documents, converted as `docs convert` does (`source=imported`) | no |
+| `docs` | `docs/**/*.md`, `CLAUDE.md`, `AGENTS.md`, ADRs, READMEs up to two folders deep | the same documents, converted as `docs convert` does (`source=imported`; a body `#` heading demoted, sections over 400 words split) | no |
 | `code` | the file tree, READMEs, manifests and build files | `architecture`, `conventions`, `cross-repo` | yes |
 | `data` | schema dumps, ORM files (recognised by a table definition in their text), migration setup, and the newest migrations of every history (Alembic, Flyway, Rails, plain SQL) | `data`: one section per database, its tables, relations, who writes what, and how migrations run | yes |
 | `infrastructure` | Helm charts and values, Terraform (`*.tf`), Kubernetes manifests, Dockerfiles, compose files, CI pipelines | `infrastructure`: the services and jobs, where they run, how they talk, how each deploys | yes |
