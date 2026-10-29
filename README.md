@@ -15,10 +15,10 @@ Homeostat closes the loop:
 
 ```sh
 # In a clone of a new or existing repo for your team's knowledge base:
-npx --yes homeostat@0.3.2 setup
+npx --yes homeostat@0.4.0 setup
 
 # Then each developer, once, in their own clone (installs the Claude Code plugin):
-npx --yes homeostat@0.3.2 setup --join
+npx --yes homeostat@0.4.0 setup --join
 ```
 
 `setup` is a re-runnable checklist: it asks only for what is missing, checks each step with a real call, and stores the CI secrets for you ([every step](docs/guide/setup.md)). The [quickstart](docs/guide/quickstart.md) takes you from there to the first daily run in about ten minutes. The full guide starts at [docs/index.md](docs/index.md).
