@@ -29,10 +29,13 @@ export interface ReviewOptions {
   reason?: string;
 }
 
-/** Review PRs hold the middle band; a daily PR is open only when the host refused to merge it. */
-const BRANCH = /^homeostat\/(review|daily)-(.+)-(\d{4}-\d{2}-\d{2})$/;
+/**
+ * Review PRs hold the middle band; a daily PR is open only when the host refused to merge it.
+ * A name already taken that day (a second run, or another base branch's run) gets `-2`, `-3`.
+ */
+const BRANCH = /^homeostat\/(review|daily)-(.+)-(\d{4}-\d{2}-\d{2})(?:-\d+)?$/;
 /** A flagged rule's PR: merging puts its fix in force, closing retires the rule. */
-const DISPUTE = /^homeostat\/review-dispute-(.+)-(\d{4}-\d{2}-\d{2})$/;
+const DISPUTE = /^homeostat\/review-dispute-(.+)-(\d{4}-\d{2}-\d{2})(?:-\d+)?$/;
 
 interface Queued {
   id: number;

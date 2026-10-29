@@ -94,6 +94,13 @@ describe("homeostat review list", () => {
     );
   });
 
+  test("lists a PR whose branch got a number because the name was taken that day", async () => {
+    const { provider } = host([pr(7, "homeostat/review-lee-2026-10-27-2")]);
+    const { stdout } = await review(provider, "list");
+    expect(stdout).toContain("#7 lessons · 7");
+    expect(stdout).not.toContain("lessons · 7-2");
+  });
+
   test("puts the PRs that ask the reviewer first, and flags conflicts", async () => {
     const { provider } = host([
       pr(1, "homeostat/review-lee-2026-10-14", { conflicts: true }),
