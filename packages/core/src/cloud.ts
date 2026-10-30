@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { type Asker, ClaudeUnavailableError, type Effort, type Usage } from "./claude.ts";
+import {
+  type Asker,
+  ClaudeUnavailableError,
+  type Effort,
+  takesEffort,
+  type Usage,
+} from "./claude.ts";
 
 /**
  * Claude through the team's own cloud account, so prompts stay inside its contracts and region
@@ -65,7 +71,7 @@ function cloudAsker(
       response = await client.messages.create({
         model,
         max_tokens: 16000,
-        output_config: { effort: opts.effort },
+        ...(takesEffort(opts.model) ? { output_config: { effort: opts.effort } } : {}),
         system,
         tools: [
           {

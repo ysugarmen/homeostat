@@ -5,6 +5,13 @@ import type { z } from "zod";
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
 /**
+ * Whether a model takes the effort setting. Haiku 4.5 rejects it (the API answers 400) and thinks
+ * on a token budget instead; Claude Code gives it a large one, which made a short yes/no judge
+ * answer cost ~6,000 output tokens. For those models effort is not sent and thinking is off.
+ */
+export const takesEffort = (model: string) => !/haiku/i.test(model);
+
+/**
  * One structured question to Claude: the reply is validated against `schema`. Null when Claude
  * declines or the reply does not fit. Implemented by the API runtime and the Claude Code runtime.
  */
@@ -67,7 +74,10 @@ export function apiAsker(opts: ApiAskerOptions): Asker {
         max_tokens: 16000,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
-        output_config: { effort: opts.effort, format: betaZodOutputFormat(schema) },
+        output_config: {
+          ...(takesEffort(opts.model) ? { effort: opts.effort } : {}),
+          format: betaZodOutputFormat(schema),
+        },
         system,
         messages: [{ role: "user", content: user }],
       });

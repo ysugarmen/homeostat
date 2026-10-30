@@ -93,6 +93,25 @@ describe("claudeCodeAsker", () => {
     ]);
   });
 
+  test("Haiku gets no effort flag and thinking off: it thinks on a budget Claude Code sets high", async () => {
+    const { run, calls } = runner(ok);
+    await claudeCodeAsker({ model: "claude-haiku-4-5-20251001", effort: "medium", run, env: {} })(
+      "s",
+      "u",
+      schema,
+    );
+    expect(calls[0]?.args).not.toContain("--effort");
+    expect(calls[0]?.env.MAX_THINKING_TOKENS).toBe("0");
+    const sonnet = runner(ok);
+    await claudeCodeAsker({ model: "claude-sonnet-5-5", effort: "low", run: sonnet.run, env: {} })(
+      "s",
+      "u",
+      schema,
+    );
+    expect(sonnet.calls[0]?.args).toContain("--effort");
+    expect(sonnet.calls[0]?.env.MAX_THINKING_TOKENS).toBeUndefined();
+  });
+
   test("output that does not fit the schema is null", async () => {
     const { run } = runner({ ...ok, structured_output: { town: "Paris" } });
     expect(await claudeCodeAsker({ model: "m", effort: "low", run })("s", "u", schema)).toBeNull();

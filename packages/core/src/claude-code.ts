@@ -1,7 +1,13 @@
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { z } from "zod";
-import { type Asker, ClaudeUnavailableError, type Effort, type Usage } from "./claude.ts";
+import {
+  type Asker,
+  ClaudeUnavailableError,
+  type Effort,
+  takesEffort,
+  type Usage,
+} from "./claude.ts";
 
 export interface RunResult {
   code: number | null;
@@ -77,8 +83,7 @@ export function claudeCodeArgs(
     "--no-session-persistence",
     "--model",
     opts.model,
-    "--effort",
-    opts.effort,
+    ...(takesEffort(opts.model) ? ["--effort", opts.effort] : []),
   ];
 }
 
@@ -114,7 +119,11 @@ export function claudeCodeAsker(opts: ClaudeCodeAskerOptions): Asker {
     const args = claudeCodeArgs(opts, system, jsonSchema);
     let out: RunResult;
     try {
-      out = await run(command, args, user, { ...(opts.env ?? process.env), [AGENT_ENV]: "1" });
+      const env: NodeJS.ProcessEnv = { ...(opts.env ?? process.env), [AGENT_ENV]: "1" };
+      // A model without effort thinks on a budget Claude Code sets high: off, unless set explicitly.
+      if (!takesEffort(opts.model) && env.MAX_THINKING_TOKENS === undefined)
+        env.MAX_THINKING_TOKENS = "0";
+      out = await run(command, args, user, env);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") {
         throw new ClaudeUnavailableError(
