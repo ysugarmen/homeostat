@@ -280,6 +280,11 @@ export const configSchema = z.strictObject({
            */
           consolidateCalls: z.int().min(0).default(30),
           /**
+           * Most model calls per daily run that check whether a lesson makes a team document out of
+           * date. Each sends only the few sections the thread's words match; 0 turns it off.
+           */
+          docPatchCalls: z.int().min(0).default(20),
+          /**
            * Most model calls per daily run that judge a confident drafted rule against its review
            * thread before it merges with no person; 0 turns the judge off. Past the cap, drafts
            * that would merge go to a reviewer instead.

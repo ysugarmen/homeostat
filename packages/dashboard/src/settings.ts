@@ -269,6 +269,12 @@ export const SECTIONS: Section[] = [
         help: "Model calls that decide whether a lesson updates an existing rule; 0 turns them off",
       },
       {
+        path: ["agents", "curator", "docPatchCalls"],
+        label: "Daily run: document checks per run",
+        kind: "number",
+        help: "Threads checked for making a team document out of date; each sends only the three best-matching sections. 0 turns them off",
+      },
+      {
         path: ["agents", "curator", "judgeCalls"],
         label: "Daily run: judge calls per run",
         kind: "number",

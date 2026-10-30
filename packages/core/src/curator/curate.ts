@@ -11,6 +11,7 @@ import { SpendingCapError } from "../pricing.ts";
 import type { Provider } from "../providers/types.ts";
 import type { Frontmatter } from "../schema.ts";
 import { score } from "../score.ts";
+import { searchSections } from "../search.ts";
 import { redactSecrets } from "../secrets.ts";
 import { slugify } from "../slug.ts";
 import { countTokens } from "../tokens.ts";
@@ -120,6 +121,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     }
   }
   let files = { ...input.files };
+  let docChecks = 0;
 
   const excludedRepos = new Set(sources.exclude.repos.map((r) => r.toLowerCase()));
   const optedOut = new Set(
@@ -222,13 +224,16 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         let draft: Draft | null;
         try {
           draft = await input.drafter.draft(safe, { areas, ...(topics ? { topics } : {}) });
-          if (input.patcher) {
-            await docPatchStep(
+          // Also a thread with no lasting rule can make a document wrong (a rename), so every
+          // thread is checked, against a shortlist of sections and within a per-run cap.
+          if (input.patcher && docChecks < config.agents.curator.docPatchCalls) {
+            const asked = await docPatchStep(
               { files, config, result, today: input.today, repo: kbRepo },
               input.patcher,
               safe,
               url,
             );
+            if (asked) docChecks++;
           }
         } catch (e) {
           if (!(e instanceof SpendingCapError)) throw e;
@@ -296,9 +301,16 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
   return result;
 }
 
+/** At most this many sections, and about this many tokens of them, go with one thread. */
+const DOC_PATCH_SECTIONS = 3;
+const DOC_PATCH_TOKENS = 3000;
+
 /**
- * Asks the patcher about the documents covering the thread's file, and applies its proposal as a
- * one-section patch. A proposal that names an unknown section or would break the document is
+ * Asks the patcher about the document sections the thread could affect, and applies its proposal
+ * as a one-section patch. Only sections of documents covering the thread's file, ranked by the
+ * thread's own words and path, best three within a token cap: sending every covering document
+ * cost ~70k tokens a thread on a KB whose documents cover everything. No matching section, no
+ * call; the return says whether the model was asked. A proposal that names an unknown section or would break the document is
  * skipped; one with risky content is kept and marked, so the PR shows it but validate blocks it.
  */
 async function docPatchStep(
@@ -313,9 +325,9 @@ async function docPatchStep(
   patcher: DocPatcher,
   thread: ReviewThread,
   url: string,
-): Promise<void> {
+): Promise<boolean> {
   const path = thread.root.path;
-  if (!path) return;
+  if (!path) return false;
   const current = (p: string) =>
     ctx.result.docs.find((d) => d.path === p)?.text ?? ctx.files[p] ?? "";
   const candidates: DocCandidate[] = [];
@@ -333,9 +345,40 @@ async function docPatchStep(
         .map((s) => ({ id: s.id, heading: s.heading, body: s.body })),
     });
   }
-  if (candidates.length === 0) return;
-  const proposal = await patcher.propose(thread, candidates);
-  if (!proposal) return;
+  if (candidates.length === 0) return false;
+  const query = [
+    path.replace(/[/._-]+/g, " "),
+    thread.pullRequest.title,
+    thread.root.body,
+    ...thread.replies.map((r) => r.body),
+  ].join(" ");
+  const hits = searchSections(
+    candidates.flatMap((c) =>
+      c.sections.map((s) => ({
+        doc: c.path,
+        title: c.title,
+        id: s.id,
+        heading: s.heading,
+        body: s.body,
+      })),
+    ),
+    query,
+    { limit: DOC_PATCH_SECTIONS },
+  );
+  let tokens = 0;
+  const picked = hits.filter(({ section: s }, i) => {
+    tokens += countTokens(`${s.heading}\n${s.body}`);
+    return i === 0 || tokens <= DOC_PATCH_TOKENS;
+  });
+  if (picked.length === 0) return false;
+  const shortlist: DocCandidate[] = candidates.flatMap((c) => {
+    const sections = c.sections.filter((s) =>
+      picked.some((h) => h.section.doc === c.path && h.section.id === s.id),
+    );
+    return sections.length ? [{ ...c, sections }] : [];
+  });
+  const proposal = await patcher.propose(thread, shortlist);
+  if (!proposal) return true;
   const skip = (reason: string) =>
     ctx.result.skipped.push({ url, reason: `document patch: ${reason}` });
   if (
@@ -344,7 +387,7 @@ async function docPatchStep(
     )
   ) {
     skip(`no section ${proposal.path}#${proposal.sectionId}`);
-    return;
+    return true;
   }
   let text: string;
   try {
@@ -360,14 +403,14 @@ async function docPatchStep(
     );
   } catch (e) {
     skip((e as Error).message);
-    return;
+    return true;
   }
   const errors = validate({ ...ctx.files, [proposal.path]: text }).issues.filter(
     (i) => i.file === proposal.path && i.severity === "error",
   );
   if (errors.some((i) => !i.code.startsWith("risk."))) {
     skip(errors.map((i) => i.message).join("; "));
-    return;
+    return true;
   }
   const risks = errors.map((i) => i.message);
   const existing = ctx.result.docs.find((d) => d.path === proposal.path);
@@ -385,6 +428,7 @@ async function docPatchStep(
   } else {
     ctx.result.docs.push({ path: proposal.path, text, sections: [section], risks });
   }
+  return true;
 }
 
 /** Over a word or character limit: fixable by rewriting shorter. */

@@ -42,7 +42,7 @@ The daily run reads pull requests merged in the KB's code repos (`repos`, or `so
 it does three things (threads whose lesson is still waiting in an open review PR are skipped, so a lesson is not drafted twice):
 
 1. **Redacts secrets** from the thread, then asks the model whether it holds a lasting rule, and drafts one, with its area and its topic from the repo's list. The lesson is filed under the repo the PR came from. When no topic fits, it goes to `general` with a suggested topic, listed in the PR for you to add to `homeostat.yaml` if it is worth one.
-2. **Checks documents.** If a team document covers the file, it asks whether the thread makes one of its sections out of date, and proposes a one-section patch.
+2. **Checks documents.** If a team document covers the file, it asks whether the thread makes one of its sections out of date, and proposes a one-section patch. Only the three sections the thread's words and path match best are sent (about 3,000 tokens at most), never whole documents, and at most `agents.curator.docPatchCalls` (20) threads a run are checked.
 3. **Validates the draft**, including the secret and risky-content checks.
 
 It never reads source code. It skips PRs marked `homeostat:skip`, members with `optOut`, and anything in `sources.exclude`. `homeostat curate --show-prompts` prints every prompt and sends nothing.

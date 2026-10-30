@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -158,6 +158,57 @@ describe("agents keep documents current (K4)", () => {
         })
       ).valueOf(),
     ).toBe(0);
+  });
+
+  test("only the few sections the thread matches are sent, not every document covering its file", async () => {
+    const { dir, git } = kbRepo();
+    // A big document that covers everything, as bootstrap writes them, with unrelated sections.
+    const filler = Array.from(
+      { length: 8 },
+      (_, i) =>
+        `## Billing topic ${i} {#billing-${i}}\n\nInvoices, ledgers and refunds number ${i}.\n`,
+    ).join("\n");
+    mkdirSync(join(dir, "knowledge/core/docs"), { recursive: true });
+    writeFileSync(
+      join(dir, "knowledge/core/docs/everything.md"),
+      `---\ntitle: Everything\narea: core\nowner: dana\nscope: ["**"]\nupdated: 2026-10-01\n---\n\n${filler}`,
+    );
+    git("add", "-A");
+    git("commit", "-qm", "big doc");
+    git("push", "-q", "origin", "main");
+    const patcher = new RenamePatcher();
+    await curate(dir, {
+      provider: new RenameProvider() as unknown as Provider,
+      drafter: noRule,
+      patcher,
+    });
+    const sent = patcher.seen[0]?.flatMap((d) => d.sections.map((x) => `${d.path}#${x.id}`)) ?? [];
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.length).toBeLessThanOrEqual(3);
+    expect(sent.some((x) => x.startsWith(DOC))).toBe(true);
+    expect(sent.some((x) => x.includes("billing-"))).toBe(false);
+  });
+
+  test("agents.curator.docPatchCalls caps the document checks in a run; 0 turns them off", async () => {
+    const { dir, git } = kbRepo();
+    const config = join(dir, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace(
+        'curator: { enabled: true, schedule: "0 6 * * *" }',
+        'curator: { enabled: true, schedule: "0 6 * * *", docPatchCalls: 0 }',
+      ),
+    );
+    git("commit", "-qam", "no doc checks");
+    git("push", "-q", "origin", "main");
+    const patcher = new RenamePatcher();
+    const { code } = await curate(dir, {
+      provider: new RenameProvider() as unknown as Provider,
+      drafter: noRule,
+      patcher,
+    });
+    expect(code).toBe(0);
+    expect(patcher.seen).toEqual([]);
   });
 
   test("a thread on a file no document covers is never shown to the patcher", async () => {
