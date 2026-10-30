@@ -16,7 +16,7 @@ import type {
   TopicProposer,
   Usage,
 } from "@homeostat/core";
-import { VERSION } from "@homeostat/core";
+import { ProviderError, VERSION } from "@homeostat/core";
 import { Command, CommanderError } from "commander";
 import {
   type BenchReportOptions,
@@ -806,6 +806,11 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     await program.parseAsync([...argv]);
   } catch (e) {
     if (e instanceof CommanderError) return e.exitCode;
+    // A git host that stays unreachable after the retries: say so in one line, not a stack trace.
+    if (e instanceof ProviderError) {
+      io.stderr(`homeostat: ${e.message}\n`);
+      return 1;
+    }
     throw e;
   }
   return exitCode;
