@@ -1,7 +1,7 @@
 {
   "name": "homeostat",
   "displayName": "homeostat",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Your team's knowledge base in Claude Code: the rules and documents for what you are working on, and the lessons you teach saved for the team. Runs locally on your clone.",
   "author": {
     "name": "homeostat contributors"
