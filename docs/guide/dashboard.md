@@ -50,7 +50,7 @@ definitions:
           # A push to homeostat/state checks out the state branch; the dashboard is built from main.
           - git fetch --quiet origin "+refs/heads/*:refs/remotes/origin/*"
           - git checkout --quiet --detach origin/main
-          - npx --yes homeostat@0.5.1 dashboard --build site
+          - npx --yes homeostat@0.5.2 dashboard --build site
           - npx --yes wrangler@4.151.1 pages deploy site --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch main
 
 pipelines:
@@ -87,7 +87,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-      - run: npx --yes homeostat@0.5.1 dashboard --build site
+      - run: npx --yes homeostat@0.5.2 dashboard --build site
       - run: npx --yes wrangler@4.151.1 pages deploy site --project-name "${{ vars.CLOUDFLARE_PAGES_PROJECT }}" --branch main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

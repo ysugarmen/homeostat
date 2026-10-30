@@ -1,6 +1,6 @@
 {
   "name": "@homeostat/dashboard",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "The local dashboard for homeostat, the self-maintaining team knowledge base. Loopback only.",
   "keywords": [
     "homeostat",
