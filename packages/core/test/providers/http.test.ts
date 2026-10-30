@@ -1,5 +1,5 @@
-import { expect, test } from "vitest";
-import { ProviderError, requestJson } from "../../src/providers/http.ts";
+import { describe, expect, test } from "vitest";
+import { idempotentWrite, ProviderError, requestJson } from "../../src/providers/http.ts";
 
 const dropped = (code: string) => Object.assign(new TypeError("fetch failed"), { cause: { code } });
 const ok = () => new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -80,4 +80,53 @@ test("a refusal such as 404 is not retried", async () => {
     requestJson("Bitbucket", h.fetchFn, "https://api.example/x", { headers: {} }, h),
   ).rejects.toThrow(/404.*nope/);
   expect(h.calls).toHaveLength(1);
+});
+
+describe("a write a dropped connection may have carried out", () => {
+  const drop = () =>
+    new ProviderError("Bitbucket", 0, "https://api.example/pr", "network error UND_ERR_SOCKET");
+
+  test("is not sent again when it landed: the existing result is used", async () => {
+    let writes = 0;
+    const out = await idempotentWrite(
+      async () => {
+        writes++;
+        throw drop();
+      },
+      async () => ({ value: { id: 7 } }),
+    );
+    expect(out).toEqual({ id: 7 });
+    expect(writes).toBe(1);
+  });
+
+  test("is sent again when it did not land", async () => {
+    let writes = 0;
+    const out = await idempotentWrite(
+      async () => {
+        writes++;
+        if (writes === 1) throw drop();
+        return { id: 8 };
+      },
+      async () => undefined,
+    );
+    expect(out).toEqual({ id: 8 });
+    expect(writes).toBe(2);
+  });
+
+  test("a refusal from the host is not retried", async () => {
+    let looked = 0;
+    const refused = new ProviderError("Bitbucket", 400, "https://api.example/pr", "bad");
+    await expect(
+      idempotentWrite(
+        async () => {
+          throw refused;
+        },
+        async () => {
+          looked++;
+          return undefined;
+        },
+      ),
+    ).rejects.toBe(refused);
+    expect(looked).toBe(0);
+  });
 });

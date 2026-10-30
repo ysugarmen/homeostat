@@ -1,4 +1,4 @@
-import { ProviderError, requestJson } from "./http.ts";
+import { idempotentWrite, ProviderError, requestJson } from "./http.ts";
 import {
   type Commit,
   type HostSetup,
@@ -292,6 +292,21 @@ export class BitbucketProvider implements Provider, HostSetup {
   }
 
   async openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }> {
+    return idempotentWrite(
+      () => this.createPullRequest(repo, pr),
+      async () => {
+        const open = (await this.listOpenPullRequests(repo)).find(
+          (p) => p.sourceBranch === pr.sourceBranch && p.targetBranch === pr.targetBranch,
+        );
+        return open ? { value: { id: open.id, url: open.url } } : undefined;
+      },
+    );
+  }
+
+  private async createPullRequest(
+    repo: RepoRef,
+    pr: NewPullRequest,
+  ): Promise<{ id: number; url: string }> {
     const { body } = await requestJson(
       "Bitbucket",
       this.fetch,
@@ -323,19 +338,27 @@ export class BitbucketProvider implements Provider, HostSetup {
     opts: { message?: string } = {},
   ): Promise<void> {
     const url = `${this.repoUrl(repo)}/pullrequests/${pullRequestId}`;
-    const { body, headers } = await requestJson(
-      "Bitbucket",
-      this.fetch,
-      `${url}/merge?async=true`,
-      {
-        method: "POST",
+    const merged = async () => {
+      const { body: pr } = await requestJson("Bitbucket", this.fetch, url, {
         headers: this.headers(),
-        body: {
-          merge_strategy: "squash",
-          close_source_branch: true,
-          ...(opts.message ? { message: opts.message } : {}),
-        },
-      },
+      });
+      return (pr as { state?: string }).state === "MERGED";
+    };
+    const { body, headers } = await idempotentWrite(
+      () =>
+        requestJson("Bitbucket", this.fetch, `${url}/merge?async=true`, {
+          method: "POST",
+          headers: this.headers(),
+          body: {
+            merge_strategy: "squash",
+            close_source_branch: true,
+            ...(opts.message ? { message: opts.message } : {}),
+          },
+        }),
+      async () =>
+        (await merged())
+          ? { value: { body: { state: "MERGED" }, headers: new Headers() } }
+          : undefined,
     );
     const task = headers.get("location");
     if (!task || (body as { state?: string } | undefined)?.state === "MERGED") return;

@@ -53,7 +53,7 @@ import {
   type Verdict,
   validate,
 } from "@homeostat/core";
-import { askerFor, capLine, formatRunUse, newRunStats, runCost } from "./agents.ts";
+import { askerFor, capLine, formatRunUse, newRunStats, type RunStats, runCost } from "./agents.ts";
 import type { Io } from "./cli.ts";
 import { plural } from "./format.ts";
 import { commitTree, git, mergeText, pushCommit, showFile } from "./git.ts";
@@ -132,9 +132,12 @@ const repoRef = (ref: string): RepoRef => {
 const accepted = (text: string) => text.replace(/^status: candidate$/m, "status: accepted");
 
 export async function runDaily(opts: DailyOptions, io: Io): Promise<number> {
+  const run: { stats?: RunStats } = {};
   try {
-    return await daily(opts, io);
+    return await daily(opts, io, run);
   } catch (e) {
+    // A run that fails after its model calls still says what they cost.
+    if (run.stats?.calls) io.stdout(`the run failed; ${formatRunUse(run.stats)}`);
     if (e instanceof CliError) {
       io.stderr(`${e.message}\n`);
       return 1;
@@ -143,7 +146,7 @@ export async function runDaily(opts: DailyOptions, io: Io): Promise<number> {
   }
 }
 
-async function daily(opts: DailyOptions, io: Io): Promise<number> {
+async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Promise<number> {
   const root = resolve(opts.dir ?? ".");
   const files = readKbFiles(root);
   const kb = validate(files);
@@ -160,6 +163,7 @@ async function daily(opts: DailyOptions, io: Io): Promise<number> {
   if (maxCost !== undefined && !(maxCost > 0))
     throw new CliError("--max-cost must be a positive amount in US dollars, e.g. --max-cost 5");
   const stats = newRunStats(maxCost);
+  run.stats = stats;
   // What the run prints that a person should act on, kept in the run report as well.
   const notices: string[] = [];
   const notice = (line: string) => {

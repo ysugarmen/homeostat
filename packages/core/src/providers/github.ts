@@ -1,4 +1,4 @@
-import { ProviderError, requestJson } from "./http.ts";
+import { idempotentWrite, ProviderError, requestJson } from "./http.ts";
 import {
   type Commit,
   type HostSetup,
@@ -166,13 +166,23 @@ export class GitHubProvider implements Provider, HostSetup {
   }
 
   async openPullRequest(repo: RepoRef, pr: NewPullRequest): Promise<{ id: number; url: string }> {
-    const { body } = await requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls`, {
-      method: "POST",
-      headers: this.headers(),
-      body: { title: pr.title, body: pr.body, head: pr.sourceBranch, base: pr.targetBranch },
-    });
-    const created = body as { number: number; html_url: string };
-    return { id: created.number, url: created.html_url };
+    return idempotentWrite(
+      async () => {
+        const { body } = await requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls`, {
+          method: "POST",
+          headers: this.headers(),
+          body: { title: pr.title, body: pr.body, head: pr.sourceBranch, base: pr.targetBranch },
+        });
+        const created = body as { number: number; html_url: string };
+        return { id: created.number, url: created.html_url };
+      },
+      async () => {
+        const open = (await this.listOpenPullRequests(repo)).find(
+          (p) => p.sourceBranch === pr.sourceBranch && p.targetBranch === pr.targetBranch,
+        );
+        return open ? { value: { id: open.id, url: open.url } } : undefined;
+      },
+    );
   }
 
   /** GitHub works mergeability out in the background: `mergeable` is null until it has. */
@@ -237,16 +247,23 @@ export class GitHubProvider implements Provider, HostSetup {
     pullRequestId: number,
     opts: { message?: string } = {},
   ): Promise<void> {
-    await requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls/${pullRequestId}/merge`, {
-      method: "PUT",
-      headers: this.headers(),
-      body: {
-        merge_method: "squash",
-        ...(opts.message
-          ? { commit_title: `${opts.message} (#${pullRequestId})`, commit_message: "" }
-          : {}),
+    await idempotentWrite(
+      () =>
+        requestJson("GitHub", this.fetch, `${this.repoUrl(repo)}/pulls/${pullRequestId}/merge`, {
+          method: "PUT",
+          headers: this.headers(),
+          body: {
+            merge_method: "squash",
+            ...(opts.message
+              ? { commit_title: `${opts.message} (#${pullRequestId})`, commit_message: "" }
+              : {}),
+          },
+        }),
+      async () => {
+        const { body } = await this.get(`${this.repoUrl(repo)}/pulls/${pullRequestId}`);
+        return (body as { merged?: boolean }).merged ? { value: undefined as never } : undefined;
       },
-    });
+    );
   }
 
   /** The org's members; for a repo owned by a user (the orgs call 404s), its collaborators. */

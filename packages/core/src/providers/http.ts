@@ -103,6 +103,28 @@ export async function requestJson(
   return { body, headers: res.headers };
 }
 
+/**
+ * A write that a dropped connection may or may not have carried out: on a network failure,
+ * `landed` looks (with reads, which are retried) and returns what the write would have, and the
+ * write is sent again only if it had not landed. One dropped connection while opening or merging a
+ * PR then neither ends a run nor opens the PR twice.
+ */
+export async function idempotentWrite<T>(
+  write: () => Promise<T>,
+  landed: () => Promise<{ value: T } | undefined>,
+  attempts = 3,
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await write();
+    } catch (e) {
+      if (!(e instanceof ProviderError) || e.status !== 0 || attempt >= attempts) throw e;
+      const done = await landed();
+      if (done) return done.value;
+    }
+  }
+}
+
 /** Pulls a human message out of Bitbucket (`error.message`) or GitHub (`message`) errors. */
 function errorDetail(body: unknown): string {
   if (typeof body === "string") return body.slice(0, 200);
