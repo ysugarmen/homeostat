@@ -148,7 +148,7 @@ describe("judgeDraft: majority on the failing side", () => {
 });
 
 describe("the judge's prompt", () => {
-  test("names every trap and sends the thread, the draft and its scope", async () => {
+  test("names every trap and sends the thread and the draft, not the area's paths", async () => {
     for (const trap of ["invented-detail", "wider-scope", "overgeneralised", "contradicts-thread"])
       expect(DRAFT_JUDGE_SYSTEM).toContain(trap);
     const seen: string[] = [];
@@ -163,7 +163,8 @@ describe("the judge's prompt", () => {
     expect(out).toEqual(OK);
     expect(seen[1]).toContain("Use var(--color-primary) instead of the hex value");
     expect(seen[1]).toContain("apps/web/src/Button.css:4");
-    expect(seen[1]).toContain("Applies to: apps/web/**");
+    // Where a rule applies comes from the team's areas; the judge failed most drafts on it.
+    expect(seen[1]).not.toContain("Applies to");
     expect(seen[1]).toContain("<existing-rule>");
     expect(draftJudgePrompt(input)).not.toContain("<existing-rule>");
   });
