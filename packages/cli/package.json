@@ -1,6 +1,6 @@
 {
   "name": "homeostat",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "A team knowledge base for coding agents that keeps itself current: it learns from code review, developers and the code. Runs on your repos, CI and tokens; no service. For Claude Code, MCP, Cursor, Copilot and AGENTS.md.",
   "keywords": [
     "claude-code",
