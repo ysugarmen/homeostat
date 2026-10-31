@@ -1,0 +1,222 @@
+{
+  "schema": "homeostat-bench/1",
+  "generatedAt": "2026-10-31T09:18:10.968Z",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "judgeModels": [
+    "claude-opus-5-5"
+  ],
+  "repeats": {
+    "before": 2,
+    "after": 1
+  },
+  "dates": {
+    "first": "2026-10-25",
+    "last": "2026-10-31"
+  },
+  "tasks": {
+    "questions": 20,
+    "coding": 12,
+    "codingTests": 4,
+    "codingJudge": 8
+  },
+  "runs": {
+    "before": 64,
+    "after": 32
+  },
+  "measures": [
+    {
+      "name": "question_accuracy",
+      "unit": "share",
+      "before": {
+        "tasks": 20,
+        "runs": 40,
+        "mean": 0.15,
+        "median": 0,
+        "spread": 0
+      },
+      "after": {
+        "tasks": 20,
+        "runs": 20,
+        "mean": 0.75,
+        "median": 1,
+        "spread": null
+      },
+      "pairedTasks": 20,
+      "delta": 0.6,
+      "ci95": [
+        0.4,
+        0.8
+      ]
+    },
+    {
+      "name": "question_score",
+      "unit": "score",
+      "before": {
+        "tasks": 20,
+        "runs": 40,
+        "mean": 0.85,
+        "median": 1,
+        "spread": 0
+      },
+      "after": {
+        "tasks": 20,
+        "runs": 20,
+        "mean": 1.7,
+        "median": 2,
+        "spread": null
+      },
+      "pairedTasks": 20,
+      "delta": 0.85,
+      "ci95": [
+        0.55,
+        1.15
+      ]
+    },
+    {
+      "name": "coding_repeated_mistake",
+      "unit": "share",
+      "before": {
+        "tasks": 12,
+        "runs": 24,
+        "mean": 0.4583333333333333,
+        "median": 0.5,
+        "spread": 0.25
+      },
+      "after": {
+        "tasks": 12,
+        "runs": 12,
+        "mean": 0.16666666666666666,
+        "median": 0,
+        "spread": null
+      },
+      "pairedTasks": 12,
+      "delta": -0.2916666666666667,
+      "ci95": [
+        -0.5416666666666666,
+        -0.08333333333333333
+      ]
+    },
+    {
+      "name": "coding_corrections",
+      "unit": "count",
+      "before": {
+        "tasks": 4,
+        "runs": 8,
+        "mean": 0.875,
+        "median": 0.75,
+        "spread": 0.75
+      },
+      "after": {
+        "tasks": 4,
+        "runs": 4,
+        "mean": 0.25,
+        "median": 0,
+        "spread": null
+      },
+      "pairedTasks": 4,
+      "delta": -0.625,
+      "ci95": [
+        -1.25,
+        -0.125
+      ]
+    },
+    {
+      "name": "coding_solved",
+      "unit": "share",
+      "before": {
+        "tasks": 12,
+        "runs": 24,
+        "mean": 0.7083333333333334,
+        "median": 1,
+        "spread": 0.08333333333333333
+      },
+      "after": {
+        "tasks": 12,
+        "runs": 12,
+        "mean": 0.8333333333333334,
+        "median": 1,
+        "spread": null
+      },
+      "pairedTasks": 12,
+      "delta": 0.125,
+      "ci95": [
+        0,
+        0.3333333333333333
+      ]
+    },
+    {
+      "name": "cost_usd",
+      "unit": "usd",
+      "before": {
+        "tasks": 32,
+        "runs": 64,
+        "mean": 0.41738660937499994,
+        "median": 0.26452375,
+        "spread": 0.17944521875
+      },
+      "after": {
+        "tasks": 32,
+        "runs": 32,
+        "mean": 0.34034834375,
+        "median": 0.2652585,
+        "spread": null
+      },
+      "pairedTasks": 32,
+      "delta": -0.07703826562499999,
+      "ci95": [
+        -0.196121828125,
+        0.011811718750000007
+      ]
+    },
+    {
+      "name": "time_s",
+      "unit": "seconds",
+      "before": {
+        "tasks": 32,
+        "runs": 64,
+        "mean": 51.89259375,
+        "median": 28.49325,
+        "spread": 18.4328125
+      },
+      "after": {
+        "tasks": 32,
+        "runs": 32,
+        "mean": 37.16934375,
+        "median": 15.8665,
+        "spread": null
+      },
+      "pairedTasks": 32,
+      "delta": -14.723249999999998,
+      "ci95": [
+        -23.816375000000008,
+        -6.949078124999998
+      ]
+    },
+    {
+      "name": "turns",
+      "unit": "count",
+      "before": {
+        "tasks": 32,
+        "runs": 64,
+        "mean": 9.359375,
+        "median": 7.25,
+        "spread": 2.21875
+      },
+      "after": {
+        "tasks": 32,
+        "runs": 32,
+        "mean": 5.6875,
+        "median": 3.5,
+        "spread": null
+      },
+      "pairedTasks": 32,
+      "delta": -3.671875,
+      "ci95": [
+        -5.140625,
+        -2.3125
+      ]
+    }
+  ]
+}

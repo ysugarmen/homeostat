@@ -1,0 +1,252 @@
+---
+// Before and after: the same tasks from a real team's review history, run by headless Claude Code
+// with the plugin off and then on. The numbers come from `homeostat bench report --json`
+// (aggregates only: no task names, prompts or code), saved as src/data/bench.json.
+import bench from "../data/bench.json";
+
+type Measure = (typeof bench.measures)[number];
+const m = Object.fromEntries(bench.measures.map((x) => [x.name, x])) as Record<string, Measure>;
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+const fewer = (name: string) => 1 - m[name].after.mean / m[name].before.mean;
+
+const stats = [
+  { big: `${Math.round(m.question_accuracy.after.mean / m.question_accuracy.before.mean)}×`, label: "more questions answered fully right", sub: `${pct(m.question_accuracy.before.mean)} → ${pct(m.question_accuracy.after.mean)}` },
+  { big: pct(fewer("coding_repeated_mistake")), label: "fewer repeats of a reviewer's correction", sub: `${pct(m.coding_repeated_mistake.before.mean)} → ${pct(m.coding_repeated_mistake.after.mean)} of coding tasks` },
+  { big: pct(fewer("coding_corrections")), label: "fewer corrections needed", sub: `${m.coding_corrections.before.mean.toFixed(2)} → ${m.coding_corrections.after.mean.toFixed(2)} per task` },
+  { big: pct(fewer("time_s")), label: "faster, and cheaper per task", sub: `${Math.round(m.time_s.before.mean)} s → ${Math.round(m.time_s.after.mean)} s · ${pct(fewer("cost_usd"))} less cost` },
+];
+
+interface Chart {
+  key: string;
+  title: string;
+  max: number;
+  fmt: (v: number) => string;
+  lower?: boolean;
+}
+const groups: { title: string; charts: Chart[] }[] = [
+  {
+    title: "Agents know the team's knowledge",
+    charts: [
+      { key: "question_accuracy", title: "Questions answered fully right", max: 1, fmt: pct },
+      { key: "question_score", title: "Answer score (0–2)", max: 2, fmt: (v) => v.toFixed(2) },
+      { key: "coding_solved", title: "Coding tasks solved", max: 1, fmt: pct },
+    ],
+  },
+  {
+    title: "They stop repeating review corrections",
+    charts: [
+      { key: "coding_repeated_mistake", title: "Tasks that repeated the reviewer's mistake", max: 0.6, fmt: pct, lower: true },
+      { key: "coding_corrections", title: "Corrections needed per task", max: 1.1, fmt: (v) => v.toFixed(2), lower: true },
+    ],
+  },
+  {
+    title: "And finish sooner, for less",
+    charts: [
+      { key: "time_s", title: "Time per task", max: 60, fmt: (v) => `${Math.round(v)} s`, lower: true },
+      { key: "turns", title: "Turns per task", max: 11, fmt: (v) => v.toFixed(1), lower: true },
+      { key: "cost_usd", title: "Cost per task", max: 0.5, fmt: (v) => `$${v.toFixed(2)}`, lower: true },
+    ],
+  },
+];
+
+const rows: { key: string; label: string; fmt: (v: number) => string; d: (v: number) => string }[] = [
+  { key: "question_accuracy", label: "Questions: fully right", fmt: pct, d: (v) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)} pp` },
+  { key: "question_score", label: "Questions: score (0–2)", fmt: (v) => v.toFixed(2), d: (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}` },
+  { key: "coding_repeated_mistake", label: "Coding: repeated mistake", fmt: pct, d: (v) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)} pp` },
+  { key: "coding_corrections", label: "Coding: corrections per task", fmt: (v) => v.toFixed(2), d: (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}` },
+  { key: "coding_solved", label: "Coding: solved", fmt: pct, d: (v) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)} pp` },
+  { key: "cost_usd", label: "Cost per task", fmt: (v) => `$${v.toFixed(3)}`, d: (v) => `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(3)}` },
+  { key: "time_s", label: "Time per task", fmt: (v) => `${v.toFixed(1)} s`, d: (v) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)} s` },
+  { key: "turns", label: "Turns per task", fmt: (v) => v.toFixed(2), d: (v) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}` },
+];
+---
+
+<section class="bench" id="benchmarks" aria-labelledby="bench-title" data-bench>
+  <h2 id="bench-title">Measured, before and after</h2>
+  <p class="bench-lede">
+    {bench.tasks.questions + bench.tasks.coding} tasks from a production team's own review history, run by Claude Code without
+    Homeostat and then with it.
+  </p>
+
+  <div class="stats">
+    {stats.map((s, i) => (
+      <div class="stat" style={`--i:${i}`}>
+        <span class="big">{s.big}</span>
+        <span class="label">{s.label}</span>
+        <span class="sub">{s.sub}</span>
+      </div>
+    ))}
+  </div>
+
+  <p class="legend" aria-hidden="true">
+    <span><i class="sw before"></i>Without Homeostat</span><span><i class="sw after"></i>With Homeostat</span>
+  </p>
+
+  {groups.map((g) => (
+    <div class="group">
+      <h3>{g.title}</h3>
+      <div class="charts">
+        {g.charts.map((c) => {
+          const x = m[c.key];
+          return (
+            <figure class="chart" aria-label={`${c.title}: ${c.fmt(x.before.mean)} without Homeostat, ${c.fmt(x.after.mean)} with it`}>
+              <figcaption>
+                {c.title}
+                {c.lower && <span class="lower">lower is better</span>}
+              </figcaption>
+              <div class="pair">
+                <div class="row">
+                  <span class="who">Without</span>
+                  <span class="track"><span class="bar before" style={`--w:${Math.min(1, x.before.mean / c.max) * 100}%`}></span></span>
+                  <span class="val">{c.fmt(x.before.mean)}</span>
+                </div>
+                <div class="row">
+                  <span class="who">With</span>
+                  <span class="track"><span class="bar after" style={`--w:${Math.min(1, x.after.mean / c.max) * 100}%`}></span></span>
+                  <span class="val strong">{c.fmt(x.after.mean)}</span>
+                </div>
+              </div>
+            </figure>
+          );
+        })}
+      </div>
+    </div>
+  ))}
+
+  <div class="method">
+    <h3>How it was measured</h3>
+    <ul>
+      <li>{bench.tasks.questions} questions and {bench.tasks.coding} coding tasks, each drawn from a merged pull request where a reviewer corrected the author. Coding tasks start from the commit before the correction.</li>
+      <li>Headless Claude Code on {bench.models.join(", ")}, the same prompts and permissions both times; only the Homeostat plugin differs.</li>
+      <li>The knowledge base was built by Homeostat from that same team's review history: <code>bootstrap</code>, then the daily run. The realistic case: the team reviewed it once, and agents stop repeating it.</li>
+      <li>Graded by hidden tests ({bench.tasks.codingTests} coding tasks) or by {bench.judgeModels.join(", ")} against the reviewer's answer. {bench.runs.before} runs without ({bench.repeats.before} repeats), {bench.runs.after} with ({bench.repeats.after}), {bench.dates.first} to {bench.dates.last}.</li>
+    </ul>
+    <p class="run-yours">Run the same comparison on your own history: <a href="/docs/guide/bench/">homeostat bench</a>.</p>
+  </div>
+
+  <details class="raw">
+    <summary>Raw results</summary>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Measure</th><th>Without</th><th>With</th><th>Change</th><th>95% interval</th><th>Tasks</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const x = m[r.key];
+            return (
+              <tr>
+                <td>{r.label}</td>
+                <td>{r.fmt(x.before.mean)} <small>median {r.fmt(x.before.median)}</small></td>
+                <td>{r.fmt(x.after.mean)} <small>median {r.fmt(x.after.median)}</small></td>
+                <td class="num">{r.d(x.delta)}</td>
+                <td class="num">[{r.d(x.ci95[0])}, {r.d(x.ci95[1])}]</td>
+                <td class="num">{x.pairedTasks}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+    <p class="raw-note">
+      Means over tasks (each task the mean of its repeats). Change is with minus without over the tasks run in both, with a bootstrap 95% interval.
+      Models: {bench.models.join(", ")}; judge {bench.judgeModels.join(", ")}. Generated {bench.generatedAt.slice(0, 10)} by
+      <code>homeostat bench report --json</code> (schema {bench.schema}).
+    </p>
+  </details>
+</section>
+
+<script>
+  // Bars grow when the section comes into view; without script or with reduced motion they are
+  // simply drawn at their size.
+  const el = document.querySelector("[data-bench]");
+  if (el && "IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    el.classList.add("armed");
+    new IntersectionObserver((entries, obs) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        el.classList.add("play");
+        obs.disconnect();
+      }
+    }, { threshold: 0.15 }).observe(el);
+  }
+</script>
+
+<style>
+  .bench { padding: 88px 0 96px; border-top: 1px solid var(--line); }
+  .bench-lede { color: var(--muted); max-width: 44em; margin: 14px 0 36px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 44px; }
+  .stat {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    padding: 20px 20px 18px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: radial-gradient(120% 90% at 0% 0%, rgb(108 196 168 / 0.09), transparent 60%), var(--panel);
+  }
+  .big {
+    font-family: "Archivo", sans-serif;
+    font-stretch: 125%;
+    font-weight: 800;
+    font-size: clamp(2.4rem, 4.2vw, 3.4rem);
+    line-height: 1;
+    color: var(--teal);
+    font-variant-numeric: tabular-nums;
+  }
+  .label { color: var(--paper); font-weight: 600; line-height: 1.3; }
+  .sub { color: var(--faint); font: 0.8rem "JetBrains Mono", monospace; }
+
+  .legend { display: flex; gap: 22px; margin: 0 0 20px; color: var(--muted); font-size: 0.88rem; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .sw { width: 22px; height: 10px; border-radius: 3px; display: inline-block; }
+  .sw.before, .bar.before { background: #56636d; }
+  .sw.after, .bar.after { background: var(--teal); }
+
+  .group { margin: 0 0 34px; }
+  .group h3 { margin: 0 0 14px; font-size: 1.05rem; color: var(--paper); }
+  .charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .chart { margin: 0; padding: 16px 18px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .chart figcaption { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; color: var(--muted); font-size: 0.88rem; margin-bottom: 14px; }
+  .lower { color: var(--faint); font: 0.7rem "JetBrains Mono", monospace; white-space: nowrap; }
+  .pair { display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 4.2em minmax(0, 1fr) 4.4em; gap: 10px; align-items: center; }
+  .who { color: var(--faint); font-size: 0.78rem; }
+  .track { position: relative; height: 14px; border-radius: 4px; background: rgb(255 255 255 / 0.04); overflow: hidden; }
+  .bar { position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: 4px; transform-origin: left center; }
+  .bench.armed .bar { transform: scaleX(0); }
+  .bench.play .bar { animation: grow 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+  .bench.play .bar.after { animation-delay: 0.25s; }
+  @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .val { text-align: right; color: var(--muted); font: 0.85rem "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+  .val.strong { color: var(--paper); font-weight: 600; }
+
+  .method { margin-top: 12px; padding-top: 26px; border-top: 1px solid var(--line); }
+  .method h3 { margin: 0 0 10px; font-size: 1rem; }
+  .method ul { margin: 0; padding-left: 1.1em; color: var(--muted); font-size: 0.9rem; display: grid; gap: 6px; max-width: 60em; }
+  .method code, .raw code { color: var(--paper); font-family: "JetBrains Mono", monospace; font-size: 0.9em; }
+  .run-yours { color: var(--muted); font-size: 0.9rem; margin: 14px 0 0; }
+  .run-yours a, .raw a { color: var(--amber); }
+
+  .raw { margin-top: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .raw summary { cursor: pointer; padding: 14px 18px; color: var(--paper); font-weight: 600; }
+  .table-wrap { overflow-x: auto; padding: 0 18px; }
+  .raw table { width: 100%; border-collapse: collapse; font-size: 0.86rem; min-width: 620px; }
+  .raw th { text-align: left; color: var(--faint); font-weight: 500; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); }
+  .raw td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); color: var(--paper); }
+  .raw td small { color: var(--faint); margin-left: 6px; }
+  .raw .num { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .raw-note { color: var(--faint); font-size: 0.8rem; padding: 12px 18px 16px; margin: 0; }
+
+  @media (max-width: 960px) {
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    .stats, .charts { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bench.armed .bar { transform: none; }
+    .bench.play .bar { animation: none; }
+  }
+</style>

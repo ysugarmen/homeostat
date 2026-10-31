@@ -1,6 +1,7 @@
 ---
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import Benchmarks from "../components/Benchmarks.astro";
 import Boundary from "../components/Boundary.astro";
 import Flow from "../components/Flow.astro";
 import Loop from "../components/Loop.astro";
@@ -48,6 +49,7 @@ const spec = [
     <header class="nav">
       <a class="brand" href="/"><span class="mark" set:html={mark} />Homeostat</a>
       <nav aria-label="Main">
+        <a href="/#benchmarks">Benchmarks</a>
         <a href="/docs/">Docs</a>
         <a href="/docs/guide/quickstart/">Quickstart</a>
         <a href="/docs/architecture/">Architecture</a>
@@ -79,6 +81,8 @@ const spec = [
         <h2 id="how">How it works</h2>
         <Flow />
       </section>
+
+      <Benchmarks />
 
       <section class="scale" aria-labelledby="confidence">
         <div class="scale-head">
