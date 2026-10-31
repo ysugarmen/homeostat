@@ -47,8 +47,8 @@ const charts: Chart[] = [
     headline: `−${Math.round((1 - t.tokens.with[last] / t.tokens.without) * 100)}%`,
   },
   {
-    title: "Team productivity",
-    sub: "agent tasks finished per hour",
+    title: "Tasks per hour",
+    sub: "agent tasks finished per agent-hour",
     without: t.tasksPerHour.without,
     with: t.tasksPerHour.with,
     max: 110,
@@ -64,7 +64,7 @@ const steps = (c: Chart) =>
     .map((v, d) => (d === 0 ? `M ${x(0)} ${y(c, v)}` : `H ${x(d)} V ${y(c, v)}`))
     .join(" ");
 const area = (c: Chart) => `${steps(c)} H ${x(last)} V ${y(c, c.without)} H ${x(0)} Z`;
-const dayTicks = [0, 7, 14, last].filter((d, i, a) => a.indexOf(d) === i);
+const dayTicks = [0, 7, last].filter((d, i, a) => a.indexOf(d) === i);
 ---
 
 <div class="overtime">
@@ -102,7 +102,7 @@ const dayTicks = [0, 7, 14, last].filter((d, i, a) => a.indexOf(d) === i);
     ))}
   </div>
   <p class="ot-note">
-    <span class="k"><i class="sw w"></i>With Homeostat</span>
+    <span class="k"><i class="sw w"></i>With Homeostat (estimated between)</span>
     <span class="k"><i class="sw wo"></i>Without</span>
     <span class="k"><i class="dt"></i>Measured</span>
     Days of the team's review history in the knowledge base. Day 0 and day {last} are measured; between them is an estimate
@@ -126,27 +126,27 @@ const dayTicks = [0, 7, 14, last].filter((d, i, a) => a.indexOf(d) === i);
   .grid text, .xt { fill: var(--faint); font: 10px "JetBrains Mono", monospace; }
   .gain { fill: rgb(108 196 168 / 0.1); }
   .without { stroke: #6b7881; stroke-width: 2; stroke-dasharray: 5 5; }
-  .with { fill: none; stroke: var(--teal); stroke-width: 2.5; stroke-linejoin: round; }
+  /* Estimated between the two measured days: dashed and faded; the measured points are solid dots. */
+  .with { fill: none; stroke: var(--teal); stroke-width: 2.5; stroke-linejoin: round; stroke-dasharray: 5 4; opacity: 0.6; }
   .dot { stroke: var(--panel); stroke-width: 2; }
   .without-dot { fill: #8a969e; }
   .with-dot { fill: var(--teal); }
   .end { fill: var(--paper); font: 600 11px "JetBrains Mono", monospace; }
   .end.muted { fill: var(--faint); font-weight: 400; }
-  :global(.bench.armed) .with { stroke-dasharray: 1; stroke-dashoffset: 1; }
-  :global(.bench.play) .with { animation: draw 1.6s ease-out 0.3s forwards; }
-  :global(.bench.armed) .gain, :global(.bench.armed) .with-dot, :global(.bench.armed) .end:not(.muted) { opacity: 0; }
-  :global(.bench.play) .gain, :global(.bench.play) .with-dot, :global(.bench.play) .end:not(.muted) { animation: show 0.5s ease-out 1.7s forwards; }
-  @keyframes draw { to { stroke-dashoffset: 0; } }
+  :global(.bench.armed) .with, :global(.bench.armed) .gain, :global(.bench.armed) .with-dot, :global(.bench.armed) .end:not(.muted) { opacity: 0; }
+  :global(.bench.play) .with { animation: show-line 0.9s ease-out 0.2s forwards; }
+  :global(.bench.play) .gain, :global(.bench.play) .with-dot, :global(.bench.play) .end:not(.muted) { animation: show 0.6s ease-out 0.9s forwards; }
+  @keyframes show-line { to { opacity: 0.6; } }
   @keyframes show { to { opacity: 1; } }
   .ot-note { color: var(--faint); font-size: 0.8rem; margin: 12px 0 0; max-width: 62em; line-height: 1.55; }
   .ot-note .k { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; color: var(--muted); }
   .ot-note code { color: var(--paper); font-family: "JetBrains Mono", monospace; }
-  .sw { display: inline-block; width: 18px; height: 0; border-top: 2.5px solid var(--teal); }
+  .sw { display: inline-block; width: 18px; height: 0; border-top: 2.5px dashed var(--teal); opacity: 0.8; }
   .sw.wo { border-top: 2px dashed #6b7881; }
   .dt { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--teal); }
   @media (max-width: 960px) { .ot-grid { grid-template-columns: minmax(0, 1fr); max-width: 560px; } }
   @media (prefers-reduced-motion: reduce) {
-    :global(.bench.armed) .with { stroke-dasharray: none; stroke-dashoffset: 0; }
     :global(.bench.armed) .gain, :global(.bench.armed) .with-dot, :global(.bench.armed) .end { opacity: 1; }
+    :global(.bench.armed) .with { opacity: 0.6; }
   }
 </style>

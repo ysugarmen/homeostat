@@ -121,7 +121,12 @@ const loop = "M 640 324 C 640 404, 460 404, 460 324";
   .loop-label { fill: var(--teal); font: 500 12px "JetBrains Mono", monospace; letter-spacing: 0.02em; }
 
   .flow-narrow { display: none; list-style: none; margin: 0; padding: 0; }
-  .flow-narrow li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+  /* Phones: the same flow, top to bottom: sources, then the knowledge base, then the agents. */
+  .flow-narrow li { position: relative; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: rgb(255 255 255 / 0.015); }
+  .flow-narrow li + li { margin-top: 34px; }
+  .flow-narrow li + li::before { content: ""; position: absolute; left: 50%; top: -28px; width: 2px; height: 22px; background: linear-gradient(var(--line), var(--amber)); }
+  .flow-narrow li + li::after { content: ""; position: absolute; left: calc(50% - 5px); top: -10px; border: 6px solid transparent; border-top-color: var(--amber); border-bottom: 0; }
+  .flow-narrow .mid { border-color: rgb(240 165 65 / 0.45); }
   .flow-narrow .k { width: 100%; color: var(--faint); font: 500 0.72rem "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: 0.1em; }
   .chip { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--paper); font-size: 0.88rem; }
   .kb-chip { border-color: rgb(240 165 65 / 0.5); }

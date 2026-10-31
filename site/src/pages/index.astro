@@ -5,6 +5,7 @@ import Benchmarks from "../components/Benchmarks.astro";
 import Boundary from "../components/Boundary.astro";
 import Flow from "../components/Flow.astro";
 import Loop from "../components/Loop.astro";
+import bench from "../data/bench.json";
 import mark from "../assets/mark.svg?raw";
 import "../styles/fonts.css";
 
@@ -12,6 +13,41 @@ import "../styles/fonts.css";
 const versionFile = readFileSync(join(process.cwd(), "../packages/core/src/version.ts"), "utf8");
 const version = /"(\d+\.\d+\.\d+[^"]*)"/.exec(versionFile)?.[1] ?? "latest";
 const repo = "https://github.com/ysugarmen/homeostat";
+const site = "https://homeostat-site.sugaryoni3.workers.dev";
+const repeated = bench.measures.find((x) => x.name === "coding_repeated_mistake");
+const pctOf = (v = 0) => `${Math.round(v * 100)}%`;
+const title = "Homeostat: the team knowledge base that maintains itself";
+const description = `Coding agents stopped repeating reviewers' corrections: ${pctOf(repeated?.before.mean)} to ${pctOf(repeated?.after.mean)} of tasks. A team knowledge base for coding agents, learned from code review and kept current. Runs on your repos, CI and keys.`;
+
+// One rule as it lives in the knowledge base: a section of a topic file, with its score, source and owner.
+const ruleFile = `## Use the shared retry helper for outbound HTTP calls {#outbound-http-retry-helper}
+
+<!-- homeostat
+scope: ["services/integrations/**", "packages/http-client/**"]
+status: accepted
+score: 76
+owner: dana
+source:
+  type: pr-feedback
+  url: https://bitbucket.org/acme/integrations-api/pull-requests/812#comment-33
+  author: sam
+  changedCode: true
+created: 2026-09-30
+lastConfirmed: 2026-10-07
+-->
+
+Wrap every outbound HTTP call to a partner API in withRetry() from
+@acme/http-client. Do not hand-roll retry loops.
+
+Why: hand-rolled loops have dropped the request-id header that
+on-call searches logs by.`;
+
+const compare = [
+  { name: "CLAUDE.md, AGENTS.md", cells: ["Written by hand", "Goes stale silently", "One file per repo", "Whoever edits it last"] },
+  { name: "Agent memory", cells: ["Picked up by one person's agent", "Never retired", "One person, one tool", "Nobody reviews it"] },
+  { name: "Homeostat", cells: ["Learned from reviews, developers and the code", "Scored, judged, retired when stale", "Every agent on the team", "Pull requests; people decide the middle band"], us: true },
+];
+const compareRows = ["Where it comes from", "Staying correct", "Who gets it", "Who governs it"];
 
 const lessons = [
   // Default weights: 50 for a comment followed by a fix, 45 by hand, 25 from an agent; +20 lead,
@@ -30,7 +66,7 @@ const spec = [
   ["Session start", "Under a second, 600 rules"],
   ["Measured", "homeostat bench: plugin off vs on"],
   ["Agents", "Claude Code, any MCP client, Cursor, GitHub Copilot, AGENTS.md"],
-  ["Licence", "Apache-2.0"],
+  ["License", "Apache-2.0"],
 ];
 ---
 
@@ -40,7 +76,18 @@ const spec = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Homeostat</title>
-    <meta name="description" content="A team knowledge base for coding agents that keeps itself current. It runs on your repos, CI and tokens: there is no Homeostat service." />
+    <meta name="description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={`${site}/`} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={`${site}/og.png`} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={`${site}/og.png`} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin />
   </head>
@@ -61,6 +108,9 @@ const spec = [
       <section class="hero">
         <div class="hero-copy">
           <h1>The team knowledge base that maintains itself.</h1>
+          <p class="proof">
+            <a href="#benchmarks">Agents stopped repeating reviewers' corrections: <b>{pctOf(repeated?.before.mean)} → {pctOf(repeated?.after.mean)}</b> of tasks.</a>
+          </p>
           <p class="lede">
             Your team's conventions, decisions and system docs, in a repo you own. Learned from code review, developers and
             the code; kept current on its own; given to every agent.
@@ -105,6 +155,31 @@ const spec = [
             <span></span>
             <span class="bar-track bare"><span style="left:35%">35</span><span style="left:70%">70</span><span style="left:100%">100</span></span>
             <span></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="knows" aria-labelledby="knows">
+        <h2 id="knows">What the knowledge looks like</h2>
+        <div class="knows-grid">
+          <div>
+            <p class="knows-lede">Markdown in your repo. Every rule keeps its score, the review it came from and its owner.</p>
+            <pre class="rule-file"><code>{ruleFile}</code></pre>
+          </div>
+          <div>
+            <h3 class="cmp-title">Why not just CLAUDE.md or agent memory?</h3>
+            <div class="cmp" role="table">
+              <div class="cmp-row head" role="row">
+                <span role="columnheader"></span>
+                {compare.map((c) => <span role="columnheader" class={c.us ? "us" : ""}>{c.name}</span>)}
+              </div>
+              {compareRows.map((r, i) => (
+                <div class="cmp-row" role="row">
+                  <span role="rowheader" class="rh">{r}</span>
+                  {compare.map((c) => <span role="cell" class={c.us ? "us" : ""}>{c.cells[i]}</span>)}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -224,19 +299,35 @@ const spec = [
   main { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
   .hero {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-    gap: 56px;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 44px;
     align-items: center;
     padding: 56px 0 96px;
   }
   .hero h1 {
     font-stretch: 125%;
     font-weight: 850;
-    font-size: clamp(2.4rem, 5vw, 4.1rem);
-    line-height: 1.02;
+    font-size: clamp(2.1rem, 3.5vw, 2.8rem);
+    line-height: 1.05;
     letter-spacing: -0.03em;
-    max-width: 12ch;
+    max-width: none;
   }
+  .proof { margin: 18px 0 0; font-size: 1.05rem; }
+  .proof a { color: var(--teal); text-decoration: none; border-bottom: 1px dashed rgb(108 196 168 / 0.5); }
+  .proof b { font-family: "JetBrains Mono", monospace; font-weight: 700; }
+
+  .knows { padding: 80px 0 72px; border-top: 1px solid var(--line); }
+  .knows-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 40px; margin-top: 28px; align-items: start; }
+  .knows-lede { color: var(--muted); margin: 0 0 14px; }
+  .rule-file { margin: 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); white-space: pre-wrap; overflow-wrap: anywhere; font: 0.78rem/1.6 "JetBrains Mono", monospace; color: var(--paper); }
+  .cmp-title { margin: 0 0 14px; font-size: 1.05rem; }
+  .cmp { display: grid; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 0.86rem; }
+  .cmp-row { display: grid; grid-template-columns: 8.5em repeat(3, minmax(0, 1fr)); }
+  .cmp-row > span { padding: 11px 12px; border-top: 1px solid var(--line); color: var(--muted); }
+  .cmp-row.head > span { border-top: 0; color: var(--paper); font-weight: 600; font-size: 0.82rem; }
+  .cmp-row .rh { color: var(--faint); font-size: 0.8rem; }
+  .cmp-row .us { background: rgb(108 196 168 / 0.07); color: var(--paper); }
+  .cmp-row.head .us { color: var(--teal); }
   .lede { color: var(--muted); font-size: 1.12rem; max-width: 34em; margin: 24px 0 32px; }
   .lede.own-line { margin-top: -16px; color: var(--paper); font-size: 1rem; border-left: 2px solid var(--teal); padding-left: 12px; }
   .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -313,9 +404,9 @@ const spec = [
   }
 
   .foot {
-    max-width: 1200px;
+    width: min(1152px, calc(100% - 48px));
     margin: 0 auto;
-    padding: 32px 24px 48px;
+    padding: 32px 0 48px;
     border-top: 1px solid var(--line);
     display: flex;
     flex-wrap: wrap;
@@ -334,6 +425,7 @@ const spec = [
     .scale { grid-template-columns: minmax(0, 1fr); }
     .plate dl { grid-template-columns: 1fr; }
     .setup-grid { grid-template-columns: 1fr; }
+    .knows-grid { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 640px) {
     body { font-size: 16px; }
@@ -346,6 +438,13 @@ const spec = [
     .bar-row.axis { display: none; }
     .plate { padding: 24px 18px; }
     .plate dl div { grid-template-columns: 1fr; gap: 4px; }
+    .foot { width: calc(100% - 32px); }
+    .steps { padding: 8px 0 48px; }
+    .steps h2 { margin: 32px 0 20px; }
+    .knows { padding: 56px 0 48px; }
+    .cmp { font-size: 0.78rem; }
+    .cmp-row { grid-template-columns: 6em repeat(3, minmax(0, 1fr)); }
+    .cmp-row > span { padding: 9px 7px; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }

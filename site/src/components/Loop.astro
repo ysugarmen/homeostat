@@ -1,7 +1,8 @@
 ---
 // The hero instrument: one lesson travelling the loop, in the real file formats. Four units, as on
 // Ashby's homeostat; the confidence needle swings and settles before the rule moves on.
-// CSS only; with reduced motion it shows the settled state.
+// Every panel shows its finished state; a highlight moves through them in order (1 to 4), so a
+// glance or a screenshot never catches empty cards. CSS only; reduced motion keeps it still.
 const score = 76;
 const angle = -90 + (score / 100) * 180;
 ---
@@ -9,7 +10,7 @@ const angle = -90 + (score / 100) * 180;
 <figure class="loop" aria-label="One lesson through Homeostat: a review comment becomes a rule, the daily PR merges it at confidence 76, and the next session receives it.">
   <div class="loop-grid">
     <section class="unit u1">
-      <header><span class="dot"></span>Review <small>PR #812</small></header>
+      <header><span class="num">1</span>Review <small>PR #812</small></header>
       <div class="comment">
         <p class="who">sam <span>senior</span> on <code>services/integrations/client.ts</code></p>
         <p>Use <code>withRetry()</code> from <code>@acme/http-client</code> here. Hand-rolled loops drop the request-id header.</p>
@@ -18,7 +19,7 @@ const angle = -90 + (score / 100) * 180;
     </section>
 
     <section class="unit u2">
-      <header><span class="dot"></span>Lesson <small>confidence</small></header>
+      <header><span class="num">2</span>Lesson <small>confidence</small></header>
       <div class="gauge">
         <svg viewBox="0 -2 200 118" aria-hidden="true">
           <path class="band decline" d="M 20.0 100.0 A 80 80 0 0 1 61.0 30.1"></path>
@@ -46,7 +47,7 @@ const angle = -90 + (score / 100) * 180;
     </section>
 
     <section class="unit u3">
-      <header><span class="dot"></span>Daily PR <small>06:00 UTC</small></header>
+      <header><span class="num">3</span>Daily PR <small>06:00 UTC</small></header>
       <p class="pr-title">homeostat: daily lessons · lee</p>
       <table class="pr-table">
         <tbody>
@@ -58,7 +59,7 @@ const angle = -90 + (score / 100) * 180;
     </section>
 
     <section class="unit u4">
-      <header><span class="dot"></span>Session <small>next morning</small></header>
+      <header><span class="num">4</span>Session <small>next morning</small></header>
       <pre class="session"><span class="prompt">$ claude</span>
 <span class="sys"># Team rules (homeostat)</span>
 <span class="sys">For the files you are changing:</span>
@@ -66,7 +67,7 @@ const angle = -90 + (score / 100) * 180;
   wrap every partner call in withRetry().</span></pre>
     </section>
   </div>
-  <figcaption>One source of many: a review comment, through the loop, to the next agent's session.</figcaption>
+  <figcaption>1 → 4: one review comment becomes a rule in the next agent's session. Code review is one source of many.</figcaption>
 </figure>
 
 <style>
@@ -120,27 +121,31 @@ const angle = -90 + (score / 100) * 180;
     font-weight: 400;
     color: var(--faint);
   }
-  .dot {
-    width: 7px;
-    height: 7px;
+  .num {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: var(--line);
-    animation: dot-active 16s infinite;
+    border: 1px solid var(--line);
+    color: var(--faint);
+    font: 700 0.68rem "JetBrains Mono", monospace;
+    animation: num-active 16s infinite;
   }
   .u2,
-  .u2 .dot { animation-delay: 3.2s; }
+  .u2 .num { animation-delay: 4s; }
   .u3,
-  .u3 .dot { animation-delay: 7.2s; }
+  .u3 .num { animation-delay: 8s; }
   .u4,
-  .u4 .dot { animation-delay: 10.4s; }
+  .u4 .num { animation-delay: 12s; }
 
   @keyframes unit-active {
     0%, 22% { border-color: rgb(240 165 65 / 0.55); box-shadow: 0 0 0 3px rgb(240 165 65 / 0.07); }
     28%, 100% { border-color: var(--line); box-shadow: none; }
   }
-  @keyframes dot-active {
-    0%, 22% { background: var(--amber); }
-    28%, 100% { background: var(--line); }
+  @keyframes num-active {
+    0%, 22% { background: var(--amber); border-color: var(--amber); color: var(--ink); }
+    28%, 100% { background: transparent; border-color: var(--line); color: var(--faint); }
   }
 
   code {
@@ -162,9 +167,6 @@ const angle = -90 + (score / 100) * 180;
     margin: 10px 0 0;
     color: var(--faint);
     font-size: 0.75rem;
-    opacity: 0;
-    animation: appear 16s infinite;
-    animation-delay: 1.8s;
   }
   .commit span { font-family: "JetBrains Mono", monospace; color: var(--teal); }
 
@@ -180,7 +182,7 @@ const angle = -90 + (score / 100) * 180;
     transform-origin: 100px 100px;
     transform: rotate(var(--angle));
     animation: needle 16s infinite;
-    animation-delay: 3.2s;
+    animation-delay: 4s;
   }
   .needle line { stroke: var(--amber); stroke-width: 3; stroke-linecap: round; }
   .hub { fill: var(--paper); }
@@ -197,13 +199,12 @@ const angle = -90 + (score / 100) * 180;
   }
   /* Swing past the reading, overshoot, settle: the instrument finding its balance. */
   @keyframes needle {
-    0% { transform: rotate(-90deg); }
-    4% { transform: rotate(-90deg); }
+    0% { transform: rotate(var(--angle)); }
+    4% { transform: rotate(-60deg); }
     9% { transform: rotate(68deg); }
     12% { transform: rotate(34deg); }
     15% { transform: rotate(52deg); }
-    18%, 92% { transform: rotate(var(--angle)); }
-    100% { transform: rotate(-90deg); }
+    18%, 100% { transform: rotate(var(--angle)); }
   }
   .terms {
     display: grid;
@@ -224,7 +225,6 @@ const angle = -90 + (score / 100) * 180;
   .pr-table .d { white-space: nowrap; font-weight: 600; }
   .d.merged { color: var(--teal); }
   .d.review { color: var(--gold); }
-  .pr-table tr:first-child { opacity: 0; animation: appear 16s infinite; animation-delay: 7.6s; }
   .dim { opacity: 0.55; }
   .stamp {
     display: inline-block;
@@ -234,9 +234,6 @@ const angle = -90 + (score / 100) * 180;
     border-radius: 999px;
     color: var(--teal);
     font-size: 0.72rem;
-    opacity: 0;
-    animation: appear 16s infinite;
-    animation-delay: 8.6s;
   }
 
   .session {
@@ -254,14 +251,6 @@ const angle = -90 + (score / 100) * 180;
     background: rgb(240 165 65 / 0.1);
     border-left: 2px solid var(--amber);
     padding-left: 6px;
-    opacity: 0;
-    animation: appear 16s infinite;
-    animation-delay: 11.2s;
-  }
-  @keyframes appear {
-    0% { opacity: 0; transform: translateY(4px); }
-    4%, 70% { opacity: 1; transform: none; }
-    76%, 100% { opacity: 0; transform: translateY(4px); }
   }
 
   @media (max-width: 640px) {
@@ -269,7 +258,7 @@ const angle = -90 + (score / 100) * 180;
     .unit { min-height: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .unit, .dot, .needle, .commit, .pr-table tr:first-child, .stamp, .session .rule { animation: none; opacity: 1; }
+    .unit, .num, .needle { animation: none; }
     .needle { transform: rotate(var(--angle)); }
   }
 </style>

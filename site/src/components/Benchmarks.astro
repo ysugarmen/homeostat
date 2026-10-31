@@ -11,11 +11,14 @@ const m = Object.fromEntries(bench.measures.map((x) => [x.name, x])) as Record<s
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const fewer = (name: string) => 1 - m[name].after.mean / m[name].before.mean;
 
+// Only results whose 95% interval clears zero, each with its sample size. Cost (interval crosses
+// zero) and corrections (few tasks) stay in the full measures below.
+const all = bench.tasks.questions + bench.tasks.coding;
 const stats = [
-  { big: `${Math.round(m.question_accuracy.after.mean / m.question_accuracy.before.mean)}×`, label: "more questions answered fully right", sub: `${pct(m.question_accuracy.before.mean)} → ${pct(m.question_accuracy.after.mean)}` },
-  { big: pct(fewer("coding_repeated_mistake")), label: "fewer repeats of a reviewer's correction", sub: `${pct(m.coding_repeated_mistake.before.mean)} → ${pct(m.coding_repeated_mistake.after.mean)} of coding tasks` },
-  { big: pct(fewer("coding_corrections")), label: "fewer corrections needed", sub: `${m.coding_corrections.before.mean.toFixed(2)} → ${m.coding_corrections.after.mean.toFixed(2)} per task` },
-  { big: pct(fewer("time_s")), label: "faster, and cheaper per task", sub: `${Math.round(m.time_s.before.mean)} s → ${Math.round(m.time_s.after.mean)} s · ${pct(fewer("cost_usd"))} less cost` },
+  { big: `${Math.round(m.question_accuracy.after.mean / m.question_accuracy.before.mean)}×`, label: "more questions answered fully right", sub: `${pct(m.question_accuracy.before.mean)} → ${pct(m.question_accuracy.after.mean)}`, n: `${m.question_accuracy.pairedTasks} questions` },
+  { big: pct(fewer("coding_repeated_mistake")), label: "fewer repeats of a reviewer's correction", sub: `${pct(m.coding_repeated_mistake.before.mean)} → ${pct(m.coding_repeated_mistake.after.mean)} of tasks`, n: `${m.coding_repeated_mistake.pairedTasks} coding tasks` },
+  { big: pct(fewer("turns")), label: "fewer turns per task", sub: `${m.turns.before.mean.toFixed(1)} → ${m.turns.after.mean.toFixed(1)}`, n: `${all} tasks` },
+  { big: pct(fewer("time_s")), label: "faster per task", sub: `${Math.round(m.time_s.before.mean)} s → ${Math.round(m.time_s.after.mean)} s`, n: `${all} tasks` },
 ];
 
 interface Chart {
@@ -76,10 +79,27 @@ const rows: { key: string; label: string; fmt: (v: number) => string; d: (v: num
         <span class="big">{s.big}</span>
         <span class="label">{s.label}</span>
         <span class="sub">{s.sub}</span>
+        <span class="n">{s.n}</span>
       </div>
     ))}
   </div>
 
+  <OverTime />
+
+  <div class="method">
+    <h3>How it was measured</h3>
+    <ul>
+      <li>{bench.tasks.questions} questions and {bench.tasks.coding} coding tasks, each drawn from a merged pull request where a reviewer corrected the author. Coding tasks start from the commit before the correction.</li>
+      <li>Headless Claude Code on {bench.models.join(", ")}, the same prompts and permissions both times; only the Homeostat plugin differs.</li>
+      <li>The knowledge base was built by Homeostat from that same team's review history: <code>bootstrap</code>, then the daily run. The realistic case: the team reviewed it once, and agents stop repeating it.</li>
+      <li>Graded by hidden tests ({bench.tasks.codingTests} coding tasks) or by {bench.judgeModels.join(", ")} against the reviewer's answer. {bench.runs.before} runs without ({bench.repeats.before} repeats), {bench.runs.after} with ({bench.repeats.after}), {bench.dates.first} to {bench.dates.last}.</li>
+    </ul>
+    <p class="run-yours">Run the same comparison on your own history: <a href="/docs/guide/bench/">homeostat bench</a>.</p>
+  </div>
+
+  <details class="raw">
+    <summary>All eight measures, before and after</summary>
+    <div class="all">
   <p class="legend" aria-hidden="true">
     <span><i class="sw before"></i>Without Homeostat</span><span><i class="sw after"></i>With Homeostat</span>
   </p>
@@ -115,18 +135,8 @@ const rows: { key: string; label: string; fmt: (v: number) => string; d: (v: num
     </div>
   ))}
 
-  <OverTime />
-
-  <div class="method">
-    <h3>How it was measured</h3>
-    <ul>
-      <li>{bench.tasks.questions} questions and {bench.tasks.coding} coding tasks, each drawn from a merged pull request where a reviewer corrected the author. Coding tasks start from the commit before the correction.</li>
-      <li>Headless Claude Code on {bench.models.join(", ")}, the same prompts and permissions both times; only the Homeostat plugin differs.</li>
-      <li>The knowledge base was built by Homeostat from that same team's review history: <code>bootstrap</code>, then the daily run. The realistic case: the team reviewed it once, and agents stop repeating it.</li>
-      <li>Graded by hidden tests ({bench.tasks.codingTests} coding tasks) or by {bench.judgeModels.join(", ")} against the reviewer's answer. {bench.runs.before} runs without ({bench.repeats.before} repeats), {bench.runs.after} with ({bench.repeats.after}), {bench.dates.first} to {bench.dates.last}.</li>
-    </ul>
-    <p class="run-yours">Run the same comparison on your own history: <a href="/docs/guide/bench/">homeostat bench</a>.</p>
-  </div>
+    </div>
+  </details>
 
   <details class="raw">
     <summary>Raw results</summary>
@@ -218,6 +228,8 @@ const rows: { key: string; label: string; fmt: (v: number) => string; d: (v: num
   }
   .label { color: var(--paper); font-weight: 600; line-height: 1.3; }
   .sub { color: var(--faint); font: 0.8rem "JetBrains Mono", monospace; }
+  .n { justify-self: start; margin-top: 4px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 0.72rem; }
+  .all { padding: 4px 18px 8px; }
 
   .legend { display: flex; gap: 22px; margin: 0 0 20px; color: var(--muted); font-size: 0.88rem; }
   .legend span { display: inline-flex; align-items: center; gap: 8px; }

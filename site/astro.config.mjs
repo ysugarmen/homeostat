@@ -7,6 +7,12 @@ export default defineConfig({
   site: "https://homeostat-site.sugaryoni3.workers.dev",
   integrations: [
     starlight({
+      // Shared doc links get the same preview card as the landing page.
+      head: [
+        { tag: "meta", attrs: { property: "og:image", content: "https://homeostat-site.sugaryoni3.workers.dev/og.png" } },
+        { tag: "meta", attrs: { name: "twitter:card", content: "summary_large_image" } },
+        { tag: "meta", attrs: { name: "twitter:image", content: "https://homeostat-site.sugaryoni3.workers.dev/og.png" } },
+      ],
       title: "Homeostat",
       description: "A team knowledge base for coding agents that keeps itself current. Runs on your repos, CI and tokens.",
       logo: { src: "./src/assets/mark.svg", replacesTitle: false },
