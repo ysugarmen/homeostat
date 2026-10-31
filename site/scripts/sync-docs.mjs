@@ -26,6 +26,8 @@ const route = (rel) => {
   const slug = rel.replace(/\.md$/, "").replace(/(^|\/)index$/, "");
   return `/docs/${slug ? `${slug.toLowerCase()}/` : ""}`;
 };
+/** Links written into pages carry the base path (GitHub Pages serves the site under /homeostat). */
+const BASE = (process.env.SITE_BASE ?? "/").replace(/\/$/, "");
 
 /**
  * `## Heading {#id}` (the KB's section-id form, used in some guides) as a real anchor: Starlight
@@ -49,7 +51,7 @@ function rewriteLinks(text, rel) {
     const resolved = posix.normalize(posix.join(from, link));
     if (resolved.startsWith("../")) return `](${GITHUB}/${resolved.slice(3)}${hash})`;
     if (UNPUBLISHED.has(resolved)) return `](${GITHUB}/docs/${resolved}${hash})`;
-    if (resolved.endsWith(".md")) return `](${route(resolved)}${hash})`;
+    if (resolved.endsWith(".md")) return `](${BASE}${route(resolved)}${hash})`;
     return match;
   });
 }

@@ -94,7 +94,7 @@ const rows: { key: string; label: string; fmt: (v: number) => string; d: (v: num
       <li>The knowledge base was built by Homeostat from that same team's review history: <code>bootstrap</code>, then the daily run. The realistic case: the team reviewed it once, and agents stop repeating it.</li>
       <li>Graded by hidden tests ({bench.tasks.codingTests} coding tasks) or by {bench.judgeModels.join(", ")} against the reviewer's answer. {bench.runs.before} runs without ({bench.repeats.before} repeats), {bench.runs.after} with ({bench.repeats.after}), {bench.dates.first} to {bench.dates.last}.</li>
     </ul>
-    <p class="run-yours">Run the same comparison on your own history: <a href="/docs/guide/bench/">homeostat bench</a>.</p>
+    <p class="run-yours">Run the same comparison on your own history: <a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/docs/guide/bench/`}>homeostat bench</a>.</p>
   </div>
 
   <details class="raw">

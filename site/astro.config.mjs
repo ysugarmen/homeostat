@@ -2,16 +2,23 @@ import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 
 const REPO = "https://github.com/ysugarmen/homeostat";
+// The same site is published twice: at the root of the Cloudflare worker, and under /homeostat on
+// GitHub Pages (a second network, for when Cloudflare's addresses are blocked). The Pages build sets
+// SITE_URL and SITE_BASE.
+const SITE = process.env.SITE_URL ?? "https://homeostat-site.sugaryoni3.workers.dev";
+const BASE = process.env.SITE_BASE ?? "/";
+const OG = `${SITE}${BASE.replace(/\/$/, "")}/og.png`;
 
 export default defineConfig({
-  site: "https://homeostat-site.sugaryoni3.workers.dev",
+  site: SITE,
+  base: BASE,
   integrations: [
     starlight({
       // Shared doc links get the same preview card as the landing page.
       head: [
-        { tag: "meta", attrs: { property: "og:image", content: "https://homeostat-site.sugaryoni3.workers.dev/og.png" } },
+        { tag: "meta", attrs: { property: "og:image", content: OG } },
         { tag: "meta", attrs: { name: "twitter:card", content: "summary_large_image" } },
-        { tag: "meta", attrs: { name: "twitter:image", content: "https://homeostat-site.sugaryoni3.workers.dev/og.png" } },
+        { tag: "meta", attrs: { name: "twitter:image", content: OG } },
       ],
       title: "Homeostat",
       description: "A team knowledge base for coding agents that keeps itself current. Runs on your repos, CI and tokens.",

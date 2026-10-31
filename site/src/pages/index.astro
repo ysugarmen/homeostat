@@ -13,7 +13,8 @@ import "../styles/fonts.css";
 const versionFile = readFileSync(join(process.cwd(), "../packages/core/src/version.ts"), "utf8");
 const version = /"(\d+\.\d+\.\d+[^"]*)"/.exec(versionFile)?.[1] ?? "latest";
 const repo = "https://github.com/ysugarmen/homeostat";
-const site = "https://homeostat-site.sugaryoni3.workers.dev";
+const b = import.meta.env.BASE_URL.replace(/\/$/, "");
+const site = `${(Astro.site?.href ?? "https://homeostat-site.sugaryoni3.workers.dev/").replace(/\/$/, "")}${b}`;
 const repeated = bench.measures.find((x) => x.name === "coding_repeated_mistake");
 const pctOf = (v = 0) => `${Math.round(v * 100)}%`;
 const title = "Homeostat: the team knowledge base that maintains itself";
@@ -88,18 +89,18 @@ const spec = [
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={`${site}/og.png`} />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="icon" href={`${b}/favicon.svg`} type="image/svg+xml" />
+    <link rel="preload" href={`${b}/fonts/archivo.woff2`} as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
     <header class="nav">
-      <a class="brand" href="/"><span class="mark" set:html={mark} />Homeostat</a>
+      <a class="brand" href={`${b}/`}><span class="mark" set:html={mark} />Homeostat</a>
       <nav aria-label="Main">
-        <a href="/#benchmarks">Benchmarks</a>
-        <a href="/docs/">Docs</a>
-        <a href="/docs/guide/quickstart/">Quickstart</a>
-        <a href="/docs/architecture/">Architecture</a>
+        <a href={`${b}/#benchmarks`}>Benchmarks</a>
+        <a href={`${b}/docs/`}>Docs</a>
+        <a href={`${b}/docs/guide/quickstart/`}>Quickstart</a>
+        <a href={`${b}/docs/architecture/`}>Architecture</a>
         <a href={repo} class="gh">GitHub</a>
       </nav>
     </header>
@@ -117,7 +118,7 @@ const spec = [
           </p>
           <p class="lede own-line">Runs entirely in your CI and your agent sessions, using your own keys. There's no Homeostat backend, so your code and data never reach us.</p>
           <div class="ctas">
-            <a class="btn primary" href="/docs/guide/quickstart/">Read the quickstart</a>
+            <a class="btn primary" href={`${b}/docs/guide/quickstart/`}>Read the quickstart</a>
             <a class="btn" href={repo}>View on GitHub</a>
           </div>
           <p class="install"><span>In your team's knowledge base repo:</span><code>npx --yes homeostat@{version} setup</code></p>
@@ -188,8 +189,8 @@ const spec = [
         <h2 id="own">Runs on yours, not ours</h2>
         <Boundary />
         <p class="plate-note">
-          What is sent where, and how to turn each part off: <a href="/docs/data-handling/">data handling</a>. Who can change
-          what your agents are told: <a href="/docs/security/">security</a>.
+          What is sent where, and how to turn each part off: <a href={`${b}/docs/data-handling/`}>data handling</a>. Who can change
+          what your agents are told: <a href={`${b}/docs/security/`}>security</a>.
         </p>
       </section>
 
@@ -221,7 +222,7 @@ const spec = [
             <pre><code>npx --yes homeostat@{version} setup --check</code></pre>
           </div>
         </div>
-        <a class="btn primary" href="/docs/guide/setup/">Read the setup guide</a>
+        <a class="btn primary" href={`${b}/docs/guide/setup/`}>Read the setup guide</a>
       </section>
     </main>
 
@@ -230,7 +231,7 @@ const spec = [
         Named after W. Ross Ashby's homeostat of 1948: four units that kept one another in balance.
       </p>
       <p class="foot-links">
-        <a href="/docs/">Docs</a><a href={repo}>GitHub</a><a href="/docs/security/">Security</a><span>Apache-2.0</span>
+        <a href={`${b}/docs/`}>Docs</a><a href={repo}>GitHub</a><a href={`${b}/docs/security/`}>Security</a><span>Apache-2.0</span>
       </p>
     </footer>
   </body>
