@@ -3,6 +3,8 @@
 // with the plugin off and then on. The numbers come from `homeostat bench report --json`
 // (aggregates only: no task names, prompts or code), saved as src/data/bench.json.
 import bench from "../data/bench.json";
+import time from "../data/bench-time.json";
+import OverTime from "./OverTime.astro";
 
 type Measure = (typeof bench.measures)[number];
 const m = Object.fromEntries(bench.measures.map((x) => [x.name, x])) as Record<string, Measure>;
@@ -113,6 +115,8 @@ const rows: { key: string; label: string; fmt: (v: number) => string; d: (v: num
     </div>
   ))}
 
+  <OverTime />
+
   <div class="method">
     <h3>How it was measured</h3>
     <ul>
@@ -145,6 +149,24 @@ const rows: { key: string; label: string; fmt: (v: number) => string; d: (v: num
               </tr>
             );
           })}
+        </tbody>
+      </table>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Day</th><th>Tasks whose lesson exists</th><th>Correct answers</th><th>Tokens per task</th><th>Tasks per hour</th></tr>
+        </thead>
+        <tbody>
+          {time.days.map((d, i) => (
+            <tr>
+              <td class="num">{d}</td>
+              <td class="num">{time.lessonsAvailable[i]} of {time.tokens.tasks}</td>
+              <td class="num">{Math.round(time.correct.with[i] * 100)}% <small>without {Math.round(time.correct.without * 100)}%</small></td>
+              <td class="num">{Math.round(time.tokens.with[i] / 1000)}k <small>without {Math.round(time.tokens.without / 1000)}k</small></td>
+              <td class="num">{time.tasksPerHour.with[i].toFixed(1)} <small>without {time.tasksPerHour.without.toFixed(1)}</small></td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

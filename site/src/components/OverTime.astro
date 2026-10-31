@@ -1,0 +1,152 @@
+---
+// The benchmark's effect as the knowledge base grows. Two points are measured: day 0 without
+// Homeostat, and the last day with it. Between them each task counts as "with" from the day the
+// review it came from was merged (documents from bootstrap count from day 0), and as "without"
+// before that: an estimate built from per-task results, not a measurement for each day.
+import t from "../data/bench-time.json";
+
+const W = 360;
+const H = 190;
+const L = 44;
+const R = 14;
+const T = 16;
+const Bm = 30;
+const last = t.days.length - 1;
+const x = (d: number) => L + (d / last) * (W - L - R);
+
+interface Chart {
+  title: string;
+  sub: string;
+  without: number;
+  with: number[];
+  max: number;
+  fmt: (v: number) => string;
+  ticks: number[];
+  headline: string;
+}
+const k = (v: number) => `${Math.round(v / 1000)}k`;
+const charts: Chart[] = [
+  {
+    title: "Correct answers",
+    sub: "questions answered fully right",
+    without: t.correct.without,
+    with: t.correct.with,
+    max: 1,
+    fmt: (v) => `${Math.round(v * 100)}%`,
+    ticks: [0, 0.25, 0.5, 0.75, 1],
+    headline: `${Math.round((t.correct.with[last] / t.correct.without) * 10) / 10}×`,
+  },
+  {
+    title: "Token usage",
+    sub: "tokens per agent task",
+    without: t.tokens.without,
+    with: t.tokens.with,
+    max: 700000,
+    fmt: k,
+    ticks: [0, 200000, 400000, 600000],
+    headline: `−${Math.round((1 - t.tokens.with[last] / t.tokens.without) * 100)}%`,
+  },
+  {
+    title: "Team productivity",
+    sub: "agent tasks finished per hour",
+    without: t.tasksPerHour.without,
+    with: t.tasksPerHour.with,
+    max: 110,
+    fmt: (v) => `${Math.round(v)}`,
+    ticks: [0, 25, 50, 75, 100],
+    headline: `+${Math.round((t.tasksPerHour.with[last] / t.tasksPerHour.without - 1) * 100)}%`,
+  },
+];
+const y = (c: Chart, v: number) => T + (1 - v / c.max) * (H - T - Bm);
+/** A step line: each day's value holds until the next day. */
+const steps = (c: Chart) =>
+  c.with
+    .map((v, d) => (d === 0 ? `M ${x(0)} ${y(c, v)}` : `H ${x(d)} V ${y(c, v)}`))
+    .join(" ");
+const area = (c: Chart) => `${steps(c)} H ${x(last)} V ${y(c, c.without)} H ${x(0)} Z`;
+const dayTicks = [0, 7, 14, last].filter((d, i, a) => a.indexOf(d) === i);
+---
+
+<div class="overtime">
+  <h3>Over time, as the knowledge base grows</h3>
+  <p class="ot-lede">
+    Without Homeostat nothing changes from one week to the next. With it, every review the team merges can become a lesson,
+    so agents get better as the knowledge base fills.
+  </p>
+  <div class="ot-grid">
+    {charts.map((c) => (
+      <figure class="ot" aria-label={`${c.title}: ${c.fmt(c.without)} without Homeostat; with it, ${c.fmt(c.with[0])} on day 0 rising to ${c.fmt(c.with[last])} by day ${last}`}>
+        <figcaption>
+          <span class="ot-title">{c.title}<small>{c.sub}</small></span>
+          <span class="ot-head">{c.headline}</span>
+        </figcaption>
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-hidden="true">
+          {c.ticks.map((v) => (
+            <g class="grid">
+              <line x1={L} x2={W - R} y1={y(c, v)} y2={y(c, v)} />
+              <text x={L - 8} y={y(c, v) + 4} text-anchor="end">{c.fmt(v)}</text>
+            </g>
+          ))}
+          {dayTicks.map((d) => (
+            <text class="xt" x={x(d)} y={H - 10} text-anchor="middle">day {d}</text>
+          ))}
+          <path class="gain" d={area(c)} />
+          <line class="without" x1={x(0)} x2={x(last)} y1={y(c, c.without)} y2={y(c, c.without)} />
+          <path class="with" d={steps(c)} pathLength="1" />
+          <circle class="dot without-dot" cx={x(0)} cy={y(c, c.without)} r="4.5" />
+          <circle class="dot with-dot" cx={x(last)} cy={y(c, c.with[last])} r="5" />
+          <text class="end" x={x(last) - 8} y={y(c, c.with[last]) - 10} text-anchor="end">{c.fmt(c.with[last])}</text>
+          <text class="end muted" x={x(last) - 8} y={y(c, c.without) + (c.with[last] > c.without ? 18 : -10)} text-anchor="end">{c.fmt(c.without)}</text>
+        </svg>
+      </figure>
+    ))}
+  </div>
+  <p class="ot-note">
+    <span class="k"><i class="sw w"></i>With Homeostat</span>
+    <span class="k"><i class="sw wo"></i>Without</span>
+    <span class="k"><i class="dt"></i>Measured</span>
+    Days of the team's review history in the knowledge base. Day 0 and day {last} are measured; between them is an estimate
+    from per-task results: a task counts as improved from the day the review it came from was merged (documents
+    from{" "}<code>bootstrap</code>{" "}from day 0).
+  </p>
+</div>
+
+<style>
+  .overtime { margin: 8px 0 38px; }
+  .overtime h3 { margin: 0 0 8px; font-size: 1.05rem; color: var(--paper); }
+  .ot-lede { color: var(--muted); font-size: 0.93rem; max-width: 52em; margin: 0 0 16px; }
+  .ot-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .ot { margin: 0; padding: 16px 16px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .ot figcaption { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+  .ot-title { display: grid; gap: 2px; color: var(--paper); font-weight: 600; font-size: 0.95rem; }
+  .ot-title small { color: var(--faint); font-weight: 400; font-size: 0.78rem; }
+  .ot-head { font-family: "Archivo", sans-serif; font-stretch: 125%; font-weight: 800; font-size: 1.6rem; line-height: 1; color: var(--teal); }
+  .ot svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .grid line { stroke: rgb(255 255 255 / 0.05); }
+  .grid text, .xt { fill: var(--faint); font: 10px "JetBrains Mono", monospace; }
+  .gain { fill: rgb(108 196 168 / 0.1); }
+  .without { stroke: #6b7881; stroke-width: 2; stroke-dasharray: 5 5; }
+  .with { fill: none; stroke: var(--teal); stroke-width: 2.5; stroke-linejoin: round; }
+  .dot { stroke: var(--panel); stroke-width: 2; }
+  .without-dot { fill: #8a969e; }
+  .with-dot { fill: var(--teal); }
+  .end { fill: var(--paper); font: 600 11px "JetBrains Mono", monospace; }
+  .end.muted { fill: var(--faint); font-weight: 400; }
+  :global(.bench.armed) .with { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  :global(.bench.play) .with { animation: draw 1.6s ease-out 0.3s forwards; }
+  :global(.bench.armed) .gain, :global(.bench.armed) .with-dot, :global(.bench.armed) .end:not(.muted) { opacity: 0; }
+  :global(.bench.play) .gain, :global(.bench.play) .with-dot, :global(.bench.play) .end:not(.muted) { animation: show 0.5s ease-out 1.7s forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes show { to { opacity: 1; } }
+  .ot-note { color: var(--faint); font-size: 0.8rem; margin: 12px 0 0; max-width: 62em; line-height: 1.55; }
+  .ot-note .k { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; color: var(--muted); }
+  .ot-note code { color: var(--paper); font-family: "JetBrains Mono", monospace; }
+  .sw { display: inline-block; width: 18px; height: 0; border-top: 2.5px solid var(--teal); }
+  .sw.wo { border-top: 2px dashed #6b7881; }
+  .dt { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--teal); }
+  @media (max-width: 960px) { .ot-grid { grid-template-columns: minmax(0, 1fr); max-width: 560px; } }
+  @media (prefers-reduced-motion: reduce) {
+    :global(.bench.armed) .with { stroke-dasharray: none; stroke-dashoffset: 0; }
+    :global(.bench.armed) .gain, :global(.bench.armed) .with-dot, :global(.bench.armed) .end { opacity: 1; }
+  }
+</style>
