@@ -32,7 +32,7 @@ npx --yes homeostat@0.5.3 setup
 npx --yes homeostat@0.5.3 setup --join
 ```
 
-`setup` is a re-runnable checklist: it asks only for what is missing, checks each step with a real call, and stores the CI secrets for you ([every step](docs/guide/setup.md)). The [quickstart](docs/guide/quickstart.md) takes you from there to the first daily run in about ten minutes. The full guide starts at [docs/index.md](docs/index.md).
+`setup` is a re-runnable checklist: it asks only for what is missing, checks each step with a real call, and stores the CI secrets for you ([every step](docs/guide/setup.md)). The [quickstart](docs/guide/quickstart.md) takes you from there to the first daily run in about ten minutes. How it works for the whole team, from the admin's setup to each developer's clone staying current: [How a team uses it](docs/guide/team.md). The full guide starts at [docs/index.md](docs/index.md).
 
 > 0.2 adds knowledge bases for several code repos, rules grouped into topic files, and `homeostat bootstrap`. Coming from 0.1: [moving to 0.2](docs/guide/migrating.md). How it works technically: [docs/architecture.md](docs/architecture.md).
 

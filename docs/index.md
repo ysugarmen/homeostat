@@ -17,6 +17,7 @@ It runs on what you already have: your git host, your CI, your developers' sessi
 
 - [Quickstart](guide/quickstart.md): a working knowledge base in ten minutes
 - [Setup](guide/setup.md): `homeostat setup`, the guided checklist, and what each optional step gives you
+- [How a team uses it](guide/team.md): the admin's setup, each developer's join, how every clone stays current, the daily run and the review queue
 - [Rules and documents](guide/entries.md): the file formats and layouts
 - [A first base](guide/bootstrap.md): `homeostat bootstrap`, from your repos' docs, schemas and deploy files
 - [Moving to 0.2](guide/migrating.md): repo folders and topic files for an existing KB
