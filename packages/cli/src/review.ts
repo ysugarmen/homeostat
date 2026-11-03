@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   type Config,
@@ -11,8 +12,9 @@ import {
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { painter } from "./format.ts";
+import { git } from "./git.ts";
 import { findKb } from "./hook.ts";
-import { nudgeBranch, rebuildOnBase } from "./kb-write.ts";
+import { nudgeBranch, rebuildOnBase, refFiles } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 
 /**
@@ -284,6 +286,35 @@ async function untilHostSees(
   }
 }
 
+/**
+ * What the PR would put on the base that fails validation, in the files it changes: above all a
+ * risk finding nobody has signed off (`riskReviewedBy`). A review PR is where such a lesson waits
+ * for a person, so merging it unread would break the base, and every later PR's build with it.
+ */
+function blocking(ctx: Context, branch: string): string[] {
+  // Only in a KB checkout of its own (the KB is the repository root), never a folder in another repo.
+  const top = git(ctx.root, "rev-parse", "--show-toplevel");
+  if (!top || realpathSync(top) !== realpathSync(resolve(ctx.root))) return [];
+  const head = `refs/remotes/origin/${branch}`;
+  git(ctx.root, "fetch", "--quiet", "origin", `+refs/heads/${branch}:${head}`);
+  git(
+    ctx.root,
+    "fetch",
+    "--quiet",
+    "origin",
+    `+refs/heads/${ctx.base}:refs/remotes/origin/${ctx.base}`,
+  );
+  if (git(ctx.root, "rev-parse", "--verify", "--quiet", head) === undefined) return [];
+  const changed = new Set(
+    (git(ctx.root, "diff", "--name-only", `refs/remotes/origin/${ctx.base}...${head}`) ?? "")
+      .split("\n")
+      .filter(Boolean),
+  );
+  return validate(refFiles(ctx.root, head))
+    .issues.filter((i) => i.severity === "error" && i.file !== undefined && changed.has(i.file))
+    .map((i) => `${i.file}: ${i.message}`);
+}
+
 async function merge(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Promise<number> {
   const pr = await homeostatPr(ctx, ref, "merge");
   let rebuilt = false;
@@ -304,6 +335,13 @@ async function merge(ctx: Context, ref: string, opts: ReviewOptions, io: Io): Pr
         `rebuilt #${pr.id} on ${pr.targetBranch}: its topic files now include both sides\n`,
       );
     await untilHostSees(ctx, pr, r.sha, io);
+  }
+  const problems = blocking(ctx, pr.sourceBranch);
+  if (problems.length) {
+    io.stderr(
+      `#${pr.id} is not merged: what it changes does not validate\n${problems.map((p) => `  ${p}`).join("\n")}\nA risk finding waits for a person: read the entry, and if it is safe add "riskReviewedBy: <your id>" to it on the PR's branch (${pr.sourceBranch}); otherwise remove the entry or close the PR.\n`,
+    );
+    return 1;
   }
   try {
     // A host recomputes whether a rebuilt PR merges a moment after the push.

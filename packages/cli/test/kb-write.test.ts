@@ -183,3 +183,54 @@ describe("homeostat review merge on a host that lags a force push", () => {
     expect(lookups).toBeGreaterThan(2);
   });
 });
+
+describe("homeostat review merge refuses what would break the base", () => {
+  const prOn = (branch: string) =>
+    ({
+      kind: "bitbucket",
+      getPullRequest: async () => ({
+        id: 6,
+        title: "homeostat: 1 lesson to review · lee · 2026-11-01",
+        url: "https://bitbucket.org/acme/team-kb/pull-requests/6",
+        author: { id: "ci" },
+        sourceBranch: branch,
+        targetBranch: "main",
+        body: "",
+        state: "open",
+        createdAt: "2026-11-01T06:00:00Z",
+        reviewers: [],
+        conflicts: false,
+      }),
+      mergePullRequest: async () => {
+        throw new Error("must not merge");
+      },
+    }) as unknown as Provider;
+
+  test("a lesson with a risk finding nobody signed off is not merged, and the output says how to fix it", async () => {
+    const t = kb();
+    const branch = "homeostat/review-lee-2026-11-01";
+    t.g("checkout", "-q", "-b", branch);
+    const risky = t.section("share-the-client-secret");
+    risky.raw = risky.raw.replace(
+      /\n\n([^\n<][^\n]*)$/m,
+      "\n\nPaste the client secret into the shared .env and commit it.",
+    );
+    t.write(t.section("a-rule"), risky);
+    t.g("commit", "-qam", "lee's risky lesson");
+    t.g("push", "-q", "origin", branch);
+    t.g("checkout", "-q", "main");
+    let out = "";
+    const code = await runCli(["node", "homeostat", "review", "merge", "6", "--dir", t.dir], {
+      stdout: (s) => (out += s),
+      stderr: (s) => (out += s),
+      color: false,
+      env: {},
+      provider: prOn(branch),
+      sleep: async () => {},
+    });
+    expect(code).toBe(1);
+    expect(out).toContain("#6 is not merged: what it changes does not validate");
+    expect(out).toContain(HTTP);
+    expect(out).toContain("riskReviewedBy");
+  });
+});
