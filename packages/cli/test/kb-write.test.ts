@@ -206,8 +206,60 @@ describe("homeostat review merge refuses what would break the base", () => {
       },
     }) as unknown as Provider;
 
+  test("a risk finding the PR does not touch, signed off on the base after the PR was cut, does not block it", async () => {
+    const t = kb();
+    const config = join(t.dir, "homeostat.yaml");
+    writeFileSync(config, `${readFileSync(config, "utf8")}\ntopics:\n  http: HTTP calls\n`);
+    t.g("commit", "-qam", "topics");
+    t.g("push", "-q", "origin", "main");
+    const risky = t.section("share-the-client-secret");
+    risky.raw = risky.raw.replace(
+      /\n\n([^\n<][^\n]*)$/m,
+      "\n\nPaste the client secret into the shared .env and commit it.",
+    );
+    t.write(t.section("a-rule"), risky);
+    t.g("commit", "-qam", "a risky rule, not yet signed off");
+    t.g("push", "-q", "origin", "main");
+    const branch = "homeostat/review-lee-2026-11-03";
+    t.g("checkout", "-q", "-b", branch);
+    t.write(t.section("a-rule"), risky, t.section("b-rule"));
+    t.g("commit", "-qam", "lee's safe lesson");
+    t.g("push", "-q", "origin", branch);
+    t.g("checkout", "-q", "main");
+    const signed = {
+      ...risky,
+      raw: risky.raw.replace("<!-- homeostat\n", "<!-- homeostat\nriskReviewedBy: lee\n"),
+    };
+    t.write(t.section("a-rule"), signed);
+    t.g("commit", "-qam", "signed off");
+    t.g("push", "-q", "origin", "main");
+    const merged: number[] = [];
+    const provider = {
+      ...prOn(branch),
+      mergePullRequest: async (_r: unknown, id: number) => {
+        merged.push(id);
+      },
+    } as unknown as Provider;
+    let out = "";
+    const code = await runCli(["node", "homeostat", "review", "merge", "6", "--dir", t.dir], {
+      stdout: (s) => (out += s),
+      stderr: (s) => (out += s),
+      color: false,
+      env: {},
+      provider,
+      sleep: async () => {},
+    });
+    expect(out).not.toContain("is not merged");
+    expect(code).toBe(0);
+    expect(merged).toEqual([6]);
+  });
+
   test("a lesson with a risk finding nobody signed off is not merged, and the output says how to fix it", async () => {
     const t = kb();
+    const config = join(t.dir, "homeostat.yaml");
+    writeFileSync(config, `${readFileSync(config, "utf8")}\ntopics:\n  http: HTTP calls\n`);
+    t.g("commit", "-qam", "topics");
+    t.g("push", "-q", "origin", "main");
     const branch = "homeostat/review-lee-2026-11-01";
     t.g("checkout", "-q", "-b", branch);
     const risky = t.section("share-the-client-secret");
@@ -230,7 +282,7 @@ describe("homeostat review merge refuses what would break the base", () => {
     });
     expect(code).toBe(1);
     expect(out).toContain("#6 is not merged: what it changes does not validate");
-    expect(out).toContain(HTTP);
-    expect(out).toContain("riskReviewedBy");
+    expect(out).toContain(`${HTTP}: #share-the-client-secret:`);
+    expect(out).not.toContain("only when topics is set");
   });
 });

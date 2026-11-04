@@ -310,8 +310,26 @@ function blocking(ctx: Context, branch: string): string[] {
       .split("\n")
       .filter(Boolean),
   );
-  return validate(refFiles(ctx.root, head))
-    .issues.filter((i) => i.severity === "error" && i.file !== undefined && changed.has(i.file))
+  const atHead = validate(refFiles(ctx.root, head));
+  // A rule the PR does not touch is the base's business: a PR cut before a rule was signed off
+  // carries the old copy of its topic file, and merging keeps the base's signed version.
+  const forkedAt = git(ctx.root, "merge-base", `refs/remotes/origin/${ctx.base}`, head);
+  const atFork = forkedAt ? validate(refFiles(ctx.root, forkedAt)) : undefined;
+  const before = new Map(
+    (atFork?.entries ?? []).map((e) => [e.entry.frontmatter.id, JSON.stringify(e.entry)]),
+  );
+  // An error that was already there when the PR was cut is not the PR's doing either.
+  const already = new Set((atFork?.issues ?? []).map((i) => `${i.file}\n${i.message}`));
+  const after = new Map(
+    atHead.entries.map((e) => [e.entry.frontmatter.id, JSON.stringify(e.entry)]),
+  );
+  const untouched = (message: string) => {
+    const id = /^#([^:\s]+):/.exec(message)?.[1];
+    return id !== undefined && before.has(id) && before.get(id) === after.get(id);
+  };
+  return atHead.issues
+    .filter((i) => i.severity === "error" && i.file !== undefined && changed.has(i.file))
+    .filter((i) => !untouched(i.message) && !already.has(`${i.file}\n${i.message}`))
     .map((i) => `${i.file}: ${i.message}`);
 }
 
