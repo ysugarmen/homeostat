@@ -219,6 +219,13 @@ export const SECTIONS: Section[] = [
         kind: "select",
         options: ["daily", "weekly", "biweekly"],
       },
+      {
+        path: ["scoring", "reviewPrs"],
+        label: "Review PRs",
+        kind: "select",
+        options: ["developer", "lesson"],
+        help: "developer: one PR a day per developer. lesson: one PR per lesson, merged or closed on its own",
+      },
     ],
   },
   {

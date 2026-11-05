@@ -420,6 +420,101 @@ describe("homeostat daily (automation, step 4)", { timeout: 30_000 }, () => {
     expect(provider.reviewers.map((r) => r.logins)).toEqual([["dana"]]);
   });
 
+  test("with scoring.reviewPrs: lesson, each lesson gets its own review PR, settled on its own", async () => {
+    const t = team();
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("scoring:\n", "scoring:\n  reviewPrs: lesson\n"),
+    );
+    t.g(t.ci, "commit", "-qam", "one PR per lesson");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    await leeLearns(t.lee);
+    await run([
+      "learn",
+      "--dir",
+      t.lee,
+      "--author",
+      "lee",
+      "--area",
+      "frontend",
+      "--title",
+      "Keep form labels visible",
+      "--rule",
+      "Give every input a visible label; never rely on the placeholder alone.",
+      "--why",
+      "Placeholders vanish while typing and screen readers skip them.",
+    ]);
+    await run(["sync", "--dir", t.lee]);
+    // A host whose merges land on main.
+    class LandingProvider extends FakeProvider {
+      override async mergePullRequest(repo: RepoRef, id: number) {
+        const branch = this.opened.find((o) => o.id === id)?.pr.sourceBranch ?? "";
+        t.g(t.origin, "update-ref", "refs/heads/main", `refs/heads/${branch}`);
+        return super.mergePullRequest(repo, id);
+      }
+    }
+    const provider = new LandingProvider();
+    const posts: string[] = [];
+    const { stdout } = await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider,
+      env: { GITHUB_TOKEN: "t", HOMEOSTAT_SLACK_WEBHOOK: "https://hooks.slack.com/services/x" },
+      fetch: (async (_u: string, init: RequestInit) => {
+        posts.push(JSON.parse(String(init.body)).text);
+        return new Response("ok");
+      }) as typeof fetch,
+    });
+    expect(stdout).toContain("lee: 0 merged, 2 to review");
+    const reviews = provider.opened.filter((o) =>
+      o.pr.sourceBranch.startsWith("homeostat/review-"),
+    );
+    expect(reviews.map((o) => o.pr.sourceBranch).sort()).toEqual([
+      "homeostat/review-lee-2026-10-16-keep-form-labels-visible",
+      "homeostat/review-lee-2026-10-16-use-the-shared-button-component",
+    ]);
+    expect(reviews.map((o) => o.pr.title).sort()).toEqual([
+      "homeostat: review lesson · Keep form labels visible · lee",
+      "homeostat: review lesson · Use the shared button component · lee",
+    ]);
+    // Each PR holds its own lesson only, and asks for it alone.
+    for (const o of reviews) {
+      const id = o.pr.sourceBranch.replace("homeostat/review-lee-2026-10-16-", "");
+      const other = id.startsWith("keep")
+        ? "use-the-shared-button-component"
+        : "keep-form-labels-visible";
+      expect(o.pr.body).toContain(`\`${id}\``);
+      expect(o.pr.body).not.toContain(`\`${other}\``);
+      expect(o.pr.body).toContain("Merge to accept it, close to decline it");
+    }
+    expect(posts[0]).toContain("*Homeostat: 2 lessons waiting for review*");
+    expect(posts[0]).toContain("• lee: Keep form labels visible — https://");
+    expect(posts[0]).toContain("• lee: Use the shared button component — https://");
+
+    // A reviewer merges the label lesson and closes the button one.
+    const label = "homeostat/review-lee-2026-10-16-keep-form-labels-visible";
+    t.g(t.ci, "pull", "-q", "origin", "main");
+    t.g(t.ci, "fetch", "-q", "origin", label);
+    t.g(t.ci, "merge", "-q", "--no-edit", "FETCH_HEAD");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    provider.open = [];
+    provider.kbMerged = [label];
+    await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider,
+      now: () => new Date("2026-10-17T06:00:00Z"),
+    });
+    const decided = JSON.parse(t.g(t.origin, "show", "homeostat/state:decisions/lee.json")).decided;
+    expect(decided).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "keep-form-labels-visible", decision: "merged" }),
+        expect.objectContaining({
+          id: "use-the-shared-button-component",
+          decision: "declined",
+          reason: "closed by a reviewer",
+        }),
+      ]),
+    );
+  });
+
   test("the next run settles a closed review PR as declined, and Lee's sync clears the lesson", async () => {
     const t = team();
     await leeLearns(t.lee);

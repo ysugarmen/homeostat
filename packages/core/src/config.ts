@@ -207,6 +207,11 @@ export const configSchema = z.strictObject({
         .prefault({}),
       reviewCadence: z.enum(["daily", "weekly", "biweekly"]).default("weekly"),
       /**
+       * How the daily run groups the lessons it sends to a person: one review PR per developer
+       * (`developer`), or one PR per lesson (`lesson`), so each is merged or closed on its own.
+       */
+      reviewPrs: z.enum(["developer", "lesson"]).default("developer"),
+      /**
        * The daily run's 0–100 confidence per lesson: merged at or above `accept` (`coreAccept` for
        * rules that reach every session), declined below `decline`, a reviewer in between.
        */

@@ -55,6 +55,7 @@ One file at the KB root. `homeostat validate` checks it, and the dashboard's Set
 | `scoring.confidence.penalty.flag` | `20` | Subtracted per open flag |
 | `scoring.confidence.penalty.judge` | `30` | Subtracted when the judge finds a drafted rule claims what its review thread does not (which also sends it to a person; [details](agents.md#judge)) |
 | `scoring.reviewCadence` | `weekly` | Reserved for review reminders; not used yet |
+| `scoring.reviewPrs` | `developer` | How the daily run groups lessons for a person: one review PR per developer a day (`developer`), or one PR per lesson (`lesson`), each merged or closed on its own. The Slack notice then lists each PR with its lesson's title |
 
 ## `agents`
 

@@ -927,23 +927,33 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     // Review and dispute PRs open after every developer's daily PR has merged, on the base that
     // includes them: opened earlier, a PR sharing a topic file conflicts as soon as it opens.
     later.push(async () => {
-      if (review.length) {
+      // One PR per developer, or with scoring.reviewPrs: lesson, one per lesson, so a reviewer
+      // merges or closes each on its own. Topic files keep rules sorted by id, so two lessons in
+      // one file usually land apart and their PRs merge without a conflict.
+      const perLesson = config.scoring.reviewPrs === "lesson";
+      for (const group of perLesson ? review.map((l) => [l]) : review.length ? [review] : []) {
+        const one = perLesson ? group[0] : undefined;
         const pr = await publish({
           root,
-          branch: `homeostat/review-${member}-${today}`,
-          changes: onFreshBase(review.map((l) => change(l, "review"))),
+          branch: one
+            ? `homeostat/review-${member}-${today}-${one.id}`
+            : `homeostat/review-${member}-${today}`,
+          changes: onFreshBase(group.map((l) => change(l, "review"))),
           provider,
           kbRepo,
           base,
-          title: `homeostat: ${plural(review.length, "lesson")} to review · ${member} · ${today}`,
-          body: prBody(member, today, list, "review"),
+          title: one
+            ? `homeostat: review ${one.update ? "update" : "lesson"} · ${one.title} · ${member}`
+            : `homeostat: ${plural(review.length, "lesson")} to review · ${member} · ${today}`,
+          body: prBody(member, today, one ? group : list, "review"),
           io,
         });
         if (pr.pr) {
-          row.reviewPr = pr.pr.url;
-          await askReviewers(pr.pr, reviewerLogins(config, review, member));
+          row.reviewPr ??= pr.pr.url;
+          if (one) row.reviewPrs = [...(row.reviewPrs ?? []), { url: pr.pr.url, title: one.title }];
+          await askReviewers(pr.pr, reviewerLogins(config, group, member));
         }
-        for (const l of review) Object.assign(l, { pr: pr.branch });
+        for (const l of group) Object.assign(l, { pr: pr.branch });
       }
       for (const l of disputes) {
         const flags = parseEntry(onBase(l.path) ?? "").entry?.frontmatter.flags ?? [];
@@ -1332,7 +1342,9 @@ function prBody(member: string, today: string, list: Lesson[], kind: "daily" | "
   return [
     kind === "daily"
       ? `Daily lessons for ${member}, ${today}. The lessons marked merged passed every check and the confidence threshold, so this PR merges itself. Declined lessons are listed for the record; lessons to review are in a separate PR.`
-      : `Lessons for ${member}, ${today}, that the daily run could not decide. Merge to accept them, close to decline, or edit first. The developer's sync picks up the outcome.`,
+      : list.length === 1
+        ? `A lesson for ${member}, ${today}, that the daily run could not decide. Merge to accept it, close to decline it, or edit it first. The developer's sync picks up the outcome.`
+        : `Lessons for ${member}, ${today}, that the daily run could not decide. Merge to accept them, close to decline, or edit first. The developer's sync picks up the outcome.`,
     "",
     "| Decision | Lesson | Confidence | Source | Why |",
     "| --- | --- | --- | --- | --- |",
@@ -1377,7 +1389,11 @@ async function notifyReviewQueue(
             waiting.reduce((n, m) => n + m.review, 0),
             "lesson",
           )} waiting for review*`,
-          ...waiting.map((m) => `• ${m.member}: ${m.review} — ${m.reviewPr}`),
+          ...waiting.flatMap((m) =>
+            m.reviewPrs?.length
+              ? m.reviewPrs.map((p) => `• ${m.member}: ${p.title} — ${p.url}`)
+              : [`• ${m.member}: ${m.review} — ${m.reviewPr}`],
+          ),
         ]
       : []),
     ...(disputes.length

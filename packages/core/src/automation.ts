@@ -94,7 +94,10 @@ export interface RunReport {
     declined: number;
     review: number;
     dailyPr?: string;
+    /** The review PR; with `scoring.reviewPrs: lesson`, the first of `reviewPrs`. */
     reviewPr?: string;
+    /** With `scoring.reviewPrs: lesson`: one review PR per lesson, with the lesson's title. */
+    reviewPrs?: { url: string; title: string }[];
     /** Review PRs opened this run for disputed rules. */
     disputePrs?: string[];
     mergeError?: string;

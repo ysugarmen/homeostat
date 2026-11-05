@@ -70,7 +70,7 @@ The weekly deep dive merges duplicates, marks contradictions, and retires rules 
 
 ## Reviewers
 
-Code review itself does not change: it is where the lessons come from. Once a day there is one review pull request per developer with the lessons that scored 35–69. Merge to accept them, edit first, or close to decline. `homeostat review merge --all` previews the whole queue and merges it.
+Code review itself does not change: it is where the lessons come from. Once a day there is one review pull request per developer with the lessons that scored 35–69 (or, with `scoring.reviewPrs: lesson`, one per lesson). Merge to accept them, edit first, or close to decline. `homeostat review merge --all` previews the whole queue and merges it.
 
 ## Other tools
 
