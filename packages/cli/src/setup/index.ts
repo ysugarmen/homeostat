@@ -10,7 +10,7 @@ import {
   writeSetupRecord,
 } from "@homeostat/core";
 import type { Io } from "../cli.ts";
-import { git } from "../git.ts";
+import { git, gitIdentity } from "../git.ts";
 import { quietMisconfigurations } from "../misconfig.ts";
 import {
   adminNote,
@@ -303,13 +303,14 @@ async function runJoin(ctx: Ctx, now: Date): Promise<number> {
     }
   }
 
-  const name = git(ctx.root, "config", "user.name");
-  const id = memberFromGit(config.team.members, name);
+  const who = gitIdentity(ctx.root);
+  const id = memberFromGit(config.team.members, who);
+  const shown = `"${who.name ?? ""}" <${who.email ?? ""}>`;
   if (config.team.members.some((m) => m.id === id))
-    ok(`your git name "${name}" is the member ${id}`);
+    ok(`your git identity ${shown} is the member ${id}`);
   else {
     bad(
-      `your git name "${name ?? ""}" is no member of the team: ask a lead to add you (homeostat setup --step team), or set git config user.name to your member id`,
+      `your git identity ${shown} is no member of the team: ask a lead to add this email to your member's emails in homeostat.yaml, then run this again`,
     );
     failed = true;
   }

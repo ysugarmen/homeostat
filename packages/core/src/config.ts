@@ -106,6 +106,13 @@ export const configSchema = z.strictObject({
               "handle must be @user, @org/team or an email",
             )
             .optional(),
+          /**
+           * The emails this member commits with (`git var GIT_AUTHOR_IDENT`): matched before the git
+           * name, so a laptop with no user.name, or a name that is no id or handle, still finds them.
+           */
+          emails: z
+            .array(z.string().regex(/^[^@\s]+@[^@\s]+$/, "emails must be email addresses"))
+            .optional(),
           /** Slack member ID (profile > ⋯ > Copy member ID): the morning notice mentions reviewers. */
           slack: z
             .string()

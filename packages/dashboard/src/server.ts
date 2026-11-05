@@ -21,7 +21,7 @@ import {
   automationView,
   decidedLessons,
   firstName,
-  gitUserName,
+  gitIdentityOf,
   type Lamp,
   lamps,
   readAutomation,
@@ -131,7 +131,7 @@ export function dashboardView(kbRoot: string, snap: Snapshot): DashboardView {
     runs: state.runs,
     decisions: state.decisions,
     heartbeats: state.heartbeats,
-    member: memberFromGit(snap.config.team.members, gitUserName(kbRoot)),
+    member: memberFromGit(snap.config.team.members, gitIdentityOf(kbRoot)),
     now: snap.now,
     window: DEFAULT_WINDOW,
   });

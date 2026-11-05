@@ -9,7 +9,7 @@ import {
   writePendingFile,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { commitFile, git, pushBranch } from "./git.ts";
+import { commitFile, git, gitIdentity, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { branchRef, foldChanges } from "./kb-write.ts";
 import { sendPending } from "./learn.ts";
@@ -39,7 +39,7 @@ export function runFlag(id: string, opts: FlagOptions, io: Io): number {
     const found = kb.entries.find((e) => e.entry.frontmatter.id === id);
     if (!found) throw new CliError(`no entry with id "${id}"`);
 
-    const by = opts.by ?? memberFromGit(kb.config.team.members, git(root, "config", "user.name"));
+    const by = opts.by ?? memberFromGit(kb.config.team.members, gitIdentity(root));
     if (!kb.config.team.members.some((m) => m.id === by)) {
       throw new CliError(`"${by}" is not a team member; pass --by <member-id>`);
     }

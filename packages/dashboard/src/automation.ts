@@ -294,16 +294,30 @@ export function lamps(
   return [daily, queue, sync, kbLamp];
 }
 
-/** This checkout's git user.name; undefined when unset or outside a repo. */
-export function gitUserName(kbRoot: string): string | undefined {
+const gitOut = (kbRoot: string, ...args: string[]): string | undefined => {
   try {
-    return execFileSync("git", ["-C", kbRoot, "config", "user.name"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
+    return (
+      execFileSync("git", ["-C", kbRoot, ...args], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim() || undefined
+    );
   } catch {
     return undefined;
   }
+};
+
+/** This checkout's git author identity (git's fallback name and email count); {} outside a repo. */
+export function gitIdentityOf(kbRoot: string): { name?: string; email?: string } {
+  const m = /^(.*?)\s*<([^>]*)>/.exec(gitOut(kbRoot, "var", "GIT_AUTHOR_IDENT") ?? "");
+  const name = m?.[1]?.trim() || gitOut(kbRoot, "config", "user.name");
+  const email = m?.[2]?.trim() || gitOut(kbRoot, "config", "user.email");
+  return { ...(name ? { name } : {}), ...(email ? { email } : {}) };
+}
+
+/** This checkout's git name, git's fallback included; undefined when unset or outside a repo. */
+export function gitUserName(kbRoot: string): string | undefined {
+  return gitIdentityOf(kbRoot).name;
 }
 
 /** The first name in this checkout's git identity, for the greeting; undefined when unset. */

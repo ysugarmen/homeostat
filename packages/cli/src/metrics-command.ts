@@ -10,7 +10,7 @@ import {
   validate,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { git } from "./git.ts";
+import { git, gitIdentity } from "./git.ts";
 import { findKb } from "./hook.ts";
 
 export interface MetricsOptions {
@@ -193,7 +193,7 @@ export function runMetrics(opts: MetricsOptions, io: Io): number {
   const runs = Math.max(1, Number.parseInt(opts.runs ?? "", 10) || DEFAULT_WINDOW.runs);
   const now = io.now?.() ?? new Date();
   const state = readState(root, 2 * runs, kb.config.sources?.baseBranch);
-  const member = memberFromGit(kb.config.team.members, git(root, "config", "user.name"));
+  const member = memberFromGit(kb.config.team.members, gitIdentity(root));
   const report = metricsReport({
     config: kb.config,
     entries: kb.entries.map((e) => ({ ...e.entry, path: e.path })),

@@ -25,7 +25,7 @@ import {
   writePendingFile,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { commitTree, forcePush, git, gitNet } from "./git.ts";
+import { commitTree, forcePush, git, gitIdentity, gitNet } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 
 /**
@@ -122,7 +122,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   }
   const base = config.sources?.baseBranch ?? "main";
   const now = (io.now?.() ?? new Date()).toISOString();
-  const member = memberFromGit(config.team.members, git(root, "config", "user.name"));
+  const member = memberFromGit(config.team.members, gitIdentity(root));
   const isMember = config.team.members.some((m) => m.id === member);
   const state = readSyncState(root);
   const notices: Notice[] = [];

@@ -33,7 +33,7 @@ cd ~/team-kb
 npx homeostat setup --join
 ```
 
-`--join` installs the Claude Code plugin (session hooks and a local MCP server), points it at the clone, and checks that the developer's git name maps to a member in `homeostat.yaml`. That mapping is how their review comments and lessons are credited and weighted.
+`--join` installs the Claude Code plugin (session hooks and a local MCP server), points it at the clone, and checks that the developer's git identity (the email and name their commits carry) maps to a member in `homeostat.yaml`, by the member's `emails` first. That mapping is how their review comments and lessons are credited and weighted.
 
 Nothing is scheduled on the laptop: no daemon and no cron job.
 

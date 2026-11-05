@@ -34,16 +34,32 @@ const slug = (s: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
+/** Who a checkout commits as: git's own author identity, so a fallback name counts too. */
+export interface GitIdentity {
+  name?: string | undefined;
+  email?: string | undefined;
+}
+
 /**
- * Which member a git user is, by `git config user.name`: the name as an id ("Dana" → dana),
- * the name as a member's handle ("Yonatan Sugarmen" → the member with handle
- * "@Yonatan Sugarmen"), or the first name as an id when exactly one member has it. Falls back
- * to the name as an id, which is no member: lessons then stay local, and the sync says so.
+ * Which member a git user is: by email first (a member's `emails`), then by name: the name as
+ * an id ("Dana" → dana), the name as a member's handle ("Yonatan Sugarmen" → the member with
+ * handle "@Yonatan Sugarmen"), or the first name as an id when exactly one member has it. Falls
+ * back to the name as an id, which is no member: lessons then stay local, and the sync says so.
  */
 export function memberFromGit(
-  members: readonly { id: string; handle?: string | undefined }[],
-  gitName: string | undefined,
+  members: readonly {
+    id: string;
+    handle?: string | undefined;
+    emails?: readonly string[] | undefined;
+  }[],
+  who: string | GitIdentity | undefined,
 ): string {
+  const { name: gitName, email } = typeof who === "object" ? who : { name: who, email: undefined };
+  const mail = email?.trim().toLowerCase();
+  if (mail) {
+    const byEmail = members.find((m) => m.emails?.some((e) => e.trim().toLowerCase() === mail));
+    if (byEmail) return byEmail.id;
+  }
   const name = (gitName ?? "").trim();
   const asId = slug(name) || "owner";
   if (members.some((m) => m.id === asId)) return asId;

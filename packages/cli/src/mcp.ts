@@ -4,7 +4,7 @@ import { logEvent, memberFromGit, parseConfig, readEvents, readKbView } from "@h
 import { type LearnInput, type McpDeps, serveStdio } from "@homeostat/mcp";
 import type { Io } from "./cli.ts";
 import { runFlag } from "./flag.ts";
-import { git } from "./git.ts";
+import { git, gitIdentity } from "./git.ts";
 import { findKb } from "./hook.ts";
 import { memberIdFrom } from "./init.ts";
 import { runLearn } from "./learn.ts";
@@ -41,7 +41,7 @@ export function mcpDeps(io: Io, cwd = process.cwd()): McpDeps {
     }
     if (who?.text !== text) {
       const members = parseConfig(text).config?.team.members ?? [];
-      who = { text, id: memberFromGit(members, git(cwd, "config", "user.name")) };
+      who = { text, id: memberFromGit(members, gitIdentity(cwd)) };
     }
     return who.id;
   };

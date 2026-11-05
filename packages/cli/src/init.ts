@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { CONFIG_FILE, ID_PATTERN, readKbFiles, slugify, VERSION, validate } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { formatIssues, painter } from "./format.ts";
-import { git } from "./git.ts";
+import { git, gitIdentity } from "./git.ts";
 
 export type Host = "github" | "bitbucket";
 export const HOSTS: readonly Host[] = ["github", "bitbucket"];
@@ -392,7 +392,7 @@ export function runInit(dir: string, opts: InitOptions, io: Io): number {
     io.stderr(`unknown --host "${opts.host}"; use ${HOSTS.join(" or ")}\n`);
     return 1;
   }
-  const member = opts.member ?? memberIdFrom(git(root, "config", "user.name"));
+  const member = opts.member ?? memberIdFrom(gitIdentity(root).name);
   if (!ID_PATTERN.test(member)) {
     io.stderr(`--member "${member}" must be lowercase letters, digits and single hyphens\n`);
     return 1;

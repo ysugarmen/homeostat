@@ -34,7 +34,7 @@ import {
   visibleTo,
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
-import { git } from "./git.ts";
+import { git, gitIdentity } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { pendingFingerprint, readSyncState, syncDue, takeNotices } from "./sync.ts";
 import { touchedPaths, uncommitted } from "./touched.ts";
@@ -140,7 +140,7 @@ async function selectForSession(
   pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
 
   const paths = touchedPaths(cwd);
-  const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
+  const member = memberFromGit(config.team.members, gitIdentity(cwd));
   // A multi-repo KB: shared rules plus this checkout's repo; none of the other repos'.
   const repo = repoHere(cwd, config);
   const visibleDocs = visibleTo(
@@ -372,7 +372,7 @@ async function stop(input: HookInput, io: Io) {
   const edits = Math.max(countEdits(input.transcript_path), changed);
   if (edits < config.agents.handoff.minEdits && !state.compacted) return;
 
-  const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
+  const member = memberFromGit(config.team.members, gitIdentity(cwd));
   if (!config.team.members.some((m) => m.id === member)) return;
 
   writeState(kbRoot, input.session_id, { ...state, asked: true });
@@ -438,7 +438,7 @@ function promptUpdates(session: string, io: Io, cwd: string, kbRoot: string): st
     checks: false,
   });
   if (!config) return "";
-  const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
+  const member = memberFromGit(config.team.members, gitIdentity(cwd));
   const seen = new Set(state.injected ?? []);
   const repo = repoHere(cwd, config);
   const selection = selectEntries(
@@ -535,7 +535,7 @@ function promptMatches(session: string, text: string, io: Io, cwd: string, kbRoo
     checks: false,
   });
   if (!config) return "";
-  const member = memberFromGit(config.team.members, git(cwd, "config", "user.name"));
+  const member = memberFromGit(config.team.members, gitIdentity(cwd));
   const repo = repoHere(cwd, config);
   const state = readState(kbRoot, session);
   const seen = new Set(state.injected ?? []);

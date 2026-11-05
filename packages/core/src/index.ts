@@ -305,7 +305,13 @@ export {
   sessionGuide,
   TRIGGER_MOMENTS,
 } from "./guide.ts";
-export { codeownersHandle, loginKey, memberForLogin, memberFromGit } from "./handles.ts";
+export {
+  codeownersHandle,
+  type GitIdentity,
+  loginKey,
+  memberForLogin,
+  memberFromGit,
+} from "./handles.ts";
 export { error, type Fix, hasErrors, type Issue, type Severity } from "./issues.ts";
 export {
   areaMap,

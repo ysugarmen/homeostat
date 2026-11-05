@@ -158,7 +158,7 @@ It does three things:
 
 1. Installs the Claude Code plugin: `claude plugin marketplace add ysugarmen/homeostat` and `claude plugin install homeostat@homeostat`.
 2. Sets the plugin's `kb_dir` to this checkout, with `claude plugin configure homeostat@homeostat --values-stdin`. If your Claude Code is too old for that, it prints the manual step instead: `/plugin` > homeostat > Configure, `kb_dir`.
-3. Checks that your `git config user.name` maps to a member of the team. If it doesn't, your lessons stay on your machine; ask a lead to run `homeostat setup --step team`.
+3. Checks that your git identity maps to a member of the team: the name and email git signs your commits with, which also counts the name your computer gives git when `user.name` is unset. The email is matched against each member's `emails`, then the name against ids, handles and first names. If nothing matches, your lessons stay on your machine: ask a lead to add your email to your member's `emails` in `homeostat.yaml`.
 
 It asks nothing, so it also works from a script.
 

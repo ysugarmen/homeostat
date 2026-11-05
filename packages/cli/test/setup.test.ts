@@ -850,7 +850,7 @@ describe("homeostat setup without a terminal, --check and --join", () => {
     expect(await setup(h.io, repo.dir, "--join")).toBe(1);
     expect(h.out.calls).not.toContain("claude plugin install homeostat@homeostat");
     expect(h.out.stdout).toContain("/plugin > homeostat > Configure");
-    expect(h.out.stdout).toContain('"Ada Lovelace" is no member');
+    expect(h.out.stdout).toContain('"Ada Lovelace" <ada@acme.example> is no member');
   });
 });
 

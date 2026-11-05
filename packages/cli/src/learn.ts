@@ -33,7 +33,7 @@ import {
 } from "@homeostat/core";
 import type { Io } from "./cli.ts";
 import { formatIssues } from "./format.ts";
-import { commitFile, existsOnRef, git, pushBranch } from "./git.ts";
+import { commitFile, existsOnRef, git, gitIdentity, pushBranch } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { branchRef, foldChanges } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
@@ -173,7 +173,7 @@ async function learn(url: string | undefined, opts: LearnOptions, io: Io): Promi
     if (!area) area = (await io.ask(`Area [${CORE_AREA}]`)).trim() || undefined;
   }
   // Without --author or a PR comment, fall back to the git user if they are a member.
-  author ??= memberFromGit(config.team.members, git(root, "config", "user.name"));
+  author ??= memberFromGit(config.team.members, gitIdentity(root));
   const stillMissing: string[] = Object.entries(fields)
     .filter(([, value]) => !value)
     .map(([key]) => key);
@@ -315,8 +315,7 @@ function learnDoc(
   const path = docFilePath(config, { repo, area, topic });
   const body = (opts.text ?? opts.rule ?? "").trim();
   if (!opts.section || !body) throw new LearnError("--doc needs --section and --text");
-  const author =
-    opts.author ?? memberFromGit(config.team.members, git(root, "config", "user.name"));
+  const author = opts.author ?? memberFromGit(config.team.members, gitIdentity(root));
   if (!config.team.members.some((m) => m.id === author)) {
     throw new LearnError(`${author} is not a team member; pass --author`);
   }

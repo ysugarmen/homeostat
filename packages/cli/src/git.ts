@@ -15,6 +15,19 @@ export function git(dir: string, ...args: string[]): string | undefined {
   }
 }
 
+/**
+ * Who this checkout commits as: git's author identity, which falls back to the system's name
+ * and email when user.name or user.email is unset, as git does for a commit. `git config
+ * user.name` alone is empty on such a laptop.
+ */
+export function gitIdentity(dir: string): { name?: string; email?: string } {
+  const ident = git(dir, "var", "GIT_AUTHOR_IDENT");
+  const m = ident ? /^(.*?)\s*<([^>]*)>/.exec(ident) : null;
+  const name = m?.[1]?.trim() || git(dir, "config", "user.name") || undefined;
+  const email = m?.[2]?.trim() || git(dir, "config", "user.email") || undefined;
+  return { ...(name ? { name } : {}), ...(email ? { email } : {}) };
+}
+
 /** The most a network git call (fetch, push) may take before it is stopped; 2 minutes by default. */
 export const networkTimeout = () => Number(process.env.HOMEOSTAT_GIT_TIMEOUT_MS) || 120_000;
 

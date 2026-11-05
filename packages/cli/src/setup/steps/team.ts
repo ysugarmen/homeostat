@@ -9,7 +9,7 @@ import {
   slugify,
 } from "@homeostat/core";
 import { plural } from "../../format.ts";
-import { git } from "../../git.ts";
+import { git, gitIdentity } from "../../git.ts";
 import { describeError, HOST_NAME, type SetupContext, type Step } from "../context.ts";
 
 const allAreas = (ctx: SetupContext): string[] => {
@@ -30,11 +30,14 @@ export const teamStep: Step = {
     const local = ctx.local().team ?? { state: "missing" };
     if (local.state !== "done") return local;
     const config = ctx.config();
-    const name = git(ctx.root, "config", "user.name");
-    if (config && name) {
-      const id = memberFromGit(config.team.members, name);
+    const who = gitIdentity(ctx.root);
+    if (config && (who.name || who.email)) {
+      const id = memberFromGit(config.team.members, who);
       if (!config.team.members.some((m) => m.id === id))
-        return { state: "missing", reason: `your git user.name "${name}" maps to no member` };
+        return {
+          state: "missing",
+          reason: `your git identity "${who.name ?? ""}" <${who.email ?? ""}> maps to no member`,
+        };
     }
     return local;
   },
@@ -77,8 +80,9 @@ export const teamStep: Step = {
 
     const edits: ConfigEdit[] = [];
     // You: the member `init` seeded from git user.name, given a handle.
-    const gitName = git(ctx.root, "config", "user.name");
-    const myId = memberFromGit(config.team.members, gitName);
+    const who = gitIdentity(ctx.root);
+    const gitName = who.name;
+    const myId = memberFromGit(config.team.members, who);
     const myIndex = config.team.members.findIndex((m) => m.id === myId);
     const me = myIndex >= 0 ? config.team.members[myIndex] : undefined;
     if (!me?.handle) {
