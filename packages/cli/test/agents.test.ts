@@ -108,3 +108,46 @@ test("a run ends with its model use per agent, and the cost where the runtime gi
   );
   expect(formatRunUse({ calls: 0, chars: 0, failed: 0, byAgent: {} })).toBe("");
 });
+
+test("an asker's own lower limit stops that asker only, and does not cap the run", async () => {
+  const files: Record<string, string> = {};
+  for (const f of readdirSync(starter, { recursive: true, encoding: "utf8" })) {
+    if ((f.endsWith(".md") || f.endsWith(".yaml")) && f !== "README.md")
+      files[f] = readFileSync(join(starter, f), "utf8");
+  }
+  const config = validate(files).config;
+  if (!config) throw new Error("config");
+  const stats = newRunStats(1);
+  const io = {
+    stdout: () => {},
+    stderr: () => {},
+    color: false,
+    env: {},
+    // Every call reports $0.40.
+    runtime:
+      ({ onUsage }: { onUsage: (u: never) => void }) =>
+      async () => {
+        onUsage({
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          costUsd: 0.4,
+        } as never);
+        return {} as never;
+      },
+  };
+  const root = mkdtempSync(join(tmpdir(), "homeostat-asker-"));
+  // The drafter stops at $0.70 of a $1 cap; the judge goes on to the cap itself.
+  const drafter = askerFor(config, "curator", io as never, root, stats, 0.7);
+  const judge = askerFor(config, "judge", io as never, root, stats);
+  await drafter("s", "u", {} as never);
+  await drafter("s", "u", {} as never);
+  const stop = await drafter("s", "u", {} as never).catch((e: unknown) => e);
+  expect(stop).toBeInstanceOf(SpendingCapError);
+  expect((stop as SpendingCapError).maxCostUsd).toBe(0.7);
+  expect(stats.capped).toBeUndefined();
+  await judge("s", "u", {} as never);
+  await expect(judge("s", "u", {} as never)).rejects.toBeInstanceOf(SpendingCapError);
+  expect(stats.capped).toBe(true);
+});

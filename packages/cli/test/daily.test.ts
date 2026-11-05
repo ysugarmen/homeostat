@@ -1598,6 +1598,37 @@ describe("homeostat daily: the spending cap", { timeout: 30_000 }, () => {
     expect(stateFile(t, "runs/2026-10-16T06-00-00Z.json").capped).toMatchObject({ left: 1 });
   });
 
+  test("drafting stops at its share of the cap, so what it drafted is still judged and merged", async () => {
+    const t = team();
+    const provider = new TwoReviews();
+    let drafts = 0;
+    const drafter: Drafter = {
+      draft: async () => {
+        // The second thread is past the drafting share ($0.35 of a $0.50 cap).
+        if (++drafts === 2) throw new SpendingCapError(0.35, 0.35);
+        return COLOUR_DRAFT;
+      },
+    };
+    const { stdout } = await run(["daily", "--dir", t.ci, "--max-cost", "0.5"], {
+      provider,
+      drafter,
+      draftJudge: undefined,
+      runtime: passingRuntime(),
+    });
+    // Before, the cap stopped the judge too: the drafted lesson was dropped and drafted again
+    // the next run, every run, so a backlog bigger than one run's cap never merged.
+    expect(stdout).toContain("judge use-colour-tokens-instead-of-hex-values: ok (passed)");
+    expect(stdout).toContain("lee: 1 merged, 0 to review, 0 declined");
+    expect(stdout).toContain(
+      "drafting stopped at $0.35, 70% of the $0.50 cap, so the rest judged what was drafted; 1 review thread left for the next run",
+    );
+    expect(stdout).not.toContain("stopped at the spending cap:");
+    expect(stateFile(t, "runs/2026-10-16T06-00-00Z.json").capped).toMatchObject({
+      left: 1,
+      since: "2026-10-15T04:00:00.000Z",
+    });
+  });
+
   test("--max-cost must be a positive amount", async () => {
     const t = team();
     const { code, stdout } = await run(["daily", "--dir", t.ci, "--max-cost", "free"]);

@@ -85,6 +85,13 @@ export interface DailyOptions {
   maxCost?: string;
 }
 
+/**
+ * With a spending cap and a judge, drafting stops at this share of the cap, so the rest pays for
+ * judging what was drafted. Without it a backlog bigger than one run's cap is drafted again every
+ * run and never judged: the confident drafts are dropped at the cap and nothing merges.
+ */
+export const DRAFT_SHARE = 0.7;
+
 /** Tries at writing the state branch when other runs keep moving it, before the run fails. */
 export const STATE_PUSH_ATTEMPTS = 5;
 
@@ -330,7 +337,10 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
         `reading reviews since ${last.capped.since}: the last run stopped at the spending cap\n`,
       );
     }
-    const asker = askerFor(config, "curator", io, root, stats);
+    const judging = config.agents.curator.judgeCalls > 0;
+    const draftLimit =
+      judging && stats.maxCostUsd !== undefined ? stats.maxCostUsd * DRAFT_SHARE : undefined;
+    const asker = askerFor(config, "curator", io, root, stats, draftLimit);
     const result = await curate({
       files,
       provider,
@@ -343,7 +353,11 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     drafted = result.entries;
     skipped = result.skipped.map((s) => ({ url: s.url, reason: s.reason }));
     if (result.capped) {
-      capError ??= result.capped.error;
+      // Stopped at the drafting share only (a limit under the cap): the run goes on, and judges
+      // what was drafted.
+      const atShare =
+        stats.maxCostUsd !== undefined && result.capped.error.maxCostUsd < stats.maxCostUsd;
+      if (!atShare) capError ??= result.capped.error;
       undrafted = result.capped.threads;
     }
     for (const e of drafted) {
@@ -1006,7 +1020,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     failedCalls: stats.failed,
     ...(stats.byAgent && Object.keys(stats.byAgent).length ? { byAgent: stats.byAgent } : {}),
   };
-  if (atCap()) {
+  if (atCap() || undrafted > 0) {
     const left = held.size + undrafted + disputesLeft;
     const { usd, estimated } = runCost(stats);
     report.capped = {
@@ -1016,7 +1030,11 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       left,
       since: since.toISOString(),
     };
-    notice(capLine(stats, left));
+    notice(
+      atCap()
+        ? capLine(stats, left)
+        : `drafting stopped at $${(Math.round((stats.maxCostUsd ?? 0) * DRAFT_SHARE * 100) / 100).toFixed(2)}, ${Math.round(DRAFT_SHARE * 100)}% of the $${(stats.maxCostUsd ?? 0).toFixed(2)} cap, so the rest judged what was drafted; ${left} review thread${left === 1 ? "" : "s"} left for the next run`,
+    );
   }
   const slack = opts.dryRun ? undefined : slackProblem(config, io);
   if (slack) notice(slack);

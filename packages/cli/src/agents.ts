@@ -99,6 +99,11 @@ export function askerFor(
   kbRoot: string,
   /** Counts every call, its size, failures and usage across the run, for the run report. */
   stats?: RunStats,
+  /**
+   * A lower limit for this asker only, under the run's cap: once the run has spent it, this
+   * asker's calls throw `SpendingCapError` but the run is not capped, so other agents go on.
+   */
+  stopAtUsd?: number,
 ): Asker {
   const { model, effort } =
     agent === "judge"
@@ -139,6 +144,8 @@ export function askerFor(
         stats.capped = true;
         throw new SpendingCapError(spent, stats.maxCostUsd);
       }
+      if (stopAtUsd !== undefined && spent >= stopAtUsd)
+        throw new SpendingCapError(spent, stopAtUsd);
     }
     const record = (ok: boolean) => {
       const chars = system.length + user.length;
