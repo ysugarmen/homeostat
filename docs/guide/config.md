@@ -2,6 +2,8 @@
 
 One file at the KB root. `homeostat validate` checks it, and the dashboard's Settings pages edit every key. Only `version` and `team` are required; everything else has a default. A KB for one code repo lists its `areas`; a KB for several lists each repo under `repos`, with its own areas.
 
+A key Homeostat does not know is an error for `homeostat validate`, the KB's own check, so a typo is caught in CI. Everywhere else (session hooks, sync, the MCP server, the dashboard) it is a warning and the key is ignored: a laptop still on an older version keeps reading the rest of a config that a newer version added an option to, and its sessions say once that the plugin needs updating (`claude plugin update homeostat@homeostat`).
+
 ## `version`, `team`, `teams`, `areas`, `repos`, `topics`
 
 | Key | Default | Meaning |

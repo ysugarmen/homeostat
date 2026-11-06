@@ -94,6 +94,28 @@ describe("homeostat hook session-start", () => {
     ]);
   });
 
+  test("on a config with an option this version does not know, rules still come, with a line to update", async () => {
+    const kbDir = kb();
+    const config = join(kbDir, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("scoring:\n", "scoring:\n  someNewOption: true\n"),
+    );
+    const cwd = codeRepo(["services/integrations/queue/worker.ts"]);
+    const { code, stdout } = await hook(
+      "session-start",
+      { session_id: "s1", cwd },
+      { CLAUDE_PLUGIN_OPTION_KB_DIR: kbDir },
+    );
+    expect(code).toBe(0);
+    const context = contextOf(stdout);
+    // Before, such a config was "invalid": the session got no rules at all, and no word why.
+    expect(context).toContain("(api-idempotency)");
+    expect(context).toContain("# Homeostat is out of date");
+    expect(context).toContain("scoring.someNewOption");
+    expect(context).toContain("claude plugin update homeostat@homeostat");
+  });
+
   test("stays under the configured token budget", async () => {
     const kbDir = kb();
     const config = join(kbDir, "homeostat.yaml");

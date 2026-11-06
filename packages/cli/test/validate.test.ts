@@ -30,6 +30,16 @@ describe("homeostat validate", () => {
     expect(stdout).toContain("3 entries, no problems");
   });
 
+  test("a config key this version does not know fails the KB's own check", async () => {
+    // Laptops only warn and read the rest; validate, run in CI, still catches a typo.
+    const dir = copyKb("starter-kb");
+    const config = join(dir, "homeostat.yaml");
+    writeFileSync(config, `${readFileSync(config, "utf8")}\nreviewrs: [dana]\n`);
+    const { code, stdout } = await run("validate", dir);
+    expect(code).toBe(1);
+    expect(stdout).toContain("error  reviewrs: unknown key, ignored; a newer Homeostat may use it");
+  });
+
   test("exits 1 and groups errors by file on a broken KB", async () => {
     const { code, stdout } = await run("validate", join(examples, "broken-kb"));
     expect(code).toBe(1);

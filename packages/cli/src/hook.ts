@@ -30,6 +30,8 @@ import {
   sessionGuide,
   summarizeTurns,
   tokenize,
+  UNKNOWN_KEY,
+  VERSION,
   validate,
   visibleTo,
 } from "@homeostat/core";
@@ -133,7 +135,7 @@ async function selectForSession(
   kbRoot: string,
   note: (fields: Record<string, unknown>) => void,
 ) {
-  const { config, entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files, {
+  const { config, entries, docs, issues } = validate(readKbView(kbRoot, { inForce: true }).files, {
     checks: false,
   });
   if (!config) throw new HookSkip("knowledge base config is invalid; run homeostat validate");
@@ -206,8 +208,13 @@ async function selectForSession(
     isMultiRepo(config) && !repo
       ? `# Homeostat\n\nThis checkout is not one of the knowledge base's repos (${repoNames(config).join(", ")}), so only the team's shared rules apply here.`
       : "";
+  // The team's config has options this version does not know: it reads the rest, and says so.
+  const unknown = issues.filter((i) => i.code === UNKNOWN_KEY).map((i) => i.path ?? "");
+  const outdated = unknown.length
+    ? `# Homeostat is out of date\n\nThe team's homeostat.yaml uses ${unknown.length === 1 ? "an option" : "options"} this Homeostat (${VERSION}) does not know (${unknown.join(", ")}), so ${unknown.length === 1 ? "it is" : "they are"} ignored. Tell the user once, in one line, to run \`claude plugin update homeostat@homeostat\` and restart Claude Code.`
+    : "";
   const join = (docs: string) =>
-    [rules, docs, guide, header, unplaced].filter(Boolean).join("\n\n");
+    [rules, docs, guide, header, unplaced, outdated].filter(Boolean).join("\n\n");
   // The guide is sized by its counts; on the rare KB where it outgrows its reserve, the document
   // sections give way rather than Claude Code cutting the end of the context.
   const context =

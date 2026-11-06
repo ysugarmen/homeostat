@@ -3,8 +3,9 @@ import {
   applyFixes,
   type Fix,
   readKbView,
+  UNKNOWN_KEY,
   type ValidateResult,
-  validate,
+  validate as validateKb,
   writeKbFile,
   writePendingFile,
 } from "@homeostat/core";
@@ -14,6 +15,20 @@ import { formatIssues, painter, plural } from "./format.ts";
 export interface ValidateOptions {
   fix?: boolean;
   json?: boolean;
+}
+
+/**
+ * The KB's own check is strict: a config key this version does not know is an error here, so a
+ * typo is caught in CI, while hooks, sync and the MCP server only warn and read the rest.
+ */
+function validate(files: Parameters<typeof validateKb>[0]): ValidateResult {
+  const result = validateKb(files);
+  if (!result.issues.some((i) => i.code === UNKNOWN_KEY)) return result;
+  return {
+    ...result,
+    ok: false,
+    issues: result.issues.map((i) => (i.code === UNKNOWN_KEY ? { ...i, severity: "error" } : i)),
+  };
 }
 
 /** `homeostat validate [dir]`. Returns the process exit code: 1 when there are errors. */

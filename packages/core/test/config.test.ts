@@ -75,6 +75,31 @@ describe("parseConfig", () => {
     ).toEqual(expect.arrayContaining(['verticals: unknown key; did you mean "areas"?']));
   });
 
+  test("a key this version does not know is ignored with a warning, at any depth", () => {
+    // A newer Homeostat added the options; a laptop on this version still reads the rest.
+    const { config, issues } = parse((c) => {
+      c.scoring = { ...(c.scoring ?? {}), reviewPrsFuture: "lesson" };
+      c.someNewSection = { enabled: true };
+    });
+    expect(config).toBeDefined();
+    expect(issues.map((i) => [i.code, i.severity, i.path])).toEqual(
+      expect.arrayContaining([
+        ["config.unknownKey", "warning", "scoring.reviewPrsFuture"],
+        ["config.unknownKey", "warning", "someNewSection"],
+      ]),
+    );
+    expect(issues.find((i) => i.path === "someNewSection")?.message).toContain(
+      "claude plugin update homeostat@homeostat",
+    );
+    // A real error alongside still fails the config.
+    expect(
+      parse((c) => {
+        c.someNewSection = {};
+        c.team.members[0].role = "admin";
+      }).config,
+    ).toBeUndefined();
+  });
+
   test("a literal webhook URL is rejected so secrets stay out of the repo", () => {
     expect(
       messages((c) => (c.notifications = { slackWebhook: "https://hooks.slack.com/x" })),

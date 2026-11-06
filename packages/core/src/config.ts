@@ -4,6 +4,7 @@ import { CORE_AREA } from "./check.ts";
 import { error, type Issue } from "./issues.ts";
 import { isKnownArea, RESERVED_REPO_NAMES } from "./layout.ts";
 import { ID_PATTERN } from "./schema.ts";
+import { VERSION } from "./version.ts";
 import { fromZod } from "./zod-issues.ts";
 
 export const CONFIG_FILE = "homeostat.yaml";
@@ -398,7 +399,41 @@ export const configSchema = z.strictObject({
 
 export type Config = z.infer<typeof configSchema>;
 
-const RENAMED_KEYS = { verticals: "areas", slackWebhook: "slackWebhookEnv" };
+const RENAMED_KEYS: Record<string, string> = {
+  verticals: "areas",
+  slackWebhook: "slackWebhookEnv",
+};
+
+/**
+ * A key this version does not know: a warning, and the key is left out, so a laptop still on an
+ * older Homeostat keeps reading the team's config after a newer one added an option. `homeostat
+ * validate`, the KB's own check, still fails on it, so a typo does not go unnoticed there.
+ */
+export const UNKNOWN_KEY = "config.unknownKey";
+
+/** Drops the keys zod reported unknown (not a renamed one, whose hint is an error) from `data`. */
+function dropUnknownKeys(data: unknown, zodError: z.ZodError): Issue[] | undefined {
+  const dropped: Issue[] = [];
+  for (const i of zodError.issues) {
+    if (i.code !== "unrecognized_keys") return undefined;
+    let at: unknown = data;
+    for (const step of i.path) at = (at as Record<PropertyKey, unknown> | undefined)?.[step];
+    if (!at || typeof at !== "object") return undefined;
+    for (const key of i.keys) {
+      if (Object.hasOwn(RENAMED_KEYS, key)) return undefined;
+      delete (at as Record<string, unknown>)[key];
+      const path = [...i.path, key].join(".");
+      dropped.push({
+        code: UNKNOWN_KEY,
+        severity: "warning",
+        message: `${path}: unknown key, ignored; a newer Homeostat may use it (this is ${VERSION}): update it (claude plugin update homeostat@homeostat, or the version your CI runs)`,
+        path,
+        file: CONFIG_FILE,
+      });
+    }
+  }
+  return dropped;
+}
 
 /** Parses and checks `homeostat.yaml`. Returns `config` only when there are no errors. */
 export function parseConfig(text: string): { config?: Config; issues: Issue[] } {
@@ -409,7 +444,16 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
       issues: doc.errors.map((e) => error("config.yaml", `invalid YAML: ${e.message}`, { file })),
     };
   }
-  const parsed = configSchema.safeParse(doc.toJS());
+  const data = doc.toJS();
+  let parsed = configSchema.safeParse(data);
+  const unknown: Issue[] = [];
+  // Unknown keys alone: leave them out and read the rest (a few passes: nested objects).
+  for (let pass = 0; !parsed.success && pass < 5; pass++) {
+    const dropped = dropUnknownKeys(data, parsed.error);
+    if (!dropped?.length) break;
+    unknown.push(...dropped);
+    parsed = configSchema.safeParse(data);
+  }
   if (!parsed.success) {
     return {
       issues: fromZod(parsed.error, { code: "config.schema", file, renamed: RENAMED_KEYS }),
@@ -417,7 +461,7 @@ export function parseConfig(text: string): { config?: Config; issues: Issue[] } 
   }
 
   const config = parsed.data;
-  const issues: Issue[] = [];
+  const issues: Issue[] = [...unknown];
   if (Object.hasOwn(config.areas, CORE_AREA)) {
     issues.push(
       error("config.area.reserved", `areas.${CORE_AREA}: reserved; core is implicit and global`, {

@@ -118,6 +118,7 @@ export {
   parseConfig,
   ROLES,
   type Role,
+  UNKNOWN_KEY,
   type Weights,
 } from "./config.ts";
 export {
