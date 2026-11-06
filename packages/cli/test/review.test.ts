@@ -101,6 +101,20 @@ describe("homeostat review list", () => {
     expect(stdout).not.toContain("lessons · 7-2");
   });
 
+  test("lists one-lesson PRs, whose branch ends with the lesson's id (scoring.reviewPrs: lesson)", async () => {
+    const { provider } = host([
+      pr(8, "homeostat/review-dani-toro-2026-11-06-keep-form-labels-visible"),
+      pr(
+        9,
+        "homeostat/review-lee-2026-11-06-don-t-add-a-part-of-day-to-bare-n-uhr-times-with-n-12",
+      ),
+    ]);
+    const { stdout } = await review(provider, "list");
+    expect(stdout).toContain("2 PRs with");
+    expect(stdout).toContain("#8 ");
+    expect(stdout).toContain("#9 ");
+  });
+
   test("puts the PRs that ask the reviewer first, and flags conflicts", async () => {
     const { provider } = host([
       pr(1, "homeostat/review-lee-2026-10-14", { conflicts: true }),
