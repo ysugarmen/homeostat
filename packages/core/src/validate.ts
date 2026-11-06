@@ -4,7 +4,7 @@ import { detectConflicts } from "./conflicts.ts";
 import { citationLoops, type Doc, isDocPath, parseDoc } from "./doc.ts";
 import { type Entry, parseEntry } from "./entry.ts";
 import { error, hasErrors, type Issue } from "./issues.ts";
-import { areasOf, locate, repoNames } from "./layout.ts";
+import { areaMap, areasOf, locate, repoNames } from "./layout.ts";
 import { RISK_ADVICE, scanRisk } from "./risk.ts";
 import { score } from "./score.ts";
 import { findEmails, scanSecrets } from "./secrets.ts";
@@ -88,6 +88,7 @@ export function validate(files: KbFiles, opts: { checks?: boolean } = {}): Valid
     docs.push({ path, doc: parsed.doc });
     if (config && full) issues.push(...docConfigIssues(path, parsed.doc, config));
   }
+  if (config) followAreas(config, entries);
   if (!full)
     return { ok: !hasErrors(issues), issues, entries, docs, ...(config ? { config } : {}) };
 
@@ -119,6 +120,25 @@ export function validate(files: KbFiles, opts: { checks?: boolean } = {}): Valid
   }
 
   return { ok: !hasErrors(issues), issues, entries, docs, ...(config ? { config } : {}) };
+}
+
+/**
+ * A rule whose scope is its area's paths follows the area: written with the area's globs of the
+ * day, it is read with today's. A rule drafted from review copies its area's globs, so once the
+ * team adds a folder the area missed, every such rule reaches it at once, with no rule rewritten.
+ * A scope with a glob the area does not list is a narrower choice and stays as written; so does
+ * one glob of several in a rule written by hand. Documents keep their scope: theirs is set on
+ * purpose, by `docs convert --scope` or bootstrap.
+ */
+function followAreas(config: Config, entries: ValidatedEntry[]): void {
+  const repos = config.repos ? repoNames(config) : undefined;
+  for (const { path, entry } of entries) {
+    const fm = entry.frontmatter;
+    const globs = areaMap(config, repos ? locate(path, repos)?.repo : undefined)[fm.area];
+    if (!globs?.length || !fm.scope.length || fm.scope.length >= globs.length) continue;
+    if (!fm.scope.every((g) => globs.includes(g))) continue;
+    if (fm.source.type === "pr-feedback" || fm.scope.length >= 2) fm.scope = [...globs];
+  }
 }
 
 /**
