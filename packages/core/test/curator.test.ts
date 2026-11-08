@@ -13,6 +13,7 @@ import {
 import { type ReviewThread, reviewThreads } from "../src/curator/threads.ts";
 import { commentKeyOf, parseCommentUrl } from "../src/curator/urls.ts";
 import { parseEntry } from "../src/entry.ts";
+import { SpendingCapError } from "../src/pricing.ts";
 import { BitbucketProvider } from "../src/providers/bitbucket.ts";
 import type { PullRequest, ReviewComment } from "../src/providers/types.ts";
 import { validate } from "../src/validate.ts";
@@ -249,16 +250,82 @@ describe("curate", () => {
     expect(after.ok).toBe(true);
   });
 
-  test("reports why each other thread was skipped", async () => {
+  test("reads every repo's PRs oldest merge first, so a cap does not starve a later repo", async () => {
+    // Two code repos: the first has a backlog of newer PRs, the second one older PR. Read repo by
+    // repo, the cap was reached in the first and the second was never read, run after run.
+    const files = kbFiles();
+    files["homeostat.yaml"] = (files["homeostat.yaml"] ?? "").replace(
+      "repos: [acme/integrations-api]",
+      "repos: [acme/integrations-api, acme/web-app]",
+    );
+    const prs: Record<string, PullRequest[]> = {
+      "integrations-api": [11, 12, 13].map((id) => ({
+        ...pr,
+        id,
+        url: `https://bitbucket.org/acme/integrations-api/pull-requests/${id}`,
+        mergedAt:
+          { 11: "2026-10-08T00:00:00Z", 12: "2026-10-09T00:00:00Z" }[id] ?? "2026-10-10T00:00:00Z",
+      })),
+      "web-app": [
+        {
+          ...pr,
+          id: 21,
+          url: "https://bitbucket.org/acme/web-app/pull-requests/21",
+          mergedAt: "2026-10-08T12:00:00Z",
+        },
+      ],
+    };
+    const provider = {
+      kind: "bitbucket",
+      listMergedPullRequests: async (repo: { name: string }) => prs[repo.name] ?? [],
+      listReviewComments: async (repo: { name: string }, id: number) => [
+        {
+          ...comment(id * 100, "dana", "2026-10-06T10:00:00Z"),
+          url: `https://bitbucket.org/acme/${repo.name}/pull-requests/${id}/_/diff#comment-${id * 100}`,
+        },
+      ],
+      listCommits: async () => [{ sha: "a", date: "2026-10-06T11:00:00Z", message: "fix" }],
+    } as unknown as Parameters<typeof curate>[0]["provider"];
+    const seen: string[] = [];
+    // The cap is reached on the third draft.
+    const drafter: Drafter = {
+      draft: async (t) => {
+        seen.push(t.root.url.replace(/^.*acme\/([^/]+)\/pull-requests\/(\d+).*$/, "$1#$2"));
+        if (seen.length === 3) throw new SpendingCapError(1, 1);
+        return {
+          title: `Rule ${seen.length}`,
+          rule: "Wrap partner HTTP calls in withRetry() from @app/http-client.",
+          why: "The reviewer asked for it.",
+          area: "integrations",
+        };
+      },
+    };
+    const result = await curate({
+      files,
+      provider,
+      drafter,
+      since: new Date("2026-10-01T00:00:00Z"),
+      today: "2026-10-13",
+    });
+    // web-app's PR was merged between the first two: it is read in its turn, not after the backlog.
+    expect(seen).toEqual(["integrations-api#11", "web-app#21", "integrations-api#12"]);
+    expect(result.capped?.threads).toBe(1);
+    expect(result.scanned.map((s) => [s.repo, s.pullRequests])).toEqual([
+      ["acme/integrations-api", 2],
+      ["acme/web-app", 1],
+    ]);
+  });
+
+  test("reports why each other thread was skipped, oldest PR first", async () => {
     const result = await run(new FakeDrafter());
     expect(result.skipped).toEqual([
       {
-        url: "https://bitbucket.org/acme/integrations-api/pull-requests/815/_/diff#comment-51",
-        reason: "reviewer rae has no member handle in homeostat.yaml",
-      },
-      {
         url: "https://bitbucket.org/acme/integrations-api/pull-requests/812/_/overview#comment-36",
         reason: "no code change after the comment",
+      },
+      {
+        url: "https://bitbucket.org/acme/integrations-api/pull-requests/815/_/diff#comment-51",
+        reason: "reviewer rae has no member handle in homeostat.yaml",
       },
     ]);
     expect(result.scanned).toEqual([

@@ -8,7 +8,7 @@ import { loginKey, memberForLogin } from "../handles.ts";
 import type { Issue } from "../issues.ts";
 import { areaMap, repoForSource, repoOf, ruleFilePath } from "../layout.ts";
 import { SpendingCapError } from "../pricing.ts";
-import type { Provider } from "../providers/types.ts";
+import type { Provider, PullRequest } from "../providers/types.ts";
 import type { Frontmatter } from "../schema.ts";
 import { score } from "../score.ts";
 import { searchSections } from "../search.ts";
@@ -130,6 +130,15 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
   const excludedPath = (path: string | undefined) =>
     path !== undefined && sources.exclude.paths.some((g) => minimatch(path, g, { dot: true }));
 
+  const queue: {
+    repoName: string;
+    repo: { owner: string; name: string };
+    kbRepo: string | undefined;
+    areas: ReturnType<typeof areaMap>;
+    topics: ReturnType<typeof topicsFor>;
+    scanned: { repo: string; pullRequests: number; threads: number };
+    pr: PullRequest;
+  }[] = [];
   for (const repoName of sources.repos) {
     if (excludedRepos.has(repoName.toLowerCase())) continue;
     // The KB repo's own pull requests are Homeostat's output: drafting from their review threads
@@ -149,153 +158,157 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     const topics = topicsFor(config, kbRepo);
     const scanned = { repo: repoName, pullRequests: 0, threads: 0 };
     result.scanned.push(scanned);
-
+    for (const pr of await input.provider.listMergedPullRequests(repo, input.since))
+      queue.push({ repoName, repo, kbRepo, areas, topics, scanned, pr });
+  }
+  // Oldest merge first, across the repos: a run that stops at the spending cap stops at one point
+  // in time for all of them. Read repo by repo, a busy first repo's backlog kept the next one from
+  // ever being read, run after run, with nothing to show it had been skipped.
+  queue.sort((a, b) => a.pr.mergedAt.localeCompare(b.pr.mergedAt));
+  for (const { repoName, repo, kbRepo, areas, topics, scanned, pr } of queue) {
     if (result.capped) break;
-    for (const pr of await input.provider.listMergedPullRequests(repo, input.since)) {
-      if (result.capped) break;
-      scanned.pullRequests++;
-      // Data controls (security plan T5): checked before anything is read or sent to a model.
-      if (pr.skipRequested) {
-        result.skipped.push({ url: pr.url, reason: "marked homeostat:skip" });
+    scanned.pullRequests++;
+    // Data controls (security plan T5): checked before anything is read or sent to a model.
+    if (pr.skipRequested) {
+      result.skipped.push({ url: pr.url, reason: "marked homeostat:skip" });
+      continue;
+    }
+    if (optedOut.has(loginKey(pr.author.id))) {
+      result.skipped.push({ url: pr.url, reason: "the author opted out" });
+      continue;
+    }
+    let threads: ReturnType<typeof reviewThreads>;
+    try {
+      const [comments, commits] = await Promise.all([
+        input.provider.listReviewComments(repo, pr.id),
+        input.provider.listCommits(repo, pr.id),
+      ]);
+      threads = reviewThreads(repoName, pr, comments, commits);
+    } catch (e) {
+      result.skipped.push({
+        url: pr.url,
+        reason: `could not read the PR: ${(e as Error).message}`,
+      });
+      continue;
+    }
+
+    for (const thread of threads) {
+      if (result.capped) {
+        result.capped.threads++;
         continue;
       }
-      if (optedOut.has(loginKey(pr.author.id))) {
-        result.skipped.push({ url: pr.url, reason: "the author opted out" });
+      scanned.threads++;
+      const url = thread.root.url;
+      const key = commentKey({
+        host: sources.host,
+        repo,
+        pullRequest: pr.id,
+        comment: thread.root.id,
+      });
+      const skip = (reason: string) => result.skipped.push({ url, reason });
+
+      if (optedOut.has(loginKey(thread.root.author.id))) {
+        skip("the reviewer opted out");
         continue;
       }
-      let threads: ReturnType<typeof reviewThreads>;
+      if (excludedPath(thread.root.path)) {
+        skip("the file is in sources.exclude.paths");
+        continue;
+      }
+      if (known.has(key)) {
+        skip("already in the knowledge base");
+        continue;
+      }
+      if (waiting.has(key)) {
+        skip("already waiting in a review PR");
+        continue;
+      }
+      if (!thread.changedCode) {
+        skip("no code change after the comment");
+        continue;
+      }
+      const reviewer = memberForLogin(config.team.members, thread.root.author.id);
+      if (!reviewer) {
+        skip(`reviewer ${thread.root.author.id} has no member handle in homeostat.yaml`);
+        continue;
+      }
+
+      const { thread: safe, redacted } = redactThread(thread);
+      result.redacted += redacted;
+      let draft: Draft | null;
       try {
-        const [comments, commits] = await Promise.all([
-          input.provider.listReviewComments(repo, pr.id),
-          input.provider.listCommits(repo, pr.id),
-        ]);
-        threads = reviewThreads(repoName, pr, comments, commits);
+        draft = await input.drafter.draft(safe, { areas, ...(topics ? { topics } : {}) });
+        // Also a thread with no lasting rule can make a document wrong (a rename), so every
+        // thread is checked, against a shortlist of sections and within a per-run cap.
+        if (input.patcher && docChecks < config.agents.curator.docPatchCalls) {
+          const asked = await docPatchStep(
+            { files, config, result, today: input.today, repo: kbRepo },
+            input.patcher,
+            safe,
+            url,
+          );
+          if (asked) docChecks++;
+        }
       } catch (e) {
-        result.skipped.push({
-          url: pr.url,
-          reason: `could not read the PR: ${(e as Error).message}`,
-        });
+        if (!(e instanceof SpendingCapError)) throw e;
+        // A lesson the cap cut off is left to the next run, which reads this thread again.
+        result.capped = { threads: 1, error: e };
         continue;
       }
-
-      for (const thread of threads) {
-        if (result.capped) {
-          result.capped.threads++;
-          continue;
-        }
-        scanned.threads++;
-        const url = thread.root.url;
-        const key = commentKey({
-          host: sources.host,
-          repo,
-          pullRequest: pr.id,
-          comment: thread.root.id,
+      if (!draft) {
+        skip("no lasting rule in the thread");
+        continue;
+      }
+      const check = (d: Draft) => {
+        const area = d.area === CORE_AREA || areas[d.area] ? d.area : CORE_AREA;
+        const built = buildEntry(config, {
+          draft: { ...d, area },
+          repo: kbRepo,
+          id: uniqueId(slugify(d.title) ?? `review-${pr.id}-${thread.root.id}`, ids),
+          url,
+          author: reviewer.id,
+          today: input.today,
         });
-        const skip = (reason: string) => result.skipped.push({ url, reason });
-
-        if (optedOut.has(loginKey(thread.root.author.id))) {
-          skip("the reviewer opted out");
-          continue;
-        }
-        if (excludedPath(thread.root.path)) {
-          skip("the file is in sources.exclude.paths");
-          continue;
-        }
-        if (known.has(key)) {
-          skip("already in the knowledge base");
-          continue;
-        }
-        if (waiting.has(key)) {
-          skip("already waiting in a review PR");
-          continue;
-        }
-        if (!thread.changedCode) {
-          skip("no code change after the comment");
-          continue;
-        }
-        const reviewer = memberForLogin(config.team.members, thread.root.author.id);
-        if (!reviewer) {
-          skip(`reviewer ${thread.root.author.id} has no member handle in homeostat.yaml`);
-          continue;
-        }
-
-        const { thread: safe, redacted } = redactThread(thread);
-        result.redacted += redacted;
-        let draft: Draft | null;
+        const errs = validate({ ...files, [built.path]: built.text }).issues.filter(
+          (i) => i.file === built.path && i.severity === "error",
+        );
+        return { built, errs };
+      };
+      const isRisk = (i: Issue) => i.code.startsWith("risk.");
+      let { built: entry, errs: errors } = check(draft);
+      let blocking = errors.filter((i) => !isRisk(i));
+      // A draft over a length limit is worth one rewrite rather than losing the lesson.
+      if (blocking.length > 0 && blocking.every(isLengthIssue)) {
+        const problems = blocking.map((i) => i.message);
+        let second: Draft | null;
         try {
-          draft = await input.drafter.draft(safe, { areas, ...(topics ? { topics } : {}) });
-          // Also a thread with no lasting rule can make a document wrong (a rename), so every
-          // thread is checked, against a shortlist of sections and within a per-run cap.
-          if (input.patcher && docChecks < config.agents.curator.docPatchCalls) {
-            const asked = await docPatchStep(
-              { files, config, result, today: input.today, repo: kbRepo },
-              input.patcher,
-              safe,
-              url,
-            );
-            if (asked) docChecks++;
-          }
+          second = await input.drafter.draft(safe, {
+            areas,
+            ...(topics ? { topics } : {}),
+            revise: { previous: draft, problems },
+          });
         } catch (e) {
           if (!(e instanceof SpendingCapError)) throw e;
-          // A lesson the cap cut off is left to the next run, which reads this thread again.
           result.capped = { threads: 1, error: e };
           continue;
         }
-        if (!draft) {
-          skip("no lasting rule in the thread");
-          continue;
+        if (second) {
+          draft = second;
+          ({ built: entry, errs: errors } = check(draft));
+          blocking = errors.filter((i) => !isRisk(i));
         }
-        const check = (d: Draft) => {
-          const area = d.area === CORE_AREA || areas[d.area] ? d.area : CORE_AREA;
-          const built = buildEntry(config, {
-            draft: { ...d, area },
-            repo: kbRepo,
-            id: uniqueId(slugify(d.title) ?? `review-${pr.id}-${thread.root.id}`, ids),
-            url,
-            author: reviewer.id,
-            today: input.today,
-          });
-          const errs = validate({ ...files, [built.path]: built.text }).issues.filter(
-            (i) => i.file === built.path && i.severity === "error",
-          );
-          return { built, errs };
-        };
-        const isRisk = (i: Issue) => i.code.startsWith("risk.");
-        let { built: entry, errs: errors } = check(draft);
-        let blocking = errors.filter((i) => !isRisk(i));
-        // A draft over a length limit is worth one rewrite rather than losing the lesson.
-        if (blocking.length > 0 && blocking.every(isLengthIssue)) {
-          const problems = blocking.map((i) => i.message);
-          let second: Draft | null;
-          try {
-            second = await input.drafter.draft(safe, {
-              areas,
-              ...(topics ? { topics } : {}),
-              revise: { previous: draft, problems },
-            });
-          } catch (e) {
-            if (!(e instanceof SpendingCapError)) throw e;
-            result.capped = { threads: 1, error: e };
-            continue;
-          }
-          if (second) {
-            draft = second;
-            ({ built: entry, errs: errors } = check(draft));
-            blocking = errors.filter((i) => !isRisk(i));
-          }
-        }
-        if (blocking.length > 0) {
-          skip(`draft did not validate: ${blocking.map((i) => i.message).join("; ")}`);
-          continue;
-        }
-        const risks = errors.filter(isRisk).map((i) => i.message);
-        if (risks.length > 0) entry = asRiskyCandidate(entry, risks);
-        files = { ...files, [entry.path]: entry.text };
-        ids.add(entry.frontmatter.id);
-        known.add(key);
-        const prAuthor = memberForLogin(config.team.members, pr.author.id)?.id;
-        result.entries.push({ ...entry, ...(prAuthor ? { prAuthor } : {}), thread: safe });
       }
+      if (blocking.length > 0) {
+        skip(`draft did not validate: ${blocking.map((i) => i.message).join("; ")}`);
+        continue;
+      }
+      const risks = errors.filter(isRisk).map((i) => i.message);
+      if (risks.length > 0) entry = asRiskyCandidate(entry, risks);
+      files = { ...files, [entry.path]: entry.text };
+      ids.add(entry.frontmatter.id);
+      known.add(key);
+      const prAuthor = memberForLogin(config.team.members, pr.author.id)?.id;
+      result.entries.push({ ...entry, ...(prAuthor ? { prAuthor } : {}), thread: safe });
     }
   }
   return result;
