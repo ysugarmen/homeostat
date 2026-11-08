@@ -49,6 +49,7 @@ import {
   retractCitations,
   SpendingCapError,
   sameLesson,
+  slugify,
   stateBranch,
   type Verdict,
   validate,
@@ -936,7 +937,8 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
         const pr = await publish({
           root,
           branch: one
-            ? `homeostat/review-${member}-${today}-${one.id}`
+            ? // A document's lesson id is its path: the branch takes a slug of it.
+              `homeostat/review-${member}-${today}-${slugify(one.id) ?? "lesson"}`
             : `homeostat/review-${member}-${today}`,
           changes: onFreshBase(group.map((l) => change(l, "review"))),
           provider,

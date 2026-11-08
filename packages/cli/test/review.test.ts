@@ -108,11 +108,14 @@ describe("homeostat review list", () => {
         9,
         "homeostat/review-lee-2026-11-06-don-t-add-a-part-of-day-to-bare-n-uhr-times-with-n-12",
       ),
+      // A document's lesson, as 0.5.7 to 0.5.9 named its branch: the document's path.
+      pr(10, "homeostat/review-lee-2026-11-08-knowledge/web/core/docs/partner-calls.md"),
     ]);
     const { stdout } = await review(provider, "list");
-    expect(stdout).toContain("2 PRs with");
+    expect(stdout).toContain("3 PRs with");
     expect(stdout).toContain("#8 ");
     expect(stdout).toContain("#9 ");
+    expect(stdout).toContain("#10 ");
   });
 
   test("puts the PRs that ask the reviewer first, and flags conflicts", async () => {
