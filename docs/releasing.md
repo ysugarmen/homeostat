@@ -2,6 +2,8 @@
 
 Every release pins one exact version everywhere: the packages, the plugin manifest, core's `VERSION` (which `homeostat init` writes into CI files), and each `homeostat@x.y.z` in the skills and docs. `packages/cli/test/versions.test.ts` fails if any of them drift or a floating range such as `homeostat@0` comes back.
 
+A team adopts a release by moving the `homeostat@x.y.z` pin in its KB's CI file. Developers' plugins read that pin from their clone and run the same version from their next sync, so nobody has to update the plugin itself; `claude plugin update homeostat@homeostat` is needed only when the plugin's own files (hooks, skills) change.
+
 ## Cutting a release
 
 ```sh

@@ -68,10 +68,14 @@ describe("the launcher and a homeostat on the PATH", () => {
     return { bin, marker, npx: join(bin, "npx.calls") };
   }
 
-  function launch(bin: string) {
+  function launch(bin: string, env: Record<string, string> = {}) {
     execFileSync(process.execPath, [launcher, "session-start"], {
       input: "{}",
-      env: { PATH: `${bin}${delimiter}${dirname(process.execPath)}`, HOME: process.env.HOME ?? "" },
+      env: {
+        PATH: `${bin}${delimiter}${dirname(process.execPath)}`,
+        HOME: process.env.HOME ?? "",
+        ...env,
+      },
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -95,6 +99,36 @@ describe("the launcher and a homeostat on the PATH", () => {
     const f = fakeBin("sleep 5");
     launch(f.bin);
     expect(readFileSync(f.npx, "utf8")).toContain(`homeostat@${version}`);
+  });
+
+  // Spelled apart, so the guard on floating versions in versions.test.ts does not read these fakes.
+  const pkg = "homeostat";
+  /** A KB clone whose CI runs the given pin of homeostat. */
+  function kbPinned(pin: string) {
+    const kb = mkdtempSync(join(tmpdir(), "homeostat-launch-kb-"));
+    writeFileSync(
+      join(kb, "bitbucket-pipelines.yml"),
+      `pipelines:\n  custom:\n    homeostat-curator:\n      - step:\n          script:\n            - npx --yes ${pkg}@${pin} daily\n`,
+    );
+    return kb;
+  }
+
+  test("the team's pin in the KB's CI decides the version, so a laptop follows it with no update", () => {
+    const f = fakeBin(`echo ${version}`);
+    launch(f.bin, { CLAUDE_PLUGIN_OPTION_KB_DIR: kbPinned("9.9.9") });
+    // The PATH binary is the plugin's version, not the team's: skipped for npx with the pin.
+    expect(readFileSync(f.npx, "utf8")).toBe(`--yes ${pkg}@9.9.9 hook session-start\n`);
+  });
+
+  test("a floating pin or an unset kb_dir setting falls back to the plugin's own version", () => {
+    const floating = fakeBin("echo 0.0.1");
+    launch(floating.bin, { CLAUDE_PLUGIN_OPTION_KB_DIR: kbPinned("latest") });
+    expect(readFileSync(floating.npx, "utf8")).toBe(
+      `--yes homeostat@${version} hook session-start\n`,
+    );
+    const unset = fakeBin("echo 0.0.1");
+    launch(unset.bin, { HOMEOSTAT_KB_DIR_SETTING: "${user_config.kb_dir}" });
+    expect(readFileSync(unset.npx, "utf8")).toBe(`--yes homeostat@${version} hook session-start\n`);
   });
 
   test("the version answer is cached, so the probe runs once a day", () => {

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Runs `homeostat hook <event>` (or `homeostat mcp`) with the first homeostat that fits, in order:
 // $HOMEOSTAT_CLI (a homeostat bin script, for development); a `homeostat` on the PATH, only when
-// it prints the plugin's own version; else npx with that version. An older binary on the PATH
+// it prints the wanted version; else npx with that version. The wanted version is the team's: the
+// exact `homeostat@x.y.z` its KB's CI runs, read from the clone, so moving that one pin in the KB
+// updates every laptop at its next sync, with no plugin update. Without a pin, the plugin's own. An older binary on the PATH
 // would reject a newer KB and leave every session without rules, silently, so the PATH binary is
 // checked, once a day per binary, and skipped on any answer but an exact match.
 // Hooks get their stdin buffered and must never break a session, so they always exit 0.
@@ -12,11 +14,40 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
-// The npx fallback runs exactly the CLI version this plugin was released with, never a floating
-// range: a compromised later release must not reach every session (security plan T4).
-const { version } = JSON.parse(
+// The npx fallback runs an exact version, never a floating range: a compromised later release
+// must not reach every session (security plan T4). The team's pin is exact too, and moves only
+// by a commit on the KB's protected base branch.
+const { version: pluginVersion } = JSON.parse(
   readFileSync(new URL("../.claude-plugin/plugin.json", import.meta.url), "utf8"),
 );
+
+/** The CI files `homeostat init` writes, where the team pins the version it runs. */
+const CI_FILES = [
+  "bitbucket-pipelines.yml",
+  ".github/workflows/homeostat-curator.yml",
+  ".github/workflows/homeostat-daily.yml",
+];
+
+/** The exact version the team's KB runs in CI, from the local clone; undefined without one. */
+function teamVersion() {
+  const dir = [
+    process.env.CLAUDE_PLUGIN_OPTION_KB_DIR,
+    process.env.HOMEOSTAT_KB_DIR_SETTING,
+    process.env.HOMEOSTAT_DIR,
+  ].find((d) => d && !d.includes("${"));
+  if (!dir) return undefined;
+  for (const file of CI_FILES) {
+    try {
+      const pin = /\bhomeostat@(\d+\.\d+\.\d+)\b/.exec(readFileSync(join(dir, file), "utf8"));
+      if (pin) return pin[1];
+    } catch {
+      // Not this host's CI file.
+    }
+  }
+  return undefined;
+}
+
+const version = teamVersion() ?? pluginVersion;
 
 const mode = process.argv[2] ?? "";
 const isMcp = mode === "mcp";

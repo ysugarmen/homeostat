@@ -211,7 +211,7 @@ async function selectForSession(
   // The team's config has options this version does not know: it reads the rest, and says so.
   const unknown = issues.filter((i) => i.code === UNKNOWN_KEY).map((i) => i.path ?? "");
   const outdated = unknown.length
-    ? `# Homeostat is out of date\n\nThe team's homeostat.yaml uses ${unknown.length === 1 ? "an option" : "options"} this Homeostat (${VERSION}) does not know (${unknown.join(", ")}), so ${unknown.length === 1 ? "it is" : "they are"} ignored. Tell the user once, in one line, to run \`claude plugin update homeostat@homeostat\` and restart Claude Code.`
+    ? `# Homeostat is out of date\n\nThe team's homeostat.yaml uses ${unknown.length === 1 ? "an option" : "options"} this Homeostat (${VERSION}) does not know (${unknown.join(", ")}), so ${unknown.length === 1 ? "it is" : "they are"} ignored. Tell the user once, in one line: run \`claude plugin update homeostat@homeostat\` and restart Claude Code, or, if the plugin is current, the KB's CI pins an older Homeostat than its config needs.`
     : "";
   const join = (docs: string) =>
     [rules, docs, guide, header, unplaced, outdated].filter(Boolean).join("\n\n");

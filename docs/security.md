@@ -98,10 +98,10 @@ Controls:
 The hooks and MCP server run on every developer's machine in every session, and the agents run in CI holding tokens. Before T4, the plugin, the skills and the CI templates called `npx homeostat@0`, which runs **whatever 0.x is newest**. One compromised release would run on every developer's machine and in every team's CI.
 
 Controls (✅ built; publishing steps in [releasing.md](releasing.md)):
-1. **Pin exact versions.** The plugin launcher runs the version that matches the plugin's own. `init` writes `homeostat@<exact version>` into CI; npm checks each package against its registry signature and provenance. Upgrades happen through a PR, never silently.
+1. **Pin exact versions.** `init` writes `homeostat@<exact version>` into CI, and the plugin launcher runs that same version, read from the developer's clone of the KB (the plugin's own version when the KB pins none, or pins a floating range, which is ignored). npm checks each package against its registry signature and provenance. Upgrades happen through a commit on the KB's protected base branch, never silently, and reach every laptop at its next sync.
 2. **Signed releases.** Publish from GitHub Actions with npm provenance (OIDC, `--provenance`), signed tags, 2FA on the npm and GitHub owner accounts.
 3. **Small, watched dependencies.** There are 8 runtime packages today; keep it small. Renovate for updates, `pnpm audit` in CI, an SBOM in each release.
-4. **Plugin integrity.** The plugin calls a pinned CLI version, never a floating one.
+4. **Plugin integrity.** The plugin calls a pinned CLI version, the team's or its own, never a floating one.
 
 ### T5. Data residency and the model provider — medium (but decisive for adoption)
 

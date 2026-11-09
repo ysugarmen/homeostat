@@ -57,6 +57,8 @@ Nobody has to remember `git pull`. The plugin's hooks run `homeostat sync` in th
 
 Developers never push to `main`: they only need to write their own `candidates/*` branch.
 
+The plugin runs the Homeostat version the KB's CI pins (`homeostat@x.y.z` in the CI file), read from the clone. To upgrade the team, the admin moves that one pin; every laptop runs the new version from its next sync, and nobody updates the plugin by hand.
+
 ## The daily run, in the KB repo's CI
 
 1. **Gathers** the pull requests merged in the code repos since the last run, and every developer's `candidates/` branch.
