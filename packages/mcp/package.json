@@ -1,6 +1,6 @@
 {
   "name": "@homeostat/mcp",
-  "version": "0.5.11",
+  "version": "0.5.12",
   "description": "The homeostat team knowledge base as an MCP server, run locally on your own clone.",
   "keywords": [
     "homeostat",
