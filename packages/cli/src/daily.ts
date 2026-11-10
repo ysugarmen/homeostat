@@ -5,6 +5,7 @@ import {
   ClaudeDocPatcher,
   ClaudeDrafter,
   ClaudeDraftJudge,
+  ClaudeDraftNarrower,
   ClaudeRetractor,
   ClaudeRuleFixer,
   type Confidence,
@@ -13,6 +14,7 @@ import {
   candidatesBranch,
   comparable,
   confidence,
+  countTokens,
   curate,
   type DecisionRecord,
   type DecisionsFile,
@@ -22,9 +24,11 @@ import {
   findRule,
   fixProblems,
   flagEntry,
+  formatEntry,
   HEARTBEAT_PATH,
   isDocPath,
   JUDGE_CONFIRMATIONS,
+  type JudgeInput,
   judgeDraft,
   judgeModelFor,
   kbSnapshot,
@@ -322,6 +326,8 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
   // The spending cap: lessons left undecided wait for the next run, and review threads not drafted.
   const held = new Set<Lesson>();
   let undrafted = 0;
+  // Where the next run reads from when this one stops at the cap: the PR drafting stopped in.
+  let resumeFrom: string | undefined;
   let capError: SpendingCapError | undefined;
   const atCap = () => capError !== undefined || stats.capped === true;
   const hitCap = (e: unknown) => {
@@ -350,6 +356,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       since,
       today,
       waiting: waitingUrls,
+      declined: declinedUrls(root, remote(STATE), decisions.values()),
     });
     drafted = result.entries;
     skipped = result.skipped.map((s) => ({ url: s.url, reason: s.reason }));
@@ -360,6 +367,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
         stats.maxCostUsd !== undefined && result.capped.error.maxCostUsd < stats.maxCostUsd;
       if (!atShare) capError ??= result.capped.error;
       undrafted = result.capped.threads;
+      resumeFrom = result.capped.from;
     }
     for (const e of drafted) {
       const member = e.prAuthor ?? e.frontmatter.source.author;
@@ -556,6 +564,13 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     opts.noReviews || judgeCalls === 0
       ? undefined
       : (io.draftJudge ?? new ClaudeDraftJudge(askerFor(config, "judge", io, root, stats)));
+  // The drafter's model narrows a failed rule; it spends from what drafting left for judging.
+  const narrower = judge
+    ? (io.draftNarrower ??
+      (io.draftJudge
+        ? undefined
+        : new ClaudeDraftNarrower(askerFor(config, "curator", io, root, stats))))
+    : undefined;
   if (judge && !io.draftJudge && judgeModelFor(config) === config.agents.curator.model) {
     io.stdout(
       `  the judge runs on the drafter's own model (${config.agents.curator.model}), which tends to agree with itself; set agents.curator.judgeModel to another\n`,
@@ -604,26 +619,27 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       continue;
     }
     const base = l.update?.base;
+    const input: JudgeInput = {
+      thread: l.thread,
+      draft: {
+        title: entry.frontmatter.title,
+        rule: entry.sections.rule ?? "",
+        why: entry.sections.why ?? "",
+        scope: entry.frontmatter.scope,
+      },
+      ...(base
+        ? {
+            updates: {
+              title: base.frontmatter.title,
+              rule: base.sections.rule ?? "",
+              why: base.sections.why ?? "",
+            },
+          }
+        : {}),
+    };
     let judged: Awaited<ReturnType<typeof judgeDraft>>;
     try {
-      judged = await judgeDraft(judge, {
-        thread: l.thread,
-        draft: {
-          title: entry.frontmatter.title,
-          rule: entry.sections.rule ?? "",
-          why: entry.sections.why ?? "",
-          scope: entry.frontmatter.scope,
-        },
-        ...(base
-          ? {
-              updates: {
-                title: base.frontmatter.title,
-                rule: base.sections.rule ?? "",
-                why: base.sections.why ?? "",
-              },
-            }
-          : {}),
-      });
+      judged = await judgeDraft(judge, input);
     } catch (e) {
       if (hitCap(e)) {
         held.add(l);
@@ -644,7 +660,43 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       `  judge ${l.id}: ${judged.verdict.ok ? "ok" : "failed"} (${judged.tally})${problems.length ? `: ${problems.join("; ")}` : ""}\n`,
     );
     if (judged.verdict.ok) continue;
-    l.judged = { problems, contradicts: judged.contradicts, tally: judged.tally };
+    // Claims the thread does not make, but nothing it contradicts: narrow the wording to what
+    // the thread says and judge it again, rather than hand the rule to a person as it is.
+    if (narrower && !judged.contradicts && judgeBudget > 0) {
+      try {
+        const narrowed = await narrower.narrow({ ...input, problems: judged.verdict.problems });
+        const again = narrowed
+          ? await judgeDraft(judge, { ...input, draft: { ...narrowed, scope: input.draft.scope } })
+          : null;
+        judgeBudget -= again?.calls ?? 0;
+        if (narrowed && again?.verdict.ok) {
+          const body = `## Rule\n${narrowed.rule}\n\n## Why\n${narrowed.why}`;
+          l.text = formatEntry(
+            { ...entry.frontmatter, title: narrowed.title, tokens: countTokens(body) },
+            body,
+          );
+          l.title = narrowed.title;
+          l.reason = `${l.reason}; narrowed to what its thread says after the judge found: ${problems.join("; ")}`;
+          io.stdout(`  judge ${l.id}: narrowed, then ok (${again.tally})\n`);
+          continue;
+        }
+        if (again && !again.verdict.ok) {
+          judged = again;
+          io.stdout(`  judge ${l.id}: narrowed, still failed (${again.tally})\n`);
+        }
+      } catch (e) {
+        if (hitCap(e)) {
+          held.add(l);
+          continue;
+        }
+        // The narrowing could not be had: the rule goes to a person as it was.
+      }
+    }
+    l.judged = {
+      problems: judged.verdict.problems.map((p) => `${p.trap}: ${p.evidence}`),
+      contradicts: judged.contradicts,
+      tally: judged.tally,
+    };
     decide(
       l,
       files,
@@ -1010,6 +1062,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       reason: l.reason,
       ...(l.confidence ? { confidence: l.confidence.score } : {}),
       ...((l as { pr?: string }).pr ? { pr: (l as { pr?: string }).pr } : {}),
+      ...(l.url ? { url: l.url } : {}),
       at: now.toISOString(),
       openedAt: now.toISOString(),
     };
@@ -1040,7 +1093,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       maxCostUsd: stats.maxCostUsd ?? 0,
       estimated,
       left,
-      since: since.toISOString(),
+      since: nextSince(since, resumeFrom, held).toISOString(),
     };
     notice(
       atCap()
@@ -1130,6 +1183,47 @@ function writeState(root: string, branch: string, files: Record<string, string>,
 }
 
 /** The latest run report on the state branch, if any. */
+/**
+ * Where the next run reads reviews from after this one stopped at the cap: the PR drafting
+ * stopped in, or the PR of a drafted lesson left unjudged, whichever was merged first, a second
+ * early so it is listed again. Before, the next run went back to where this one started, so a
+ * run capped every day read from the same day on, a little further back each morning.
+ */
+export function nextSince(
+  since: Date,
+  resumeFrom: string | undefined,
+  held: Iterable<Lesson>,
+): Date {
+  const points = [
+    ...(resumeFrom ? [Date.parse(resumeFrom)] : []),
+    ...[...held].flatMap((l) => (l.thread ? [Date.parse(l.thread.pullRequest.mergedAt)] : [])),
+  ].filter((t) => !Number.isNaN(t));
+  if (!points.length) return since;
+  return new Date(Math.max(since.getTime(), Math.min(...points) - 1000));
+}
+
+/**
+ * Review comments whose lesson was declined: by the run, or by a reviewer closing its PR. A
+ * decision records its comment since 0.5.12; older ones are found through the run reports.
+ */
+function declinedUrls(root: string, ref: string, decisions: Iterable<DecisionsFile>): string[] {
+  const urlOf = new Map<string, string>();
+  for (const name of (git(root, "ls-tree", "--name-only", `${ref}:runs`) ?? "").split("\n")) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      const report = JSON.parse(showFile(root, ref, `runs/${name}`) ?? "") as RunReport;
+      for (const l of report.lessons) if (l.url) urlOf.set(l.id, l.url);
+    } catch {
+      // A report this version cannot read names no thread.
+    }
+  }
+  return [...decisions].flatMap((d) =>
+    d.decided
+      .filter((r) => r.decision === "declined")
+      .flatMap((r) => r.url ?? urlOf.get(r.id) ?? []),
+  );
+}
+
 function lastRun(root: string, ref: string): RunReport | undefined {
   const runs = (git(root, "ls-tree", "--name-only", `${ref}:runs`) ?? "").split("\n");
   const name = runs

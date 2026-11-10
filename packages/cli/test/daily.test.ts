@@ -9,6 +9,7 @@ import type {
   Draft,
   Drafter,
   DraftJudge,
+  DraftNarrower,
   JudgeVerdict,
   NewPullRequest,
   OpenPullRequest,
@@ -1040,6 +1041,59 @@ describe("homeostat daily: the judge on confident drafts", { timeout: 30_000 }, 
     expect(provider.merged).toHaveLength(1);
   });
 
+  test("a failed draft is narrowed to what its thread says, judged again, and merges when it passes", async () => {
+    const t = team();
+    // In the trial, reviewers merged two in three of the rules the judge failed as they were.
+    class LandingProvider extends FakeProvider {
+      override async mergePullRequest(repo: RepoRef, id: number) {
+        const branch = this.opened.find((o) => o.id === id)?.pr.sourceBranch ?? "";
+        t.g(t.origin, "update-ref", "refs/heads/main", `refs/heads/${branch}`);
+        return super.mergePullRequest(repo, id);
+      }
+    }
+    const provider = new LandingProvider();
+    // The first three answers fail it (kept by the majority); the narrowed draft passes.
+    const draftJudge = new FakeJudge(INVENTED, INVENTED, INVENTED, PASS);
+    const narrowed: string[] = [];
+    const draftNarrower: DraftNarrower = {
+      narrow: async (input) => {
+        narrowed.push(input.problems.map((p) => p.trap).join(","));
+        return {
+          title: "Use the primary colour token instead of its hex value",
+          rule: "Use var(--color-primary) instead of the primary colour's hex value.",
+          why: "The hex value did not change with the theme and broke dark mode.",
+        };
+      },
+    };
+    const { stdout } = await run(["daily", "--dir", t.ci], { provider, draftJudge, draftNarrower });
+    expect(narrowed).toEqual(["invented-detail"]);
+    expect(draftJudge.calls.at(-1)).toBe("Use the primary colour token instead of its hex value");
+    expect(stdout).toContain(
+      "judge use-colour-tokens-instead-of-hex-values: narrowed, then ok (passed)",
+    );
+    expect(stdout).toContain("lee: 1 merged, 0 to review");
+    const merged = t.g(
+      t.origin,
+      "grep",
+      "-l",
+      "var(--color-primary) instead of the primary",
+      "main",
+    );
+    expect(merged).toContain("knowledge/");
+  });
+
+  test("a narrowed draft that still fails goes to review with the second verdict", async () => {
+    const t = team();
+    const provider = new FakeProvider();
+    const draftJudge = new FakeJudge(INVENTED);
+    const draftNarrower: DraftNarrower = {
+      narrow: async () => ({ title: "Narrower", rule: "Still too wide.", why: "Because." }),
+    };
+    const { stdout } = await run(["daily", "--dir", t.ci], { provider, draftJudge, draftNarrower });
+    expect(stdout).toContain("narrowed, still failed (3/3 failed)");
+    expect(stdout).toContain("lee: 0 merged, 1 to review");
+  });
+
   test("a failure kept by the majority goes to review, the problems in the PR body, confidence lowered", async () => {
     const t = team();
     const provider = new FakeProvider();
@@ -1642,7 +1696,7 @@ describe("homeostat daily: the spending cap", { timeout: 30_000 }, () => {
       maxCostUsd: 0.01,
       estimated: true,
       left: 1,
-      since: "2026-10-15T04:00:00.000Z",
+      since: "2026-10-15T09:59:59.000Z",
     });
     expect(report.notices).toContain(
       "stopped at the spending cap: $0.04 of $0.01 (estimated from tokens); 1 lesson left for the next run",
@@ -1662,7 +1716,7 @@ describe("homeostat daily: the spending cap", { timeout: 30_000 }, () => {
       now: () => new Date("2026-10-17T06:00:00Z"),
     });
     expect(next.stdout).toContain(
-      "reading reviews since 2026-10-15T04:00:00.000Z: the last run stopped at the spending cap",
+      "reading reviews since 2026-10-15T09:59:59.000Z: the last run stopped at the spending cap",
     );
     expect(next.stdout).toContain("judge use-spacing-tokens-instead-of-pixel-margins: ok (passed)");
     expect(next.stdout).toContain("lee: 1 merged, 0 to review, 0 declined");
@@ -1720,7 +1774,7 @@ describe("homeostat daily: the spending cap", { timeout: 30_000 }, () => {
     expect(stdout).not.toContain("stopped at the spending cap:");
     expect(stateFile(t, "runs/2026-10-16T06-00-00Z.json").capped).toMatchObject({
       left: 1,
-      since: "2026-10-15T04:00:00.000Z",
+      since: "2026-10-15T09:59:59.000Z",
     });
   });
 
@@ -1879,5 +1933,22 @@ describe("homeostat daily: overlapping runs", { timeout: 30_000 }, () => {
       "could not record this run on homeostat/state: it kept moving under other runs (5 tries",
     );
     expect(readFileSync(join(t.ci, ".git/state-races"), "utf8").trim()).toBe("5");
+  });
+});
+
+describe("where a capped run's successor reads from", () => {
+  test("the PR drafting stopped in, or an unjudged lesson's PR if older, never before the start", async () => {
+    const { nextSince } = await import("../src/daily.ts");
+    const start = new Date("2026-11-02T00:00:00Z");
+    const lesson = (mergedAt: string) => ({ thread: { pullRequest: { mergedAt } } }) as never;
+    // Before, it stayed at the start: a run capped every day read from the same day on.
+    expect(nextSince(start, "2026-11-09T10:00:00Z", []).toISOString()).toBe(
+      "2026-11-09T09:59:59.000Z",
+    );
+    expect(
+      nextSince(start, "2026-11-09T10:00:00Z", [lesson("2026-11-08T12:00:00Z")]).toISOString(),
+    ).toBe("2026-11-08T11:59:59.000Z");
+    expect(nextSince(start, "2026-10-30T00:00:00Z", []).toISOString()).toBe(start.toISOString());
+    expect(nextSince(start, undefined, []).toISOString()).toBe(start.toISOString());
   });
 });

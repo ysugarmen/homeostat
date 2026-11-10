@@ -208,3 +208,54 @@ export async function judgeDraft(
 /** The problems as one line, for the decision's reason. */
 export const describeProblems = (problems: readonly JudgeProblem[]) =>
   problems.map((p) => `${p.trap}: ${p.evidence}`).join("; ");
+
+/**
+ * Narrows a rule the judge failed, instead of sending it to a person: one call rewrites it to say
+ * only what its thread supports, then the judge checks it again. Reviewers merged two in three of
+ * the rules the judge failed as they were, so most needed a narrower wording, not a decision.
+ */
+export interface DraftNarrower {
+  narrow(input: JudgeInput & { problems: readonly JudgeProblem[] }): Promise<NarrowedRule | null>;
+}
+
+export interface NarrowedRule {
+  title: string;
+  rule: string;
+  why: string;
+}
+
+export const NARROW_SYSTEM = `You correct a coding rule that another model drafted from one code-review thread. A checker found claims in it that the thread does not make. Rewrite the rule so it says only what the thread supports: narrow or drop every flagged claim, keep everything else as it is, and keep the same plain, short style. Never add anything the thread does not say. If nothing useful is left once the flagged claims are gone, answer with an empty rule.`;
+
+export const narrowSchema = z.object({
+  title: z.string().describe("the rule's title, narrowed like the rule; at most 80 characters"),
+  rule: z.string().describe("the corrected rule; empty when nothing useful is left"),
+  why: z.string().describe("the corrected why, keeping only what the thread says"),
+});
+
+export function narrowPrompt(input: JudgeInput & { problems: readonly JudgeProblem[] }): string {
+  return `${draftJudgePrompt(input)}
+
+The checker's findings:
+${input.problems.map((p) => `- ${p.trap}: ${p.evidence}`).join("\n")}
+
+Rewrite the draft so none of these remain.`;
+}
+
+export class ClaudeDraftNarrower implements DraftNarrower {
+  private readonly ask: Asker;
+  constructor(ask: Asker) {
+    this.ask = ask;
+  }
+  async narrow(
+    input: JudgeInput & { problems: readonly JudgeProblem[] },
+  ): Promise<NarrowedRule | null> {
+    const out = await this.ask(NARROW_SYSTEM, narrowPrompt(input), narrowSchema);
+    const parsed = narrowSchema.safeParse(out);
+    if (!parsed.success || !parsed.data.rule.trim()) return null;
+    return {
+      title: parsed.data.title.trim().slice(0, 80),
+      rule: parsed.data.rule.trim(),
+      why: parsed.data.why.trim(),
+    };
+  }
+}

@@ -186,8 +186,10 @@ export {
 } from "./curator/draft.ts";
 export {
   ClaudeDraftJudge,
+  ClaudeDraftNarrower,
   DRAFT_JUDGE_SYSTEM,
   type DraftJudge,
+  type DraftNarrower,
   describeProblems,
   draftJudgePrompt,
   draftJudgeSchema,
@@ -199,6 +201,10 @@ export {
   type JudgeTrap,
   type JudgeVerdict,
   judgeDraft,
+  NARROW_SYSTEM,
+  type NarrowedRule,
+  narrowPrompt,
+  narrowSchema,
   parseJudgeVerdict,
 } from "./curator/judge.ts";
 export { type ReviewThread, reviewThreads } from "./curator/threads.ts";

@@ -37,6 +37,8 @@ export interface CurateInput {
    * Their threads are skipped, so a lesson is not drafted again in other words while it waits.
    */
   waiting?: readonly string[];
+  /** Review-comment URLs whose lesson was declined, by a reviewer or the run: never drafted again. */
+  declined?: readonly string[];
 }
 
 export interface CuratedEntry {
@@ -82,7 +84,11 @@ export interface CurateResult {
    * Set when the run's spending cap stopped the drafting: the threads read but not drafted. Merged
    * PRs after them are not read; the next run reads them again.
    */
-  capped?: { threads: number; error: SpendingCapError };
+  /**
+   * Stopped at the spending cap: the threads left, and `from`, the merge time of the PR it
+   * stopped in. PRs are read oldest first, so every PR merged before it was read whole.
+   */
+  capped?: { threads: number; error: SpendingCapError; from?: string };
 }
 
 export class CurateError extends Error {}
@@ -111,6 +117,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
     ),
   );
   const waiting = new Set((input.waiting ?? []).flatMap((u) => commentKeyOf(u) ?? []));
+  const declined = new Set((input.declined ?? []).flatMap((u) => commentKeyOf(u) ?? []));
   const ids = new Set(kb.entries.map(({ entry }) => entry.frontmatter.id));
   const result: CurateResult = { entries: [], skipped: [], scanned: [], redacted: 0, docs: [] };
   // Threads already behind a document section count as known, like those behind entries.
@@ -219,6 +226,10 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         skip("already in the knowledge base");
         continue;
       }
+      if (declined.has(key)) {
+        skip("its lesson was declined before");
+        continue;
+      }
       if (waiting.has(key)) {
         skip("already waiting in a review PR");
         continue;
@@ -252,7 +263,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
       } catch (e) {
         if (!(e instanceof SpendingCapError)) throw e;
         // A lesson the cap cut off is left to the next run, which reads this thread again.
-        result.capped = { threads: 1, error: e };
+        result.capped = { threads: 1, error: e, from: pr.mergedAt };
         continue;
       }
       if (!draft) {
@@ -289,7 +300,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
           });
         } catch (e) {
           if (!(e instanceof SpendingCapError)) throw e;
-          result.capped = { threads: 1, error: e };
+          result.capped = { threads: 1, error: e, from: pr.mergedAt };
           continue;
         }
         if (second) {

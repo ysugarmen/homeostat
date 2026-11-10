@@ -316,6 +316,26 @@ describe("curate", () => {
     ]);
   });
 
+  test("a thread whose lesson was declined is never drafted again", async () => {
+    // Reviewers closed lessons only to see the same thread drafted again the next morning.
+    const provider = new BitbucketProvider({ token: "t", fetch: replayFetch("bitbucket").fetch });
+    const drafter = new FakeDrafter();
+    const result = await curate({
+      files: kbFiles(),
+      provider,
+      drafter,
+      since: new Date("2026-10-06T00:00:00Z"),
+      today: "2026-10-13",
+      declined: ["https://bitbucket.org/acme/integrations-api/pull-requests/812/_/diff#comment-33"],
+    });
+    expect(drafter.seen).toEqual([]);
+    expect(result.entries).toEqual([]);
+    expect(result.skipped).toContainEqual({
+      url: "https://bitbucket.org/acme/integrations-api/pull-requests/812/_/diff#comment-33",
+      reason: "its lesson was declined before",
+    });
+  });
+
   test("reports why each other thread was skipped, oldest PR first", async () => {
     const result = await run(new FakeDrafter());
     expect(result.skipped).toEqual([

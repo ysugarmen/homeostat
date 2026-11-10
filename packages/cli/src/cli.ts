@@ -7,6 +7,7 @@ import type {
   DocPatcher,
   Drafter,
   DraftJudge,
+  DraftNarrower,
   HostSetup,
   Merger,
   Provider,
@@ -91,6 +92,8 @@ export interface Io {
   fixer?: RuleFixer;
   consolidator?: Consolidator;
   draftJudge?: DraftJudge;
+  /** Narrows a rule the judge failed, for another check (tests pass a fake). */
+  draftNarrower?: DraftNarrower;
   retractor?: Retractor;
   topicProposer?: TopicProposer;
   /** Test seam: a Claude runtime in place of the configured one, reporting usage as it goes. */

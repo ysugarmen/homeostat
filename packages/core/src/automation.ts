@@ -41,6 +41,8 @@ export interface DecisionRecord {
   reason: string;
   confidence?: number;
   pr?: string;
+  /** The review comment the lesson was drafted from, so a declined thread is not drafted again. */
+  url?: string;
   at: string;
   /** When the record was first written, which is when its review PR opened; for review latency. */
   openedAt?: string;
