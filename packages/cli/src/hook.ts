@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import {
   AGENT_ENV,
   addCredits,
@@ -24,6 +24,7 @@ import {
   renderContext,
   repoNames,
   restCounts,
+  rulesForFile,
   searchEntries,
   searchSections,
   selectEntries,
@@ -59,6 +60,9 @@ export interface HookInput {
   last_assistant_message?: string;
   /** UserPromptSubmit: the message the developer sent. */
   prompt?: string;
+  /** PostToolUse: the tool the agent used, and its input (a file path for Read, Edit, Write). */
+  tool_name?: string;
+  tool_input?: { file_path?: string; notebook_path?: string };
 }
 
 /** The KB checkout: the plugin's kb_dir option, then $HOMEOSTAT_DIR, then the session dir itself. */
@@ -253,6 +257,8 @@ interface HandoffState {
   compacted?: boolean;
   /** Rule ids this session has been given, so a later update adds only what is new. */
   injected?: string[];
+  /** Repo-relative files whose rules this session was given when it opened them. */
+  files?: string[];
   /** Document sections (`<doc>#<id>`) given for a message, so each is given once. */
   sections?: string[];
   /** The KB view the session last saw (HEAD + pending set); unchanged means nothing to add. */
@@ -638,6 +644,86 @@ function promptMatches(session: string, text: string, io: Io, cwd: string, kbRoo
   return parts.join("\n\n");
 }
 
+/** Tokens of rules a file brings when a session opens it: a few rules, not a context dump. */
+const FILE_TOKENS = 700;
+
+/**
+ * PostToolUse on Read, Edit and Write: the rules about the file the agent just opened, before it
+ * plans anything around it. Agents read code first and look rules up later, if ever; this way
+ * the rules a reviewer wrote about a file arrive with the file. Once per file per session, and
+ * only rules the session has not been given.
+ */
+async function fileUse(input: HookInput, io: Io) {
+  const cwd = input.cwd ?? process.cwd();
+  const file = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
+  if (!file || !input.session_id) return;
+  const kbRoot = findKb(io.env, cwd);
+  if (!kbRoot) return;
+  // Real paths on both sides: git answers with them, and a symlinked folder (macOS's /var is
+  // /private/var) would otherwise put the file outside its own repo.
+  const real = (p: string) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return resolve(p);
+    }
+  };
+  const abs = real(resolve(cwd, file));
+  const top = git(dirname(abs), "rev-parse", "--show-toplevel");
+  if (!top) return;
+  const root = real(top);
+  if (root === real(kbRoot)) return;
+  const rel = relative(root, abs).replaceAll("\\", "/");
+  if (!rel || rel.startsWith("..")) return;
+  const state = readState(kbRoot, input.session_id);
+  if (state.files?.includes(rel)) return;
+
+  const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files, {
+    checks: false,
+  });
+  if (!config) return;
+  const member = memberFromGit(config.team.members, gitIdentity(root));
+  const repo = repoHere(root, config);
+  const seen = new Set(state.injected ?? []);
+  const pool = visibleTo(
+    inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
+    config,
+    member,
+  ).filter((e) => !seen.has(e.frontmatter.id));
+  const selection = selectEntries(rulesForFile(pool, rel), {
+    paths: [rel],
+    tokenBudget: FILE_TOKENS,
+  });
+  const ids = selection.items.map((i) => i.entry.frontmatter.id);
+  writeState(kbRoot, input.session_id, {
+    ...state,
+    files: [...(state.files ?? []), rel],
+    injected: [...seen, ...ids],
+  });
+  if (!ids.length) return;
+  logEvent(kbRoot, {
+    ts: (io.now?.() ?? new Date()).toISOString(),
+    type: "injection",
+    session: input.session_id,
+    source: "file",
+    cwd,
+    ...(repo ? { repo } : {}),
+    entries: selection.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
+  });
+  const rules = renderContext(selection).replace(
+    /^# Team knowledge \(homeostat\)\n\n[\s\S]*?\n\n(?=## |\*\*)/,
+    "",
+  );
+  io.stdout(
+    `${JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PostToolUse",
+        additionalContext: `# Team rules about ${rel} (homeostat)\n\nReviewers wrote these about this file. Follow them in what you plan or change here.\n\n${rules}`,
+      },
+    })}\n`,
+  );
+}
+
 /** How often a long session checks for a new daily run. */
 const SYNC_EVERY_HOURS = 3;
 
@@ -652,6 +738,7 @@ const HANDLERS: Record<string, (input: HookInput, io: Io) => Promise<void>> = {
   prompt,
   stop,
   "pre-compact": preCompact,
+  file: fileUse,
 };
 
 export const HOOK_EVENTS = Object.keys(HANDLERS);

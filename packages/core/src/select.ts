@@ -100,6 +100,41 @@ function namesExactly(ref: string, path: string): boolean {
   return p === r || p.endsWith(`/${r}`) || p.startsWith(`${r}/`) || p.includes(`/${r}/`);
 }
 
+/** File names too common to tie a rule to one file when named alone, without a folder. */
+const COMMON_NAMES = new Set([
+  "__init__.py",
+  "conftest.py",
+  "main.py",
+  "utils.py",
+  "models.py",
+  "config.py",
+  "settings.py",
+  "constants.py",
+  "types.ts",
+  "index.ts",
+  "index.tsx",
+  "index.js",
+  "utils.ts",
+  "package.json",
+  "pyproject.toml",
+]);
+
+/**
+ * The rules about one file, for when a session opens it: those whose scope names it with a
+ * narrower glob than everything, and those whose text names the file or its folder. Rules that
+ * apply everywhere, and name no file, are left out: the session start already gave the best of
+ * them, and they would follow every file opened.
+ */
+export function rulesForFile(entries: readonly Entry[], path: string): Entry[] {
+  return entries.filter((e) => {
+    if (e.frontmatter.status !== "accepted" || isRejectedDecision(e.frontmatter)) return false;
+    if (e.frontmatter.scope.some((g) => !isGlobalGlob(g) && glob(g).match(path))) return true;
+    return fileRefs(`${e.frontmatter.title} ${e.sections.rule ?? ""}`).some(
+      (r) => !(COMMON_NAMES.has(r) && !r.includes("/")) && namesExactly(r, path),
+    );
+  });
+}
+
 /** Literal folders a glob names before its first wildcard: `services/billing/**` is 2. */
 function depth(pattern: string): number {
   let n = 0;

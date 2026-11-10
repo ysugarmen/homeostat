@@ -332,3 +332,51 @@ describe("SessionStart in a multi-repo KB", () => {
     expect(stdout).toContain("not one of the knowledge base's repos (api, worker)");
   });
 });
+
+describe("homeostat hook file (PostToolUse on Read, Edit, Write)", () => {
+  test("opening a file brings the rules about it, once, and not the ones for everywhere", async () => {
+    const kbDir = kb();
+    // An agent planning a change reads code before it looks anything up; the file's rules come
+    // with the file, whatever it does next.
+    const cwd = codeRepo(["services/integrations/queue/worker.ts", "README.md"]);
+    const env = { CLAUDE_PLUGIN_OPTION_KB_DIR: kbDir };
+    const opened = (path: string) =>
+      hook(
+        "file",
+        { session_id: "f1", cwd, tool_name: "Read", tool_input: { file_path: join(cwd, path) } },
+        env,
+      );
+    const first = await opened("services/integrations/queue/worker.ts");
+    expect(first.code).toBe(0);
+    const context = JSON.parse(first.stdout).hookSpecificOutput;
+    expect(context.hookEventName).toBe("PostToolUse");
+    expect(context.additionalContext).toContain(
+      "# Team rules about services/integrations/queue/worker.ts (homeostat)",
+    );
+    expect(context.additionalContext).toContain("(api-idempotency)");
+    // Rules for everywhere are the session start's, not every file's.
+    expect(context.additionalContext).not.toContain("(core-conventional-commits)");
+    // The same file again: nothing new.
+    expect((await opened("services/integrations/queue/worker.ts")).stdout).toBe("");
+    // A file no rule is about: nothing.
+    expect((await opened("README.md")).stdout).toBe("");
+  });
+
+  test("rules the session start already gave are not given again", async () => {
+    const kbDir = kb();
+    const cwd = codeRepo(["services/integrations/queue/worker.ts"]);
+    const env = { CLAUDE_PLUGIN_OPTION_KB_DIR: kbDir };
+    await hook("session-start", { session_id: "f2", cwd, source: "startup" }, env);
+    const { stdout } = await hook(
+      "file",
+      {
+        session_id: "f2",
+        cwd,
+        tool_name: "Read",
+        tool_input: { file_path: join(cwd, "services/integrations/queue/worker.ts") },
+      },
+      env,
+    );
+    expect(stdout).toBe("");
+  });
+});

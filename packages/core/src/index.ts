@@ -468,6 +468,7 @@ export {
   KIND_GUIDANCE,
   renderContext,
   restCounts,
+  rulesForFile,
   type SelectedEntry,
   type Selection,
   type SelectOptions,
