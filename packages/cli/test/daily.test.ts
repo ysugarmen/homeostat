@@ -17,6 +17,7 @@ import type {
   PullRequest,
   RepoRef,
   Retractor,
+  ReviewRewriter,
   ReviewThread,
   RuleCandidate,
   Usage,
@@ -1950,5 +1951,106 @@ describe("where a capped run's successor reads from", () => {
     ).toBe("2026-11-08T11:59:59.000Z");
     expect(nextSince(start, "2026-10-30T00:00:00Z", []).toISOString()).toBe(start.toISOString());
     expect(nextSince(start, undefined, []).toISOString()).toBe(start.toISOString());
+  });
+});
+
+describe("homeostat daily: reviewers' comments on review PRs", { timeout: 30_000 }, () => {
+  test("a reviewer's comment is applied on the PR's branch and answered, once", async () => {
+    const t = team();
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("scoring:\n", "scoring:\n  reviewPrs: lesson\n"),
+    );
+    t.g(t.ci, "commit", "-qam", "one PR per lesson");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    await leeLearns(t.lee);
+    const branch = "homeostat/review-lee-2026-10-16-use-the-shared-button-component";
+    // A senior asks for the rule to be generalised, as a reviewer did in a team trial.
+    const provider = new FakeProvider();
+    const replies: { id: number; body: string }[] = [];
+    const codeComments = provider.listReviewComments.bind(provider);
+    Object.assign(provider, {
+      listReviewComments: async (repo: RepoRef, id: number) => {
+        if (repo.name !== "team-kb") return codeComments();
+        return [
+          {
+            id: 7001,
+            body: "this should be reframed to cover every component in the repo, not only buttons",
+            author: { id: "dana" },
+            createdAt: "2026-10-16T09:00:00Z",
+            url: `https://github.com/acme/team-kb/pull/${id}#c7001`,
+          },
+          ...replies.map((r, i) => ({
+            id: 8000 + i,
+            body: r.body,
+            author: { id: "homeostat-bot" },
+            createdAt: "2026-10-17T06:00:00Z",
+            url: `https://github.com/acme/team-kb/pull/${id}#c${8000 + i}`,
+          })),
+        ];
+      },
+      commentOnPullRequest: async (_repo: RepoRef, id: number, body: string) => {
+        replies.push({ id, body });
+      },
+    });
+    await run(["daily", "--dir", t.ci, "--no-reviews"], { provider });
+    const opened = provider.opened.find((o) => o.pr.sourceBranch === branch);
+    if (!opened) throw new Error("no review PR");
+    provider.open = [
+      {
+        id: opened.id,
+        title: opened.pr.title,
+        url: `https://github.com/acme/team-kb/pull/${opened.id}`,
+        author: { id: "ci" },
+        sourceBranch: branch,
+        targetBranch: "main",
+      },
+    ];
+    const asked: string[] = [];
+    const reviewRewriter: ReviewRewriter = {
+      rewrite: async (input) => {
+        asked.push(input.comment.body);
+        return {
+          change: true,
+          title: "Use the shared UI components, never raw HTML elements",
+          rule: "Render UI with the shared components from apps/web/ui, never raw HTML elements they wrap.",
+          why: "Raw elements skip the focus ring and the analytics hook the shared ones add.",
+          area: "core",
+          scope: ["apps/web/**"],
+          reply: "Generalised from buttons to every shared component.",
+        };
+      },
+    };
+    const next = await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider,
+      reviewRewriter,
+      now: () => new Date("2026-10-17T06:00:00Z"),
+    });
+    expect(next.stdout).toContain(
+      `#${opened.id}: rewrote use-the-shared-button-component as a reviewer asked`,
+    );
+    expect(asked).toHaveLength(1);
+    // The rule moved to core, with the reviewer's scope, on the PR's own branch.
+    const moved = t.g(
+      t.origin,
+      "show",
+      `${branch}:knowledge/core/use-the-shared-button-component.md`,
+    );
+    expect(moved).toContain("title: Use the shared UI components, never raw HTML elements");
+    expect(moved).toContain("apps/web/**");
+    expect(
+      t.g(t.origin, "ls-tree", "-r", "--name-only", branch, "knowledge/frontend"),
+    ).not.toContain("use-the-shared-button-component");
+    expect(replies).toHaveLength(1);
+    expect(replies[0]?.body).toMatch(/^↻ Homeostat \(comment 7001\): Generalised/);
+    // The next run sees its own reply and does not apply the comment again.
+    await run(["daily", "--dir", t.ci, "--no-reviews"], {
+      provider,
+      reviewRewriter,
+      now: () => new Date("2026-10-18T06:00:00Z"),
+    });
+    expect(asked).toHaveLength(1);
+    expect(replies).toHaveLength(1);
   });
 });

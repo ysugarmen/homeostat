@@ -57,6 +57,10 @@ The same lesson often comes back in other words ("Parse DB URLs by last '@'" and
 
 At most `agents.curator.consolidateCalls` (30) calls per run, each a few thousand characters; past that, on a model error, or with `--no-reviews`, the older word-overlap duplicate check decides. Every call is logged as a `model-call` event.
 
+### Reviewers' comments {#review-comments}
+
+Before drafting, the daily run reads the comments on its open one-lesson review PRs. A comment from a reviewer (the named `team.reviewers`, or seniors and leads) that asks to change the rule, such as generalising it, rescoping it ("all Python code"), rewording it or moving it to another area, is applied: one call to the drafter's model rewrites the rule as asked (a reviewer may widen it past what the original thread said), the change is committed to the PR's branch, moved between topic files if its area changed, validated, pushed, and answered on the PR with a line starting `↻ Homeostat (comment <id>)`. That line is how later runs know the comment was handled. A comment that asks for no change gets a short reply and nothing else. A rewrite that does not validate is left out, and the reply says why. The reviewer still merges.
+
 ### The judge {#judge}
 
 A confident lesson merges with nobody reading it. Its confidence says the lesson is genuine (a member's comment led to a code change), not that the drafted rule says only what the comment said, and a drafting model can add things: a value the reviewer never gave, a helper name, a wider scope, "always" where the comment said "maybe here". Every agent then treats those as fact.

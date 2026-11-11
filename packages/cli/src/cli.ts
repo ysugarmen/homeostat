@@ -12,6 +12,7 @@ import type {
   Merger,
   Provider,
   Retractor,
+  ReviewRewriter,
   RuleFixer,
   Seeder,
   TopicProposer,
@@ -92,6 +93,8 @@ export interface Io {
   fixer?: RuleFixer;
   consolidator?: Consolidator;
   draftJudge?: DraftJudge;
+  /** Applies reviewers' comments on review PRs (tests pass a fake). */
+  reviewRewriter?: ReviewRewriter;
   /** Narrows a rule the judge failed, for another check (tests pass a fake). */
   draftNarrower?: DraftNarrower;
   retractor?: Retractor;

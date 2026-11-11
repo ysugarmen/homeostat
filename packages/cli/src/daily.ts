@@ -7,6 +7,7 @@ import {
   ClaudeDraftJudge,
   ClaudeDraftNarrower,
   ClaudeRetractor,
+  ClaudeReviewRewriter,
   ClaudeRuleFixer,
   type Confidence,
   type Config,
@@ -65,6 +66,7 @@ import { commitTree, git, mergeText, pushCommit, showFile } from "./git.ts";
 import { foldChanges, nudgeBranch, refFiles, showRule } from "./kb-write.ts";
 import { CliError, providerFor } from "./provider.ts";
 import { type FileChange, publish } from "./publish.ts";
+import { applyReviewComments } from "./review-comments.ts";
 
 /**
  * `homeostat daily`: the one scheduled job (the KB repo's CI, or `homeostat up`). Laptops need not
@@ -247,6 +249,28 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       r.at = now.toISOString();
       r.settledAt = (r.pr && mergedAt.get(r.pr)) || now.toISOString();
       settled++;
+    }
+  }
+
+  // Reviewers' comments on open review PRs ("generalise this", "scope it to all Python"): the
+  // rule is rewritten on the PR's branch, checked and answered, before anything waits on it.
+  if (!opts.dryRun) {
+    try {
+      const rewritten = await applyReviewComments({
+        root,
+        base,
+        config,
+        provider,
+        kbRepo,
+        rewriter:
+          io.reviewRewriter ??
+          new ClaudeReviewRewriter(askerFor(config, "curator", io, root, stats)),
+        io,
+      });
+      if (rewritten) io.stdout(`rewrote ${plural(rewritten, "review PR")} as reviewers asked\n`);
+    } catch (e) {
+      // A comment the run could not apply waits for a person; the run goes on.
+      io.stdout(`could not apply reviewers' comments: ${(e as Error).message}\n`);
     }
   }
 

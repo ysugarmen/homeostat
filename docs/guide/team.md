@@ -73,7 +73,9 @@ The weekly deep dive merges duplicates, marks contradictions, and retires rules 
 
 ## Reviewers
 
-Code review itself does not change: it is where the lessons come from. Once a day there is one review pull request per developer with the lessons that scored 35–69 (or, with `scoring.reviewPrs: lesson`, one per lesson). Merge to accept them, edit first, or close to decline. `homeostat review merge --all` previews the whole queue and merges it.
+Code review itself does not change: it is where the lessons come from. Once a day there is one review pull request per developer with the lessons that scored 35–69 (or, with `scoring.reviewPrs: lesson`, one per lesson). Merge to accept them, edit first, or close to decline.
+
+To change a rule, a reviewer can just say so in a comment on its PR ("generalise this to all logging", "scope it to all Python code", "reword: …"). The next daily run rewrites the rule on the PR's branch as asked, moving it to another area or scope if needed, checks it, and replies on the PR with what changed; the reviewer then merges. Comments from the named reviewers (or, without them, seniors and leads) count, each once; a question or an approval changes nothing. This works on one-lesson PRs; on a PR with several rules, edit the file. `homeostat review merge --all` previews the whole queue and merges it.
 
 ## Other tools
 

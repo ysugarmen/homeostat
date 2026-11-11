@@ -207,6 +207,15 @@ export {
   narrowSchema,
   parseJudgeVerdict,
 } from "./curator/judge.ts";
+export {
+  ClaudeReviewRewriter,
+  REWRITE_SYSTEM,
+  type ReviewRewriter,
+  type Rewrite,
+  type RewriteInput,
+  rewritePrompt,
+  rewriteSchema,
+} from "./curator/rewrite.ts";
 export { type ReviewThread, reviewThreads } from "./curator/threads.ts";
 export {
   type CommentRef,
