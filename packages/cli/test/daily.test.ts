@@ -1083,6 +1083,24 @@ describe("homeostat daily: the judge on confident drafts", { timeout: 30_000 }, 
     expect(merged).toContain("knowledge/");
   });
 
+  test("a narrowed draft over a limit (a rule of more than 60 words) is kept for review, not merged", async () => {
+    // In the trial, three narrowed rules merged at 65 to 99 words and failed the KB's validation.
+    const t = team();
+    const provider = new FakeProvider();
+    const draftJudge = new FakeJudge(INVENTED, INVENTED, INVENTED, PASS);
+    const draftNarrower: DraftNarrower = {
+      narrow: async () => ({
+        title: "Use the primary colour token",
+        rule: Array.from({ length: 70 }, (_, i) => `word${i}`).join(" "),
+        why: "Because.",
+      }),
+    };
+    const { stdout } = await run(["daily", "--dir", t.ci], { provider, draftJudge, draftNarrower });
+    expect(stdout).toContain("narrowed, but ## Rule has 70 words; max 60; kept for review");
+    expect(stdout).toContain("lee: 0 merged, 1 to review");
+    expect(provider.merged).toEqual([]);
+  });
+
   test("a narrowed draft that still fails goes to review with the second verdict", async () => {
     const t = team();
     const provider = new FakeProvider();

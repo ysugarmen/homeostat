@@ -224,12 +224,16 @@ export interface NarrowedRule {
   why: string;
 }
 
-export const NARROW_SYSTEM = `You correct a coding rule that another model drafted from one code-review thread. A checker found claims in it that the thread does not make. Rewrite the rule so it says only what the thread supports: narrow or drop every flagged claim, keep everything else as it is, and keep the same plain, short style. Never add anything the thread does not say. If nothing useful is left once the flagged claims are gone, answer with an empty rule.`;
+export const NARROW_SYSTEM = `You correct a coding rule that another model drafted from one code-review thread. A checker found claims in it that the thread does not make. Rewrite the rule so it says only what the thread supports: narrow or drop every flagged claim, keep everything else as it is, and keep the same plain, short style: the rule at most 60 words, the why at most 100. Never add anything the thread does not say. If nothing useful is left once the flagged claims are gone, answer with an empty rule.`;
 
 export const narrowSchema = z.object({
   title: z.string().describe("the rule's title, narrowed like the rule; at most 80 characters"),
-  rule: z.string().describe("the corrected rule; empty when nothing useful is left"),
-  why: z.string().describe("the corrected why, keeping only what the thread says"),
+  rule: z
+    .string()
+    .describe("the corrected rule, at most 60 words; empty when nothing useful is left"),
+  why: z
+    .string()
+    .describe("the corrected why, at most 100 words, keeping only what the thread says"),
 });
 
 export function narrowPrompt(input: JudgeInput & { problems: readonly JudgeProblem[] }): string {

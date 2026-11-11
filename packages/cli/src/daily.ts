@@ -693,12 +693,22 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
           ? await judgeDraft(judge, { ...input, draft: { ...narrowed, scope: input.draft.scope } })
           : null;
         judgeBudget -= again?.calls ?? 0;
-        if (narrowed && again?.verdict.ok) {
-          const body = `## Rule\n${narrowed.rule}\n\n## Why\n${narrowed.why}`;
-          l.text = formatEntry(
-            { ...entry.frontmatter, title: narrowed.title, tokens: countTokens(body) },
-            body,
-          );
+        const body = narrowed ? `## Rule\n${narrowed.rule}\n\n## Why\n${narrowed.why}` : "";
+        const text = narrowed
+          ? formatEntry(
+              { ...entry.frontmatter, title: narrowed.title, tokens: countTokens(body) },
+              body,
+            )
+          : "";
+        // The narrowed text meets the same checks as any draft (a rule's length, a title's):
+        // otherwise it would merge past them and fail the KB's own validation.
+        const invalid = narrowed
+          ? parseEntry(text).issues.find((i) => i.severity === "error")
+          : undefined;
+        if (invalid)
+          io.stdout(`  judge ${l.id}: narrowed, but ${invalid.message}; kept for review\n`);
+        if (narrowed && again?.verdict.ok && !invalid) {
+          l.text = text;
           l.title = narrowed.title;
           l.reason = `${l.reason}; narrowed to what its thread says after the judge found: ${problems.join("; ")}`;
           io.stdout(`  judge ${l.id}: narrowed, then ok (${again.tally})\n`);

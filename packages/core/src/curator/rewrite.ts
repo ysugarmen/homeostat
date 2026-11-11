@@ -33,7 +33,7 @@ export interface ReviewRewriter {
 
 export const REWRITE_SYSTEM = `You maintain a team's coding rules. A reviewer commented on a proposed rule before accepting it. Decide whether the comment asks to change the rule, and if it does, rewrite the rule exactly as the reviewer asks.
 
-The reviewer decides: if they ask to generalise the rule, scope it wider or narrower, reword it or move it to another area, do that, even past what the original review said. Keep everything they did not ask to change. Keep the team's plain, short style: one paragraph of rule, one of why, no headings or lists. Keep a concrete example from the original when it still helps.
+The reviewer decides: if they ask to generalise the rule, scope it wider or narrower, reword it or move it to another area, do that, even past what the original review said. Keep everything they did not ask to change. Keep the team's plain, short style: one paragraph of rule (at most 60 words), one of why (at most 100), no headings or lists. Keep a concrete example from the original when it still helps.
 
 Scope is a list of path globs in the code repo. "**" means every file; "**/*.py" every Python file. An area's globs come with it: to scope a rule to everywhere, use the area "core" and the scope ["**"], or a narrower glob such as ["**/*.py"]. Use only the areas listed.
 
