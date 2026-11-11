@@ -6,7 +6,7 @@ Homeostat turns review feedback that led to a code change into short, scored rul
 
 ```sh
 # In a repo for your team's knowledge base:
-npx --yes homeostat@0.5.13 init
+npx --yes homeostat@0.5.14 init
 
 # In Claude Code:
 claude plugin marketplace add ysugarmen/homeostat
