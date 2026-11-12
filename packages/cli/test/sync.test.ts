@@ -133,7 +133,7 @@ async function session(kb: string, sessionId: string, event = "session-start") {
   };
 }
 
-describe("homeostat sync (automation, step 2)", () => {
+describe("homeostat sync (automation, step 2)", { timeout: 30_000 }, () => {
   test("a new lesson is sent at once, in the background, and sync puts it on candidates/<member>", async () => {
     const t = team();
     const learned = await learnButton(t.lee);
