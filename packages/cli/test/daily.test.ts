@@ -2025,6 +2025,12 @@ describe("homeostat daily: reviewers' comments on review PRs", { timeout: 30_000
         targetBranch: "main",
       },
     ];
+    // Other PRs merge meanwhile: the base moves on, and the PR is not rebased.
+    const rule = join(t.ci, "knowledge/core/redact-before-logging.md");
+    t.g(t.ci, "pull", "-q", "origin", "main");
+    writeFileSync(rule, readFileSync(rule, "utf8").replace("score: 2", "score: 3"));
+    t.g(t.ci, "commit", "-qam", "another rule changes on main");
+    t.g(t.ci, "push", "-q", "origin", "main");
     const asked: string[] = [];
     const reviewRewriter: ReviewRewriter = {
       rewrite: async (input) => {

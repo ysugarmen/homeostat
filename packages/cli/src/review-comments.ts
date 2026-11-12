@@ -81,10 +81,16 @@ export async function applyReviewComments(ctx: CommentsContext): Promise<number>
     );
     git(root, "fetch", "--quiet", "origin", `+refs/heads/${base}:refs/remotes/origin/${base}`);
     const prRef = `refs/remotes/origin/${pr.sourceBranch}`;
+    // The rules the PR changes, against where it was cut: the base has moved since (other PRs
+    // merged), and its later changes are not the PR's.
+    const forkedAt =
+      git(root, "merge-base", `refs/remotes/origin/${base}`, prRef) ??
+      `refs/remotes/origin/${base}`;
     const before = new Map(
-      validate(refFiles(root, `refs/remotes/origin/${base}`), { checks: false }).entries.map(
-        (e) => [e.entry.frontmatter.id, JSON.stringify(e.entry)],
-      ),
+      validate(refFiles(root, forkedAt), { checks: false }).entries.map((e) => [
+        e.entry.frontmatter.id,
+        JSON.stringify(e.entry),
+      ]),
     );
     const lessons = validate(refFiles(root, prRef), { checks: false }).entries.filter(
       (e) => before.get(e.entry.frontmatter.id) !== JSON.stringify(e.entry),
