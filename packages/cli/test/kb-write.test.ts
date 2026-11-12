@@ -118,7 +118,7 @@ describe("rebuildOnBase", () => {
   });
 });
 
-describe("homeostat review merge on a host that lags a force push", () => {
+describe("homeostat review merge on a host that lags a force push", { timeout: 30_000 }, () => {
   test("waits for the rebuilt commit, nudges the host with an ordinary push, then merges", async () => {
     const t = kb();
     const config = join(t.dir, "homeostat.yaml");

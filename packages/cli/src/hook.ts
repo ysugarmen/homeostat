@@ -39,6 +39,7 @@ import {
 import type { Io } from "./cli.ts";
 import { git, gitIdentity } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
+import { loadKbInForce } from "./kb-cache.ts";
 import { pendingFingerprint, readSyncState, syncDue, takeNotices } from "./sync.ts";
 import { touchedPaths, uncommitted } from "./touched.ts";
 
@@ -139,9 +140,7 @@ async function selectForSession(
   kbRoot: string,
   note: (fields: Record<string, unknown>) => void,
 ) {
-  const { config, entries, docs, issues } = validate(readKbView(kbRoot, { inForce: true }).files, {
-    checks: false,
-  });
+  const { config, entries, docs, issues } = loadKbInForce(kbRoot);
   if (!config) throw new HookSkip("knowledge base config is invalid; run homeostat validate");
   pruneEvents(kbRoot, config.security.eventRetentionDays, io.now?.() ?? new Date());
 
@@ -347,9 +346,7 @@ function logTurns(input: HookInput, io: Io, kbRoot: string) {
 
 /** Every id a credit can name: rule ids, `area/topic` documents and `area/topic#section`. */
 function creditable(kbRoot: string): Set<string> {
-  const { entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files, {
-    checks: false,
-  });
+  const { entries, docs } = loadKbInForce(kbRoot);
   const ids = new Set<string>();
   for (const e of entries) ids.add(e.entry.frontmatter.id.toLowerCase());
   for (const d of docs) {
@@ -447,9 +444,7 @@ function promptUpdates(session: string, io: Io, cwd: string, kbRoot: string): st
   const news = takeNotices(kbRoot);
   if (view === state.view && news.length === 0) return "";
 
-  const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files, {
-    checks: false,
-  });
+  const { config, entries } = loadKbInForce(kbRoot);
   if (!config) return "";
   const member = memberFromGit(config.team.members, gitIdentity(cwd));
   const seen = new Set(state.injected ?? []);
@@ -544,9 +539,7 @@ const PROMPT_SECTION_CHARS = 2400;
 function promptMatches(session: string, text: string, io: Io, cwd: string, kbRoot: string): string {
   const words = new Set(tokenize(text).filter((w) => !CHAT.has(w)));
   if (words.size < PROMPT_MIN_TERMS) return "";
-  const { config, entries, docs } = validate(readKbView(kbRoot, { inForce: true }).files, {
-    checks: false,
-  });
+  const { config, entries, docs } = loadKbInForce(kbRoot);
   if (!config) return "";
   const member = memberFromGit(config.team.members, gitIdentity(cwd));
   const repo = repoHere(cwd, config);
@@ -678,9 +671,7 @@ async function fileUse(input: HookInput, io: Io) {
   const state = readState(kbRoot, input.session_id);
   if (state.files?.includes(rel)) return;
 
-  const { config, entries } = validate(readKbView(kbRoot, { inForce: true }).files, {
-    checks: false,
-  });
+  const { config, entries } = loadKbInForce(kbRoot);
   if (!config) return;
   const member = memberFromGit(config.team.members, gitIdentity(root));
   const repo = repoHere(root, config);
