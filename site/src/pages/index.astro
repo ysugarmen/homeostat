@@ -64,7 +64,9 @@ const spec = [
   ["Changes", "Pull requests only"],
   ["Model reads", "Review threads and the KB. Code only via bootstrap, after a preview"],
   ["Cost", "Reported per run, capped by agents.maxCostUsd"],
-  ["Session start", "Under a second, 600 rules"],
+  ["Rules arrive", "At session start, with each message, and when a file is opened"],
+  ["Hook time", "About 0.3 s with 1,700 rules; the parsed KB is cached in the clone"],
+  ["Updates", "Laptops run the version the KB pins; no plugin updates by hand"],
   ["Measured", "homeostat bench: plugin off vs on"],
   ["Agents", "Claude Code, any MCP client, Cursor, GitHub Copilot, AGENTS.md"],
   ["License", "Apache-2.0"],
@@ -138,7 +140,7 @@ const spec = [
       <section class="scale" aria-labelledby="confidence">
         <div class="scale-head">
           <h2 id="confidence">Humans decide only the middle band</h2>
-          <p>Every change is scored. Only the middle band waits for a person. The lines are yours to move.</p>
+          <p>Every change is scored. Only the middle band waits for a person. The lines are yours to move. To reword, generalise or rescope a rule, a reviewer comments on its PR; the next run rewrites it.</p>
         </div>
         <div class="bars" role="list">
           {lessons.map((l) => (
