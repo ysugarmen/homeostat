@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Runs `homeostat hook <event>` (or `homeostat mcp`) with the first homeostat that fits, in order:
 // $HOMEOSTAT_CLI (a homeostat bin script, for development); a `homeostat` on the PATH, only when
-// it prints the wanted version; else npx with that version. The wanted version is the team's: the
+// it prints the wanted version; the wanted version in npx's cache, run with node directly; else
+// npx with that version. The wanted version is the team's: the
 // exact `homeostat@x.y.z` its KB's CI runs, read from the clone, so moving that one pin in the KB
 // updates every laptop at its next sync, with no plugin update. Without a pin, the plugin's own. An older binary on the PATH
 // would reject a newer KB and leave every session without rules, silently, so the PATH binary is
@@ -10,9 +11,9 @@
 // The MCP server is long-lived and talks over stdio, so it gets stdio passed straight through.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
 
 // The npx fallback runs an exact version, never a floating range: a compromised later release
 // must not reach every session (security plan T4). The team's pin is exact too, and moves only
@@ -119,6 +120,35 @@ function matchesVersion(bin) {
   return matches;
 }
 
+/**
+ * The wanted version as npx left it in its cache (`<npm cache>/_npx/<hash>/node_modules/homeostat`),
+ * run with this node directly: the same files npx would run, without npx resolving the package
+ * again on every hook, which was most of a hook's time (about 0.8 s of 1.2 s). Only an exact
+ * version match counts; without one, npx runs and fills the cache for the next hook.
+ */
+function fromNpxCache() {
+  const root = join(process.env.npm_config_cache || join(homedir(), ".npm"), "_npx");
+  let dirs;
+  try {
+    dirs = readdirSync(root);
+  } catch {
+    return undefined;
+  }
+  for (const dir of dirs) {
+    const manifest = join(root, dir, "node_modules", "homeostat", "package.json");
+    try {
+      const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+      if (pkg.name !== "homeostat" || pkg.version !== version) continue;
+      const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.homeostat;
+      const script = bin ? join(dirname(manifest), bin) : undefined;
+      if (script && existsSync(script)) return script;
+    } catch {
+      // Not a homeostat install, or a half-written one: npx handles it.
+    }
+  }
+  return undefined;
+}
+
 const input = isMcp ? undefined : await readStdin();
 // Each candidate is worked out only when the ones before it were missing, so a development
 // checkout never probes the PATH.
@@ -129,6 +159,10 @@ const candidates = [
   () => {
     const bin = onPath();
     return bin && matchesVersion(bin) ? [bin, cliArgs] : undefined;
+  },
+  () => {
+    const script = fromNpxCache();
+    return script ? [process.execPath, [script, ...cliArgs]] : undefined;
   },
   () => ["npx", ["--yes", `homeostat@${version}`, ...cliArgs]],
 ];

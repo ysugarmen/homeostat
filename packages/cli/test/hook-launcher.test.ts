@@ -1,6 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -74,6 +82,8 @@ describe("the launcher and a homeostat on the PATH", () => {
       env: {
         PATH: `${bin}${delimiter}${dirname(process.execPath)}`,
         HOME: process.env.HOME ?? "",
+        // An empty npm cache, so the machine's own npx installs are not found.
+        npm_config_cache: mkdtempSync(join(tmpdir(), "homeostat-launch-npm-")),
         ...env,
       },
       encoding: "utf8",
@@ -129,6 +139,38 @@ describe("the launcher and a homeostat on the PATH", () => {
     const unset = fakeBin("echo 0.0.1");
     launch(unset.bin, { HOMEOSTAT_KB_DIR_SETTING: "${user_config.kb_dir}" });
     expect(readFileSync(unset.npx, "utf8")).toBe(`--yes homeostat@${version} hook session-start\n`);
+  });
+
+  test("the wanted version already in npx's cache runs with node, without npx", () => {
+    // npx resolving the package again was most of every hook's time.
+    const f = fakeBin("echo 0.0.1");
+    const cache = mkdtempSync(join(tmpdir(), "homeostat-launch-npm-"));
+    const pkg = join(cache, "_npx", "abc123", "node_modules", "homeostat");
+    mkdirSync(join(pkg, "bin"), { recursive: true });
+    writeFileSync(
+      join(pkg, "package.json"),
+      JSON.stringify({ name: "homeostat", version, bin: { homeostat: "./bin/homeostat.js" } }),
+    );
+    const ran = join(cache, "ran");
+    writeFileSync(
+      join(pkg, "bin", "homeostat.js"),
+      `require("node:fs").writeFileSync(${JSON.stringify(ran)}, process.argv.slice(2).join(" "));`,
+    );
+    launch(f.bin, { npm_config_cache: cache });
+    expect(readFileSync(ran, "utf8")).toBe("hook session-start");
+    expect(existsSync(f.npx)).toBe(false);
+    // Another version in the cache is not used: npx runs the wanted one.
+    const other = fakeBin("echo 0.0.1");
+    writeFileSync(
+      join(pkg, "package.json"),
+      JSON.stringify({
+        name: "homeostat",
+        version: "0.0.1",
+        bin: { homeostat: "./bin/homeostat.js" },
+      }),
+    );
+    launch(other.bin, { npm_config_cache: cache });
+    expect(readFileSync(other.npx, "utf8")).toBe(`--yes homeostat@${version} hook session-start\n`);
   });
 
   test("the version answer is cached, so the probe runs once a day", () => {
