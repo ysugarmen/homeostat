@@ -1,2 +1,2 @@
 /** The release version; `scripts/version.mjs` keeps it in step with every package.json. */
-export const VERSION = "0.5.16";
+export const VERSION = "0.5.17";
