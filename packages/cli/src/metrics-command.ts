@@ -113,6 +113,31 @@ export function formatMetrics(r: MetricsReport, present: boolean): string {
     `${re.docs.listed} covering sessions, ${re.docs.read} opened (${pct(re.docs.pullThrough)})`,
   );
   line("team", `${re.team.sharing} of ${re.team.members} members share usage counts`);
+  // The figures above are this machine's; the team's come from members who share counts.
+  if (re.team.sharing) {
+    const t = re.team.byDay.reduce(
+      (a, d) => ({
+        sessions: a.sessions + d.sessions,
+        rules: a.rules + d.rules,
+        mcpCalls: a.mcpCalls + d.mcpCalls,
+        docReads: a.docReads + d.docReads,
+        turns: a.turns + (d.turns ?? 0),
+        retrieved: a.retrieved + (d.retrievedTurns ?? 0),
+        credited: a.credited + (d.creditedTurns ?? 0),
+      }),
+      { sessions: 0, rules: 0, mcpCalls: 0, docReads: 0, turns: 0, retrieved: 0, credited: 0 },
+    );
+    const share = (n: number) => (t.turns ? pct(n / t.turns) : "—");
+    line(
+      "team sessions",
+      `${t.sessions} over ${re.team.byDay.length} days, ${t.rules} rules injected`,
+    );
+    line("team lookups", `${t.mcpCalls} MCP calls, ${t.docReads} document reads`);
+    line(
+      "team turns",
+      `${t.turns}: ${share(t.retrieved)} looked something up, ${share(t.credited)} credited a rule`,
+    );
+  }
 
   h("Use");
   const u = r.usage;

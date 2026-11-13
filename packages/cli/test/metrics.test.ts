@@ -213,3 +213,41 @@ describe("homeostat metrics", () => {
     expect(stderr).toContain("homeostat.yaml is missing or invalid");
   });
 });
+
+describe("homeostat metrics: the team's shared usage", () => {
+  test("adds up the counts members share, next to how many share them", async () => {
+    // Before, it printed only "1 of 3 members share usage counts" and this machine's figures.
+    const day = (
+      sessions: number,
+      turns: number,
+      retrievedTurns: number,
+      creditedTurns: number,
+    ) => ({
+      sessions,
+      injections: sessions,
+      rules: sessions * 4,
+      mcpCalls: retrievedTurns,
+      docReads: 1,
+      turns,
+      retrievedTurns,
+      creditedTurns,
+    });
+    const kb = clone({
+      "heartbeats/dana.json": {
+        member: "dana",
+        at: "2026-10-21T08:00:00Z",
+        kbCommit: null,
+        behind: 0,
+        pending: 0,
+        version: "0.5.17",
+        usage: { "2026-10-20": day(3, 20, 2, 1), "2026-10-21": day(2, 10, 1, 0) },
+      },
+    });
+    const { code, stdout } = await run(["--dir", kb, "--days", "7"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("1 of 3 members share usage counts");
+    expect(stdout).toMatch(/team sessions\s+5 over \d+ days, 20 rules injected/);
+    expect(stdout).toMatch(/team lookups\s+3 MCP calls, 2 document reads/);
+    expect(stdout).toMatch(/team turns\s+30: 10% looked something up, 3% credited a rule/);
+  });
+});
