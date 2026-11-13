@@ -22,7 +22,10 @@ import type { FileChange } from "./publish.ts";
 /** Starts every reply the daily run posts, naming the comment it answers, so none is done twice. */
 export const REPLY_MARK = "↻ Homeostat";
 const answered = (body: string) =>
-  [...body.matchAll(/↻ Homeostat \(comment (\d+)\)/g)].map((m) => Number(m[1]));
+  // A reply that could not apply the comment does not settle it (0.5.16 marked those handled too).
+  /could not apply/.test(body)
+    ? []
+    : [...body.matchAll(/↻ Homeostat \(comment (\d+)\)/g)].map((m) => Number(m[1]));
 
 export interface CommentsContext {
   root: string;
