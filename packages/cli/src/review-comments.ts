@@ -175,17 +175,25 @@ export async function applyReviewComments(ctx: CommentsContext): Promise<number>
           f.text,
           `homeostat: rewrite ${entry.frontmatter.id} as a reviewer asked`,
         );
+      // Only the rewritten rule's own problems block it: a PR cut a few days ago can carry
+      // another rule as the base had it then, with a problem the base has since fixed.
+      const id = entry.frontmatter.id;
       const issues = validate(refFiles(root, `refs/heads/${pr.sourceBranch}`)).issues.filter(
-        (i) => i.severity === "error",
+        (i) =>
+          i.severity === "error" &&
+          (i.message.startsWith(`#${id}:`) || (i.file === to && !i.message.startsWith("#"))),
       );
       if (issues.length) {
         io.stdout(
           `  #${pr.id}: the rewrite does not validate (${issues[0]?.message}); left as it was\n`,
         );
+        // Not marked handled: the next run tries again (a later base, a better rewrite). The
+        // same failure is not posted twice.
+        const failure = `${REPLY_MARK} could not apply comment ${todo.map((c) => c.id).join(", comment ")}: the rewritten rule does not validate (${issues[0]?.message ?? "an error"}). It will be tried again; or edit it on the branch.`;
         replies.splice(
           0,
           replies.length,
-          `${REPLY_MARK} (comment ${todo.map((c) => c.id).join(", comment ")}): I could not apply this: the rewritten rule does not validate (${issues[0]?.message ?? "an error"}). Please edit it on the branch.`,
+          ...(comments.some((c) => c.body === failure) ? [] : [failure]),
         );
       } else {
         pushBranch(root, pr.sourceBranch);

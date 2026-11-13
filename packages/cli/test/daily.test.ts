@@ -1980,7 +1980,20 @@ describe("homeostat daily: reviewers' comments on review PRs", { timeout: 30_000
       config,
       readFileSync(config, "utf8").replace("scoring:\n", "scoring:\n  reviewPrs: lesson\n"),
     );
-    t.g(t.ci, "commit", "-qam", "one PR per lesson");
+    // Another rule on the base is over a limit when the PR is cut (fixed on the base later):
+    // its problem must not block the rewrite of the PR's own rule.
+    const starterRule = readFileSync(join(t.ci, "knowledge/core/redact-before-logging.md"), "utf8");
+    writeFileSync(
+      join(t.ci, "knowledge/core/a-long-rule.md"),
+      starterRule
+        .replace("id: redact-before-logging", "id: a-long-rule")
+        .replace(
+          /## Rule\n[\s\S]*?\n\n## Why/,
+          `## Rule\n${Array.from({ length: 70 }, (_, i) => `w${i}`).join(" ")}\n\n## Why`,
+        ),
+    );
+    t.g(t.ci, "add", "-A");
+    t.g(t.ci, "commit", "-qm", "one PR per lesson; a rule over the limit");
     t.g(t.ci, "push", "-q", "origin", "main");
     await leeLearns(t.lee);
     const branch = "homeostat/review-lee-2026-10-16-use-the-shared-button-component";
