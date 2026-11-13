@@ -282,6 +282,12 @@ export const SECTIONS: Section[] = [
         help: "Threads checked for making a team document out of date; each sends only the three best-matching sections. 0 turns them off",
       },
       {
+        path: ["agents", "curator", "concurrency"],
+        label: "Daily run: model calls at once",
+        kind: "number",
+        help: "Drafts and judgments run this many at a time (1-16); the spending cap still holds",
+      },
+      {
         path: ["agents", "curator", "judgeCalls"],
         label: "Daily run: judge calls per run",
         kind: "number",

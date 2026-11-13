@@ -165,6 +165,7 @@ export {
   curate,
   type DocUpdate,
   type Skipped,
+  startPool,
 } from "./curator/curate.ts";
 export {
   ClaudeDocPatcher,

@@ -55,6 +55,7 @@ import {
   SpendingCapError,
   sameLesson,
   slugify,
+  startPool,
   stateBranch,
   type Verdict,
   validate,
@@ -620,28 +621,30 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
   }
   let judgeDown: string | undefined;
   let overJudgeCap = 0;
-  for (const l of lessons) {
-    if (!judge || !toJudge(l) || !l.thread) continue;
+  // Judged several at a time (agents.curator.concurrency), as drafting is; decided in order.
+  const judgeOne = async (l: Lesson): Promise<boolean> => {
     const entry = parseEntry(l.text).entry;
-    if (!entry) continue;
+    if (!entry || !judge || !l.thread) return false;
     const unjudged = (why: string) => {
       l.decision = "review";
       l.reason = `${l.reason}; not judged (${why}), so a person reads it`;
     };
     if (judgeDown) {
       unjudged(judgeDown);
-      continue;
+      return false;
     }
     // Past the spending cap the draft is left undecided: the next run drafts and judges it.
     if (atCap()) {
       held.add(l);
-      continue;
+      return false;
     }
     if (judgeBudget <= 0) {
       unjudged("agents.curator.judgeCalls reached");
       overJudgeCap++;
-      continue;
+      return false;
     }
+    // One call is set aside as it starts, so judgments in flight together keep within the cap.
+    judgeBudget--;
     const base = l.update?.base;
     const input: JudgeInput = {
       thread: l.thread,
@@ -667,23 +670,23 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     } catch (e) {
       if (hitCap(e)) {
         held.add(l);
-        continue;
+        return false;
       }
       judgeDown = `the judge could not be reached: ${(e as Error).message}`;
       unjudged(judgeDown);
-      continue;
+      return false;
     }
-    judgeBudget -= judged?.calls ?? 1;
+    judgeBudget -= (judged?.calls ?? 1) - 1;
     if (!judged) {
       io.stdout(`  judge ${l.id}: no usable answer\n`);
       unjudged("the judge gave no usable answer");
-      continue;
+      return false;
     }
     const problems = judged.verdict.problems.map((p) => `${p.trap}: ${p.evidence}`);
     io.stdout(
       `  judge ${l.id}: ${judged.verdict.ok ? "ok" : "failed"} (${judged.tally})${problems.length ? `: ${problems.join("; ")}` : ""}\n`,
     );
-    if (judged.verdict.ok) continue;
+    if (judged.verdict.ok) return false;
     // Claims the thread does not make, but nothing it contradicts: narrow the wording to what
     // the thread says and judge it again, rather than hand the rule to a person as it is.
     if (narrower && !judged.contradicts && judgeBudget > 0) {
@@ -712,7 +715,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
           l.title = narrowed.title;
           l.reason = `${l.reason}; narrowed to what its thread says after the judge found: ${problems.join("; ")}`;
           io.stdout(`  judge ${l.id}: narrowed, then ok (${again.tally})\n`);
-          continue;
+          return false;
         }
         if (again && !again.verdict.ok) {
           judged = again;
@@ -721,7 +724,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       } catch (e) {
         if (hitCap(e)) {
           held.add(l);
-          continue;
+          return false;
         }
         // The narrowing could not be had: the rule goes to a person as it was.
       }
@@ -731,6 +734,12 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
       contradicts: judged.contradicts,
       tally: judged.tally,
     };
+    return true;
+  };
+  const queue = judge ? lessons.filter((l) => toJudge(l) && l.thread) : [];
+  const outcomes = startPool(queue, Math.max(1, config.agents.curator.concurrency), judgeOne);
+  for (const [i, l] of queue.entries()) {
+    if (!(await outcomes[i])) continue;
     decide(
       l,
       files,

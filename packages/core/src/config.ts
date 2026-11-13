@@ -298,6 +298,11 @@ export const configSchema = z.strictObject({
            */
           docPatchCalls: z.int().min(0).default(20),
           /**
+           * Model calls the daily run makes at once, drafting and judging. One at a time, a busy
+           * day's few hundred calls took the run past its CI step's time limit.
+           */
+          concurrency: z.int().min(1).max(16).default(4),
+          /**
            * Most model calls per daily run that judge a confident drafted rule against its review
            * thread before it merges with no person; 0 turns the judge off. Past the cap, drafts
            * that would merge go to a reviewer instead.

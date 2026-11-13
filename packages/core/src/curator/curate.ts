@@ -172,8 +172,19 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
   // in time for all of them. Read repo by repo, a busy first repo's backlog kept the next one from
   // ever being read, run after run, with nothing to show it had been skipped.
   queue.sort((a, b) => a.pr.mergedAt.localeCompare(b.pr.mergedAt));
+  // 1. Every thread, in merge order, through the checks that need no model.
+  const eligible: {
+    pr: PullRequest;
+    repo: { owner: string; name: string };
+    kbRepo: string | undefined;
+    areas: ReturnType<typeof areaMap>;
+    topics: ReturnType<typeof topicsFor>;
+    safe: ReviewThread;
+    url: string;
+    key: string;
+    reviewer: { id: string };
+  }[] = [];
   for (const { repoName, repo, kbRepo, areas, topics, scanned, pr } of queue) {
-    if (result.capped) break;
     scanned.pullRequests++;
     // Data controls (security plan T5): checked before anything is read or sent to a model.
     if (pr.skipRequested) {
@@ -198,12 +209,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
       });
       continue;
     }
-
     for (const thread of threads) {
-      if (result.capped) {
-        result.capped.threads++;
-        continue;
-      }
       scanned.threads++;
       const url = thread.root.url;
       const key = commentKey({
@@ -213,7 +219,6 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         comment: thread.root.id,
       });
       const skip = (reason: string) => result.skipped.push({ url, reason });
-
       if (optedOut.has(loginKey(thread.root.author.id))) {
         skip("the reviewer opted out");
         continue;
@@ -243,86 +248,162 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         skip(`reviewer ${thread.root.author.id} has no member handle in homeostat.yaml`);
         continue;
       }
-
       const { thread: safe, redacted } = redactThread(thread);
       result.redacted += redacted;
-      let draft: Draft | null;
+      eligible.push({ pr, repo, kbRepo, areas, topics, safe, url, key, reviewer });
+    }
+  }
+
+  // 2. Their drafts, several at a time: one after another, a busy day's 200-odd calls took the
+  // run past its CI step's time limit. None starts once the spending cap is reached.
+  let capError: SpendingCapError | undefined;
+  const drafts = startPool(
+    eligible,
+    Math.max(1, config.agents.curator.concurrency),
+    (it) =>
+      input.drafter
+        .draft(it.safe, { areas: it.areas, ...(it.topics ? { topics: it.topics } : {}) })
+        .catch((e) => {
+          if (e instanceof SpendingCapError) capError ??= e;
+          throw e;
+        }),
+    () => capError === undefined,
+  );
+
+  // 3. In merge order, as before: document checks, a length retry, checks, ids.
+  for (const [i, it] of eligible.entries()) {
+    const { pr, kbRepo, areas, topics, safe, url, key, reviewer } = it;
+    if (result.capped) {
+      result.capped.threads++;
+      continue;
+    }
+    const skip = (reason: string) => result.skipped.push({ url, reason });
+    let draft: Draft | null;
+    try {
+      const got = await drafts[i];
+      // Not started: the cap was reached by a draft ahead of it.
+      if (got === undefined) throw capError ?? new SpendingCapError(0, 0);
+      draft = got;
+      // Also a thread with no lasting rule can make a document wrong (a rename), so every
+      // thread is checked, against a shortlist of sections and within a per-run cap.
+      if (input.patcher && docChecks < config.agents.curator.docPatchCalls) {
+        const asked = await docPatchStep(
+          { files, config, result, today: input.today, repo: kbRepo },
+          input.patcher,
+          safe,
+          url,
+        );
+        if (asked) docChecks++;
+      }
+    } catch (e) {
+      if (!(e instanceof SpendingCapError)) throw e;
+      // A lesson the cap cut off is left to the next run, which reads this thread again.
+      result.capped = { threads: 1, error: e, from: pr.mergedAt };
+      continue;
+    }
+    if (!draft) {
+      skip("no lasting rule in the thread");
+      continue;
+    }
+    const check = (d: Draft) => {
+      const area = d.area === CORE_AREA || areas[d.area] ? d.area : CORE_AREA;
+      const built = buildEntry(config, {
+        draft: { ...d, area },
+        repo: kbRepo,
+        id: uniqueId(slugify(d.title) ?? `review-${pr.id}-${safe.root.id}`, ids),
+        url,
+        author: reviewer.id,
+        today: input.today,
+      });
+      const errs = validate({ ...files, [built.path]: built.text }).issues.filter(
+        (i) => i.file === built.path && i.severity === "error",
+      );
+      return { built, errs };
+    };
+    const isRisk = (i: Issue) => i.code.startsWith("risk.");
+    let { built: entry, errs: errors } = check(draft);
+    let blocking = errors.filter((i) => !isRisk(i));
+    // A draft over a length limit is worth one rewrite rather than losing the lesson.
+    if (blocking.length > 0 && blocking.every(isLengthIssue)) {
+      const problems = blocking.map((i) => i.message);
+      let second: Draft | null;
       try {
-        draft = await input.drafter.draft(safe, { areas, ...(topics ? { topics } : {}) });
-        // Also a thread with no lasting rule can make a document wrong (a rename), so every
-        // thread is checked, against a shortlist of sections and within a per-run cap.
-        if (input.patcher && docChecks < config.agents.curator.docPatchCalls) {
-          const asked = await docPatchStep(
-            { files, config, result, today: input.today, repo: kbRepo },
-            input.patcher,
-            safe,
-            url,
-          );
-          if (asked) docChecks++;
-        }
+        second = await input.drafter.draft(safe, {
+          areas,
+          ...(topics ? { topics } : {}),
+          revise: { previous: draft, problems },
+        });
       } catch (e) {
         if (!(e instanceof SpendingCapError)) throw e;
-        // A lesson the cap cut off is left to the next run, which reads this thread again.
         result.capped = { threads: 1, error: e, from: pr.mergedAt };
         continue;
       }
-      if (!draft) {
-        skip("no lasting rule in the thread");
-        continue;
+      if (second) {
+        draft = second;
+        ({ built: entry, errs: errors } = check(draft));
+        blocking = errors.filter((i) => !isRisk(i));
       }
-      const check = (d: Draft) => {
-        const area = d.area === CORE_AREA || areas[d.area] ? d.area : CORE_AREA;
-        const built = buildEntry(config, {
-          draft: { ...d, area },
-          repo: kbRepo,
-          id: uniqueId(slugify(d.title) ?? `review-${pr.id}-${thread.root.id}`, ids),
-          url,
-          author: reviewer.id,
-          today: input.today,
-        });
-        const errs = validate({ ...files, [built.path]: built.text }).issues.filter(
-          (i) => i.file === built.path && i.severity === "error",
-        );
-        return { built, errs };
-      };
-      const isRisk = (i: Issue) => i.code.startsWith("risk.");
-      let { built: entry, errs: errors } = check(draft);
-      let blocking = errors.filter((i) => !isRisk(i));
-      // A draft over a length limit is worth one rewrite rather than losing the lesson.
-      if (blocking.length > 0 && blocking.every(isLengthIssue)) {
-        const problems = blocking.map((i) => i.message);
-        let second: Draft | null;
-        try {
-          second = await input.drafter.draft(safe, {
-            areas,
-            ...(topics ? { topics } : {}),
-            revise: { previous: draft, problems },
-          });
-        } catch (e) {
-          if (!(e instanceof SpendingCapError)) throw e;
-          result.capped = { threads: 1, error: e, from: pr.mergedAt };
-          continue;
-        }
-        if (second) {
-          draft = second;
-          ({ built: entry, errs: errors } = check(draft));
-          blocking = errors.filter((i) => !isRisk(i));
-        }
-      }
-      if (blocking.length > 0) {
-        skip(`draft did not validate: ${blocking.map((i) => i.message).join("; ")}`);
-        continue;
-      }
-      const risks = errors.filter(isRisk).map((i) => i.message);
-      if (risks.length > 0) entry = asRiskyCandidate(entry, risks);
-      files = { ...files, [entry.path]: entry.text };
-      ids.add(entry.frontmatter.id);
-      known.add(key);
-      const prAuthor = memberForLogin(config.team.members, pr.author.id)?.id;
-      result.entries.push({ ...entry, ...(prAuthor ? { prAuthor } : {}), thread: safe });
     }
+    if (blocking.length > 0) {
+      skip(`draft did not validate: ${blocking.map((i) => i.message).join("; ")}`);
+      continue;
+    }
+    const risks = errors.filter(isRisk).map((i) => i.message);
+    if (risks.length > 0) entry = asRiskyCandidate(entry, risks);
+    files = { ...files, [entry.path]: entry.text };
+    ids.add(entry.frontmatter.id);
+    known.add(key);
+    const prAuthor = memberForLogin(config.team.members, pr.author.id)?.id;
+    result.entries.push({ ...entry, ...(prAuthor ? { prAuthor } : {}), thread: safe });
   }
   return result;
+}
+
+/**
+ * Starts `fn` on each item, at most `limit` at a time, in order; one item's promise per item,
+ * settled when that item is done. An item whose turn comes when `go()` is false is not started
+ * and resolves to undefined. Every promise is marked handled, so one the caller never reaches
+ * (it stopped early) does not fail the process.
+ */
+export function startPool<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+  go: () => boolean = () => true,
+): Promise<R | undefined>[] {
+  const settle = items.map(() => {
+    let resolve!: (v: R | undefined) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<R | undefined>((a, b) => {
+      resolve = a;
+      reject = b;
+    });
+    promise.catch(() => {});
+    return { promise, resolve, reject };
+  });
+  let next = 0;
+  let active = 0;
+  const pump = () => {
+    while (active < limit && next < items.length) {
+      const i = next++;
+      const s = settle[i];
+      const item = items[i];
+      if (!s || item === undefined) continue;
+      if (!go()) {
+        s.resolve(undefined);
+        continue;
+      }
+      active++;
+      fn(item)
+        .then(s.resolve, s.reject)
+        .finally(() => {
+          active--;
+          pump();
+        });
+    }
+  };
+  pump();
+  return settle.map((s) => s.promise);
 }
 
 /** At most this many sections, and about this many tokens of them, go with one thread. */

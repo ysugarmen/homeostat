@@ -308,10 +308,19 @@ describe("curate", () => {
       today: "2026-10-13",
     });
     // web-app's PR was merged between the first two: it is read in its turn, not after the backlog.
-    expect(seen).toEqual(["integrations-api#11", "web-app#21", "integrations-api#12"]);
-    expect(result.capped?.threads).toBe(1);
+    // Drafts run four at a time, so the fourth had started when the third hit the cap.
+    expect(seen).toEqual([
+      "integrations-api#11",
+      "web-app#21",
+      "integrations-api#12",
+      "integrations-api#13",
+    ]);
+    // What the cap cut off is left whole to the next run, which starts at the first lesson lost.
+    expect(result.entries.map((e) => e.frontmatter.title)).toEqual(["Rule 1", "Rule 2"]);
+    expect(result.capped?.threads).toBe(2);
+    expect(result.capped?.from).toBe("2026-10-09T00:00:00Z");
     expect(result.scanned.map((s) => [s.repo, s.pullRequests])).toEqual([
-      ["acme/integrations-api", 2],
+      ["acme/integrations-api", 3],
       ["acme/web-app", 1],
     ]);
   });
