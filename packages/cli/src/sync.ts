@@ -242,9 +242,10 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
       pending: Object.keys(pending).length,
       version: VERSION,
     };
-    // Usage counts leave the laptop only when the member chose to share them.
+    // Usage counts leave the laptop only when the member chose to share them, as the config
+    // just pulled says: read before the pull, a change of it reached heartbeats a sync late.
     const shares =
-      config.team.members.find((m) => m.id === member)?.usage === true ||
+      (now3 ?? config).team.members.find((m) => m.id === member)?.usage === true ||
       io.env?.HOMEOSTAT_SHARE_USAGE === "1";
     if (shares) {
       const since = new Date(Date.parse(now) - 8 * 86_400_000).toISOString();

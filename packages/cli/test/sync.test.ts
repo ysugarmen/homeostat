@@ -266,6 +266,29 @@ describe("homeostat sync (automation, step 2)", { timeout: 30_000 }, () => {
     ).toBeDefined();
   });
 
+  test("turned on in the KB by an admin, usage counts go in the very sync that pulls the change", async () => {
+    // A team turned usage on for everyone; the first syncs after it sent no counts, since the
+    // config was read before the pull.
+    const t = team();
+    await run(["sync", "--dir", t.lee]);
+    const admin = mkdtempSync(join(tmpdir(), "homeostat-sync-admin-"));
+    execFileSync("git", ["clone", "-q", t.origin, admin]);
+    execFileSync("git", ["-C", admin, "config", "user.name", "Admin"]);
+    execFileSync("git", ["-C", admin, "config", "user.email", "admin@example.com"]);
+    const config = join(admin, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("    - id: lee\n", "    - id: lee\n      usage: true\n"),
+    );
+    execFileSync("git", ["-C", admin, "commit", "-qam", "share usage"]);
+    execFileSync("git", ["-C", admin, "push", "-q", "origin", "main"]);
+    await run(["sync", "--dir", t.lee]);
+    const heartbeat = JSON.parse(
+      t.g(t.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json"),
+    );
+    expect(heartbeat.usage).toBeDefined();
+  });
+
   test("a sync whose origin is gone is logged as failed at the fetch", async () => {
     const t = team();
     await run(["sync", "--dir", t.lee]);
