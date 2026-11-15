@@ -43,7 +43,9 @@ They work in their code repos as before. The plugin adds the team's knowledge to
 
 - **When a session starts:** the rules for the files being changed, the matching document sections, and a short guide to look up the rest, within a token budget.
 - **With every message:** rules and sections whose words match the message, once per session, so a question that names no file gets them too.
-- **When the agent opens a file:** the rules about that file (a narrow scope that covers it, or a rule that names it), once per file, up to a few hundred tokens, before it plans anything around it. Agents tend to read code first and look rules up later, if at all; this way a reviewer's rule about a file arrives with the file.
+- **When the agent opens a file:** the rules learned on it or near it, or about it, once per file, before it plans anything around it; the file's other rules by title. Agents tend to read code first and look rules up later, if at all; this way a reviewer's rule about a file arrives with the file.
+- **When the agent writes code:** the rules whose code triggers (like `Literal[`) the new code contains, so a practice rule arrives the moment such code is written, in any file.
+- **Before the agent commits:** the rules for the changes, once per diff (`distribution.commitCheck`).
 - **To teach a lesson:** `/homeostat:learn` or `homeostat learn`. It is saved in the clone's `.homeostat/pending/`, applies to the author's sessions at once, and goes to the team at the next daily run.
 - **To dispute a rule:** `homeostat flag <id> --reason "…"`. It leaves sessions at once and goes back to review.
 

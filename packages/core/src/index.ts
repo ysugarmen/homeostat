@@ -473,16 +473,28 @@ export {
   snapshotRepo,
 } from "./seed.ts";
 export {
+  areaWideScopes,
+  type BroadScope,
+  broadScopesFor,
   CONTEXT_HEADER,
+  codeAffinity,
   fileRefs,
+  fillBudget,
   KIND_GUIDANCE,
+  originDistance,
+  type RankedForFile,
+  rankForFile,
   renderContext,
+  renderTitles,
   restCounts,
+  rulesForCode,
   rulesForFile,
   type SelectedEntry,
   type Selection,
   type SelectOptions,
   selectEntries,
+  selectForFile,
+  usableTrigger,
 } from "./select.ts";
 export {
   type CaseResult,

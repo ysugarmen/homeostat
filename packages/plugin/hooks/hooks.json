@@ -61,6 +61,19 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/run.mjs", "commit"],
+            "timeout": 15
+          }
+        ]
+      }
     ]
   }
 }

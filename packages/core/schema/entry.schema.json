@@ -53,6 +53,10 @@
         },
         "changedCode": {
           "type": "boolean"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": ["type", "author"],
@@ -115,6 +119,15 @@
         "practice",
         "decision"
       ]
+    },
+    "triggers": {
+      "maxItems": 5,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 60
+      }
     },
     "adopted": {
       "type": "boolean"

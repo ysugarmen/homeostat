@@ -150,6 +150,7 @@ distribution:
       ["distribution.exports", "copilot"],
       ["distribution.tokenBudget", "1500"],
       ["distribution.docTokenBudget", "1000"],
+      ["distribution.commitCheck", "on"],
     ]);
     const text = applySection(yaml, "distribution", form).text ?? "";
     expect(text).toBe(yaml.replace("tokenBudget: 2000", "tokenBudget: 1500"));

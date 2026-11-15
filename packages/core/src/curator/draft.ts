@@ -11,6 +11,8 @@ export interface Draft {
   topic?: string;
   /** When no topic fits: a short name for a new one, for a person to consider. */
   suggestedTopic?: string;
+  /** Literal code fragments the rule is about, so it follows that code into any file. */
+  triggers?: string[];
 }
 
 export interface DraftContext {
@@ -47,6 +49,12 @@ export const draftSchema = z.object({
     .describe(
       "only with topic general: a short lowercase-hyphenated name for a new topic it would fit",
     ),
+  triggers: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "0 to 4 short literal code fragments, copied from the thread's code, that appear in code this rule is about (e.g. `Literal[`, `freeze_time(`, `# TODO`); empty when the rule is about a place, a process or the pull request itself",
+    ),
 });
 
 export const DRAFT_SYSTEM = `You maintain a software team's knowledge base of coding rules that AI coding agents follow.
@@ -54,6 +62,8 @@ export const DRAFT_SYSTEM = `You maintain a software team's knowledge base of co
 You get one code-review thread: a reviewer's comment on a pull request, any replies, and the fact that the author changed the code afterwards. Decide whether it holds a lasting rule that would help on other pull requests too, and if so write it.
 
 Write the rule so it generalises beyond this pull request but stays concrete: name the function, package, path or pattern involved. Use only names, values and examples that appear in the thread; do not add illustrative values of your own, because other agents will treat every detail in the rule as fact. Take the reason only from the thread; never invent facts or motivations it does not state. If the reviewer gives no reason, write the most direct reason the thread supports, briefly.
+
+When the rule is about how a kind of code is written (a type, a call, a library, a pattern), give triggers: short literal fragments that code breaking or following the rule contains, taken from the thread, so the rule reaches whoever writes such code next, in any file. Make them specific: never a bare keyword like def, class, import or return. Leave triggers empty when the rule is about a place, a deploy or a pull-request habit.
 
 Set keep to false for one-offs: typos, naming nits specific to this code, questions, praise, or anything that only makes sense for this diff.`;
 
@@ -121,6 +131,7 @@ export class ClaudeDrafter implements Drafter {
       area: out.area.trim(),
       ...(out.topic?.trim() ? { topic: out.topic.trim() } : {}),
       ...(out.suggested_topic?.trim() ? { suggestedTopic: out.suggested_topic.trim() } : {}),
+      ...(out.triggers?.length ? { triggers: out.triggers } : {}),
     };
   }
 }

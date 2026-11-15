@@ -143,6 +143,8 @@ describe("settings forms write homeostat.yaml (4.2)", () => {
       _token: token,
       "distribution.exports": ["claude", "cursor"],
       "distribution.tokenBudget": "1500",
+      // Checked by default, as the form shows it.
+      "distribution.commitCheck": "on",
     });
     expect(status).toBe(200);
     expect(html).toContain("Saved to homeostat.yaml");
@@ -151,6 +153,7 @@ describe("settings forms write homeostat.yaml (4.2)", () => {
       exports: ["claude", "cursor"],
       tokenBudget: 1500,
       docTokenBudget: 1000,
+      commitCheck: true,
     });
     expect((await get("/settings/distribution")).html).toContain('value="1500"');
   });

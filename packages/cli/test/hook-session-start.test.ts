@@ -84,11 +84,13 @@ describe("homeostat hook session-start", () => {
     expect(code).toBe(0);
     expect(JSON.parse(stdout).hookSpecificOutput.hookEventName).toBe("SessionStart");
     const ids = [...contextOf(stdout).matchAll(/^## .+ \(([a-z0-9-]+)\)$/gm)].map((m) => m[1]);
+    // outbound-http-retry-helper is scoped to its whole area (the integrations globs), which only
+    // says what area it is in: it comes after the rules whose scope someone narrowed.
     expect(ids).toEqual([
       "api-idempotency",
-      "outbound-http-retry-helper",
       "api-timeouts",
       "core-no-console",
+      "outbound-http-retry-helper",
       "core-conventional-commits",
       "redact-before-logging",
     ]);

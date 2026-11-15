@@ -349,6 +349,11 @@ export const configSchema = z.strictObject({
       tokenBudget: z.int().positive().default(2000),
       /** Tokens for the document sections that name touched files, on top of the rules. */
       docTokenBudget: z.int().nonnegative().default(1000),
+      /**
+       * Before an agent's git commit, show the rules for the staged changes and hold the commit
+       * once so the agent checks its diff against them.
+       */
+      commitCheck: z.boolean().default(true),
     })
     .prefault({}),
   notifications: z

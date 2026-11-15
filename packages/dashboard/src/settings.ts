@@ -349,6 +349,12 @@ export const SECTIONS: Section[] = [
         label: "Token budget for documents",
         kind: "number",
       },
+      {
+        path: ["distribution", "commitCheck"],
+        label: "Check commits against the rules",
+        kind: "checkbox",
+        help: "Before an agent commits, show it the rules for the changed files and code, and hold the commit once",
+      },
     ],
   },
   {

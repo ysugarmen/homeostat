@@ -250,6 +250,15 @@ describe("curate", () => {
     expect(after.ok).toBe(true);
   });
 
+  test("a rule keeps the file it was learned on, and only triggers specific enough to fire", async () => {
+    const drafter = new FakeDrafter({ triggers: ["withRetry(", "def", "# ", "withRetry("] });
+    const [entry] = (await run(drafter)).entries;
+    expect(entry?.frontmatter.source.path).toBe(drafter.seen[0]?.root.path);
+    expect(entry?.frontmatter.source.path).toBeTruthy();
+    expect(entry?.frontmatter.triggers).toEqual(["withRetry("]);
+    expect(validate({ ...kbFiles(), [entry?.path ?? ""]: entry?.text ?? "" }).ok).toBe(true);
+  });
+
   test("reads every repo's PRs oldest merge first, so a cap does not starve a later repo", async () => {
     // Two code repos: the first has a backlog of newer PRs, the second one older PR. Read repo by
     // repo, the cap was reached in the first and the second was never read, run after run.

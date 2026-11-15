@@ -13,6 +13,7 @@ import type { Frontmatter } from "../schema.ts";
 import { score } from "../score.ts";
 import { searchSections } from "../search.ts";
 import { redactSecrets } from "../secrets.ts";
+import { usableTrigger } from "../select.ts";
 import { slugify } from "../slug.ts";
 import { countTokens } from "../tokens.ts";
 import { GENERAL_TOPIC, topicsFor } from "../topics.ts";
@@ -312,6 +313,7 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         repo: kbRepo,
         id: uniqueId(slugify(d.title) ?? `review-${pr.id}-${safe.root.id}`, ids),
         url,
+        path: safe.root.path,
         author: reviewer.id,
         today: input.today,
       });
@@ -556,7 +558,10 @@ function buildEntry(
       area: string;
       topic?: string;
       suggestedTopic?: string;
+      triggers?: string[];
     };
+    /** The file the review comment was on, when it was on one. */
+    path?: string | undefined;
     /** The multi-repo KB's repo the PR is from; undefined in a one-repo KB. */
     repo?: string | undefined;
     id: string;
@@ -575,7 +580,13 @@ function buildEntry(
     status: "candidate",
     score: 0,
     owner: args.author,
-    source: { type: "pr-feedback", url: args.url, author: args.author, changedCode: true },
+    source: {
+      type: "pr-feedback",
+      url: args.url,
+      author: args.author,
+      changedCode: true,
+      ...(args.path ? { path: args.path } : {}),
+    },
     created: args.today,
     lastConfirmed: args.today,
     tokens: countTokens(body),
@@ -588,6 +599,9 @@ function buildEntry(
       : GENERAL_TOPIC
     : undefined;
   if (topic) frontmatter.topic = topic;
+  // Only fragments specific enough to say something about the code, each once, at most five.
+  const triggers = [...new Set((draft.triggers ?? []).map((t) => t.trim()).filter(usableTrigger))];
+  if (triggers.length) frontmatter.triggers = triggers.slice(0, 5);
   const suggested =
     topic === GENERAL_TOPIC
       ? (draft.suggestedTopic ?? (draft.topic !== GENERAL_TOPIC ? draft.topic : undefined))

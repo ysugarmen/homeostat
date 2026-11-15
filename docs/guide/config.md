@@ -97,6 +97,7 @@ A key Homeostat does not know is an error for `homeostat validate`, the KB's own
 | `distribution.exports` | all four | Which tools `homeostat export` writes for: `claude`, `cursor`, `agents-md`, `copilot` |
 | `distribution.tokenBudget` | `2000` | Tokens of rules per session |
 | `distribution.docTokenBudget` | `1000` | Tokens of document sections per session, on top of the rules |
+| `distribution.commitCheck` | `true` | Before an agent's `git commit`, show it the rules for what it is committing (rules whose code triggers the added lines contain, then rules learned on or near the changed files, by title) and hold that commit once so it checks the diff; the same diff then goes through. See [Clients](clients.md#rules-at-the-right-moment) |
 
 ## `notifications`
 

@@ -58,12 +58,13 @@ Partner APIs time out often; the helper adds backoff and the request-id header o
 | `status` | `candidate` (proposed), `accepted` (in force), `disputed` (flagged back to review), `retired` |
 | `score` | Computed from the source; `validate --fix` keeps it current |
 | `owner` | The member who answers for it |
-| `source` | `type` (`pr-feedback`, `manual`, `agent-handoff`, `deep-dive`), `url` (required for pr-feedback), `author`, `changedCode` (did the code change after the comment?) |
+| `source` | `type` (`pr-feedback`, `manual`, `agent-handoff`, `deep-dive`), `url` (required for pr-feedback), `author`, `changedCode` (did the code change after the comment?), `path` (the file the review comment was on: sessions get the rule when they open that file or one near it) |
 | `alsoFrom` | Optional: URLs of later lessons the daily run folded into this rule instead of adding a sibling. `source` stays the first origin; the curator treats these threads as already known |
 | `created`, `lastConfirmed` | ISO dates; the deep dive retires rules not confirmed for `staleAfterDays` |
 | `approvedBy` | Optional: who accepted it. Merging is the approval, so nobody needs to set it by hand |
 | `kind` | Optional: `convention`, `anti-pattern`, `review-lesson`, `migration`, `legacy`, `tech-debt`, `practice`, `decision`. Sessions group rules by kind under one line of guidance each |
 | `adopted` | With `kind: decision`: `false` records a proposal the team rejected. Agents see it in search and explain as context and stop re-proposing it, but never get it as a rule |
+| `triggers` | Optional, at most 5: short literal code fragments the rule is about, like `Literal[` or `freeze_time(`. When an agent writes code containing one, the rule is given right then, in any file its scope covers. The curator writes them for rules about how code is written; bare keywords, punctuation, patterns like `.*` and English phrases are never used |
 | `riskReviewedBy` | A member who read the risky-content findings (see below) and judged the rule safe |
 | `conflictsWith`, `supersedes`, `tags`, `flags` | Links to other rules, search tags, and "this is wrong" reports (each costs score) |
 | `tokens` | Cached token count of the body, for budgeting; `validate --fix` updates it |

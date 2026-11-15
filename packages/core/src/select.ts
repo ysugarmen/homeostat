@@ -1,5 +1,7 @@
 import { Minimatch } from "minimatch";
+import type { Config } from "./config.ts";
 import type { Entry } from "./entry.ts";
+import { areaMap } from "./layout.ts";
 import { reciprocalRankFusion } from "./rank.ts";
 import { isRejectedDecision, type Kind } from "./schema.ts";
 import { tokenize } from "./search.ts";
@@ -17,6 +19,8 @@ export interface SelectOptions {
   tokenBudget: number;
   /** Hard cap on rendered characters, e.g. Claude Code's 10,000 for SessionStart context. */
   maxChars?: number;
+  /** Scopes that only name a rule's area; such a match ranks below a precise one. */
+  broad?: BroadScope;
 }
 
 export interface SelectedEntry {
@@ -129,10 +133,186 @@ export function rulesForFile(entries: readonly Entry[], path: string): Entry[] {
   return entries.filter((e) => {
     if (e.frontmatter.status !== "accepted" || isRejectedDecision(e.frontmatter)) return false;
     if (e.frontmatter.scope.some((g) => !isGlobalGlob(g) && glob(g).match(path))) return true;
+    if (originDistance(e.frontmatter.source.path, path) !== undefined) return true;
     return fileRefs(`${e.frontmatter.title} ${e.sections.rule ?? ""}`).some(
       (r) => !(COMMON_NAMES.has(r) && !r.includes("/")) && namesExactly(r, path),
     );
   });
+}
+
+const folder = (p: string) => p.slice(0, Math.max(0, p.lastIndexOf("/")));
+
+/**
+ * How near `path` is to where a rule was learned (`source.path`): 0 the same file, 1 the same
+ * folder, 2 the folder above it; undefined when farther, or when the rule's origin is unknown.
+ * Review comments repeat near where they were first made: in a team trial, 4 in 10 repeated
+ * lessons were repeated in the file, folder or package they were learned in.
+ */
+export function originDistance(origin: string | undefined, path: string): number | undefined {
+  if (!origin) return undefined;
+  if (origin === path) return 0;
+  const a = folder(origin);
+  const b = folder(path);
+  if (a === b) return 1;
+  const up = folder(a);
+  return up && up === folder(b) ? 2 : undefined;
+}
+
+/** A scope that only says which area a rule is in: true for an area's own globs. */
+export type BroadScope = (scope: readonly string[]) => boolean;
+
+/**
+ * A predicate for scopes that cover a whole area, from the area globs in force: the curator
+ * scopes each rule to its area, so in a big area hundreds of rules match every file in it.
+ */
+export function areaWideScopes(areas: Record<string, readonly string[]>): BroadScope {
+  const key = (globs: readonly string[]) => [...globs].sort().join("\n");
+  const wide = new Set(Object.values(areas).map(key));
+  return (scope) => wide.has(key(scope));
+}
+
+/** The area-wide scopes of a repo's areas (a one-repo KB's, without a repo). */
+export function broadScopesFor(config: Pick<Config, "repos" | "areas">, repo?: string): BroadScope {
+  return areaWideScopes(areaMap(config, repo));
+}
+
+export interface RankedForFile {
+  entry: Entry;
+  /**
+   * 0 learned on this file, or names it; 1 a narrow scope matches it; 2 learned in its folder;
+   * 3 learned in the folder above; 4 only an area-wide scope matches it.
+   */
+  tier: number;
+}
+
+/**
+ * The rules about one file, best first: where the rule was learned and what it names come
+ * before area-wide scopes, so a file in a big area gets its own rules, not the area's top few.
+ * Within a tier, the rule whose words share the path's come first, then score.
+ */
+export function rankForFile(
+  entries: readonly Entry[],
+  path: string,
+  opts: { broad?: BroadScope; code?: string } = {},
+): RankedForFile[] {
+  const named = (e: Entry) =>
+    fileRefs(`${e.frontmatter.title} ${e.sections.rule ?? ""}`).some(
+      (r) => !(COMMON_NAMES.has(r) && !r.includes("/")) && namesExactly(r, path),
+    );
+  const tierOf = (e: Entry) => {
+    const d = originDistance(e.frontmatter.source.path, path);
+    if (d === 0 || named(e)) return 0;
+    const narrow =
+      !opts.broad?.(e.frontmatter.scope) &&
+      e.frontmatter.scope.some((g) => !isGlobalGlob(g) && glob(g).match(path));
+    if (narrow) return 1;
+    if (d !== undefined) return d + 1;
+    return 4;
+  };
+  const candidates = rulesForFile(entries, path);
+  const keywords = new Map(keywordRanking(candidates, [path]).map((id, i) => [id, i]));
+  const kw = (e: Entry) => keywords.get(e.frontmatter.id) ?? Number.POSITIVE_INFINITY;
+  const affinity = opts.code ? codeAffinity(candidates, opts.code) : new Map<string, number>();
+  const near = (e: Entry) => affinity.get(e.frontmatter.id) ?? 0;
+  return candidates
+    .map((entry) => ({ entry, tier: tierOf(entry) }))
+    .sort(
+      (a, b) =>
+        a.tier - b.tier ||
+        near(b.entry) - near(a.entry) ||
+        kw(a.entry) - kw(b.entry) ||
+        b.entry.frontmatter.score - a.entry.frontmatter.score ||
+        b.entry.frontmatter.lastConfirmed.localeCompare(a.entry.frontmatter.lastConfirmed) ||
+        a.entry.frontmatter.id.localeCompare(b.entry.frontmatter.id),
+    );
+}
+
+/**
+ * How much of each rule's own vocabulary the code uses: the summed rarity (among `entries`) of
+ * the rule's words that appear in the code, over the root of how many words the rule has. A
+ * file can hold a hundred rules; the ones naming what this code calls come first.
+ */
+export function codeAffinity(entries: readonly Entry[], code: string): Map<string, number> {
+  const inCode = new Set(tokenize(code));
+  const words = entries.map((e) => ({
+    id: e.frontmatter.id,
+    terms: new Set(tokenize(`${e.frontmatter.title} ${e.sections.rule ?? ""}`)),
+  }));
+  const df = new Map<string, number>();
+  for (const w of words) for (const t of w.terms) df.set(t, (df.get(t) ?? 0) + 1);
+  const n = words.length;
+  const out = new Map<string, number>();
+  for (const w of words) {
+    let sum = 0;
+    for (const t of w.terms) {
+      if (inCode.has(t))
+        sum += Math.log(1 + (n - (df.get(t) ?? 0) + 0.5) / ((df.get(t) ?? 0) + 0.5));
+    }
+    out.set(w.id, w.terms.size ? sum / Math.sqrt(w.terms.size) : 0);
+  }
+  return out;
+}
+
+/** The rules for one file within a token budget: `rankForFile`, then `fillBudget`. */
+export function selectForFile(
+  entries: readonly Entry[],
+  path: string,
+  opts: { tokenBudget: number; broad?: BroadScope; code?: string },
+): Selection {
+  return fillBudget(
+    rankForFile(entries, path, opts).map((r) => r.entry),
+    opts,
+  );
+}
+
+/** Code fragments too common to say anything about the code that contains them. */
+const GENERIC_TRIGGERS = new Set(
+  (
+    "def class import from return self async await const let var function none true false null " +
+    "print if else for while try except catch export public private static new this match case " +
+    "with lambda yield pass raise assert type interface enum test data value string number"
+  ).split(" "),
+);
+
+/**
+ * Whether a trigger is specific enough to fire on: a literal code fragment, not a bare keyword,
+ * not punctuation or whitespace, not a regular expression and not an English phrase. In a team
+ * trial these were what a model wrote that fired on almost any file.
+ */
+export function usableTrigger(t: string): boolean {
+  const s = t.trim();
+  if (s.length < 3 || s.length > 60) return false;
+  if (!/[A-Za-z0-9_]{3,}/.test(s)) return false;
+  if (GENERIC_TRIGGERS.has(s.replace(/[^A-Za-z]/g, "").toLowerCase())) return false;
+  // A pattern, not code: `.*`, `\b`, `{3,}` and the like.
+  if (/\.\*|\\[a-zA-Z]|\{\d+,?\d*\}|\(\?[:=!]/.test(s)) return false;
+  // Words, not code: "module docstring", "env var in charts".
+  if (/^[A-Za-z][a-z]*(?: [a-z]+)+$/.test(s)) return false;
+  return true;
+}
+
+/**
+ * The rules whose triggers appear in code just written to `path` (literal, case-sensitive),
+ * among those whose scope covers the file: a practice rule follows the code it is about, in
+ * whatever file it is written.
+ */
+export function rulesForCode(entries: readonly Entry[], path: string, code: string): Entry[] {
+  if (!code) return [];
+  return entries.filter((e) => {
+    const triggers = e.frontmatter.triggers ?? [];
+    if (!triggers.length) return false;
+    if (e.frontmatter.status !== "accepted" || isRejectedDecision(e.frontmatter)) return false;
+    const covers = e.frontmatter.scope.some((g) => isGlobalGlob(g) || glob(g).match(path));
+    return covers && triggers.some((t) => usableTrigger(t) && code.includes(t.trim()));
+  });
+}
+
+/**
+ * One line per rule, title and id: the rules that apply but did not fit in full. A file can hold
+ * dozens of rules; their titles let the agent see which matter here and read those.
+ */
+export function renderTitles(entries: readonly Entry[]): string {
+  return entries.map((e) => `- ${e.frontmatter.title} (${e.frontmatter.id})`).join("\n");
 }
 
 /** Literal folders a glob names before its first wildcard: `services/billing/**` is 2. */
@@ -215,6 +395,8 @@ export function selectEntries(entries: readonly Entry[], opts: SelectOptions): S
       const hit = e.frontmatter.scope.filter(
         (g) => !isGlobalGlob(g) && opts.paths.some((p) => glob(g).match(p)),
       );
+      const wide = hit.length > 0 && !!opts.broad?.(e.frontmatter.scope);
+      const origin = e.frontmatter.source.path;
       const refs = fileRefs(
         `${e.frontmatter.title} ${e.sections.rule ?? ""} ${e.sections.why ?? ""}`,
       );
@@ -226,6 +408,11 @@ export function selectEntries(entries: readonly Entry[], opts: SelectOptions): S
           else if (!near && namesPath(r, p)) near = true;
         }
       }
+      for (const p of opts.paths) {
+        const d = originDistance(origin, p);
+        if (d === 0) exact++;
+        else if (d !== undefined) near = true;
+      }
       const specific = hit.length > 0;
       const tier = specific || exact ? 0 : near ? 1 : refs.length === 0 ? 2 : 3;
       return {
@@ -234,6 +421,9 @@ export function selectEntries(entries: readonly Entry[], opts: SelectOptions): S
         specific,
         exact,
         tier,
+        // An area-wide scope only says the rule is in the touched area: among scope matches it
+        // ranks after every narrower one, however deep its globs.
+        wide,
         depth: Math.max(0, ...hit.map(depth)),
         applies: specific || isGlobal(e.frontmatter.scope),
       };
@@ -247,7 +437,7 @@ export function selectEntries(entries: readonly Entry[], opts: SelectOptions): S
   const fused = reciprocalRankFusion([
     applicable
       .filter((r) => r.specific)
-      .sort((a, b) => b.depth - a.depth || prior(a, b))
+      .sort((a, b) => Number(a.wide) - Number(b.wide) || b.depth - a.depth || prior(a, b))
       .map((r) => r.id),
     keywordRanking(
       applicable.map((r) => r.e),
@@ -262,11 +452,25 @@ export function selectEntries(entries: readonly Entry[], opts: SelectOptions): S
     (a, b) => a.tier - b.tier || (fused.get(b.id) ?? 0) - (fused.get(a.id) ?? 0) || prior(a, b),
   );
 
+  return fillBudget(
+    relevant.map((r) => r.e),
+    opts,
+  );
+}
+
+/**
+ * Takes entries in order within the budget: each whole if it fits, else as its Rule alone,
+ * else left for the index; a rule that does not fit never stops a smaller one after it.
+ */
+export function fillBudget(
+  ordered: readonly Entry[],
+  opts: { tokenBudget: number; maxChars?: number },
+): Selection {
   const items: SelectedEntry[] = [];
   const dropped: string[] = [];
   const rest: Entry[] = [];
   let tokens = 0;
-  for (const { e } of relevant) {
+  for (const e of ordered) {
     const remaining = opts.tokenBudget - tokens;
     // The cached `tokens` field rules out the full form cheaply; the final count is exact.
     const forms: SelectedEntry["form"][] =

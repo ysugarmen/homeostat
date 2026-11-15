@@ -33,6 +33,11 @@ export const sourceSchema = z.strictObject({
   url: z.url({ protocol: /^https?$/ }).optional(),
   author: memberId,
   changedCode: z.boolean().optional(),
+  /**
+   * The repo-relative file the review comment was on: where the lesson was learned. Sessions
+   * get the rule when they open that file or one near it, whatever its scope.
+   */
+  path: z.string().min(1).optional(),
 });
 
 /**
@@ -72,6 +77,14 @@ export const frontmatterSchema = z.strictObject({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     .optional(),
   kind: z.enum(KINDS).optional(),
+  /**
+   * Short literal code fragments the rule is about, e.g. `Literal[` or `freeze_time(`. When an
+   * agent writes code containing one, the rule is given right then, wherever the file is.
+   */
+  triggers: z
+    .array(z.string().trim().min(3, "must be at least 3 characters").max(60))
+    .max(5, "must list at most 5 triggers")
+    .optional(),
   /**
    * With kind decision: false records a proposal the team discussed and rejected. It is never
    * injected as a rule; search and explain show it as context so agents stop re-proposing it.
