@@ -293,18 +293,32 @@ export function usableTrigger(t: string): boolean {
 
 /**
  * The rules whose triggers appear in code just written to `path` (literal, case-sensitive),
- * among those whose scope covers the file: a practice rule follows the code it is about, in
- * whatever file it is written.
+ * among those whose scope covers the file, best first: more of a rule's triggers in the code,
+ * then a longer one (a long fragment is a rarer one). A practice rule follows the code it is
+ * about, in whatever file it is written. Many rules can fire on one edit; the caller gives the
+ * first in full and lists the rest by title.
  */
 export function rulesForCode(entries: readonly Entry[], path: string, code: string): Entry[] {
   if (!code) return [];
-  return entries.filter((e) => {
-    const triggers = e.frontmatter.triggers ?? [];
-    if (!triggers.length) return false;
-    if (e.frontmatter.status !== "accepted" || isRejectedDecision(e.frontmatter)) return false;
-    const covers = e.frontmatter.scope.some((g) => isGlobalGlob(g) || glob(g).match(path));
-    return covers && triggers.some((t) => usableTrigger(t) && code.includes(t.trim()));
-  });
+  const fired: { e: Entry; count: number; longest: number }[] = [];
+  for (const e of entries) {
+    const triggers = (e.frontmatter.triggers ?? []).map((t) => t.trim()).filter(usableTrigger);
+    if (!triggers.length) continue;
+    if (e.frontmatter.status !== "accepted" || isRejectedDecision(e.frontmatter)) continue;
+    if (!e.frontmatter.scope.some((g) => isGlobalGlob(g) || glob(g).match(path))) continue;
+    const hit = triggers.filter((t) => code.includes(t));
+    if (hit.length)
+      fired.push({ e, count: hit.length, longest: Math.max(...hit.map((t) => t.length)) });
+  }
+  return fired
+    .sort(
+      (a, b) =>
+        b.count - a.count ||
+        b.longest - a.longest ||
+        b.e.frontmatter.score - a.e.frontmatter.score ||
+        a.e.frontmatter.id.localeCompare(b.e.frontmatter.id),
+    )
+    .map((x) => x.e);
 }
 
 /**

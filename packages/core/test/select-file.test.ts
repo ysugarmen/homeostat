@@ -129,7 +129,21 @@ describe("code triggers", () => {
     ).toEqual(["strenum"]);
     expect(
       rulesForCode(entries, "services/billing/kinds.py", code).map((e) => e.frontmatter.id),
-    ).toEqual(["strenum", "billing-only"]);
+    ).toEqual(["billing-only", "strenum"]);
     expect(rulesForCode(entries, "services/billing/kinds.py", "Kind = str")).toEqual([]);
+  });
+
+  test("the rule more of whose triggers the code holds comes first, then the longer match", () => {
+    const entries = [
+      rule("short", { scope: ["**"], triggers: ["ledger"] }),
+      rule("long", { scope: ["**"], triggers: ["ledger_client.post("] }),
+      rule("two", { scope: ["**"], triggers: ["ledger", "with_retry("] }),
+    ];
+    const code = "with_retry(lambda: ledger_client.post(batch))";
+    expect(rulesForCode(entries, "a.py", code).map((e) => e.frontmatter.id)).toEqual([
+      "two",
+      "long",
+      "short",
+    ]);
   });
 });

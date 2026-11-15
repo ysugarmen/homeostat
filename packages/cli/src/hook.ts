@@ -663,11 +663,15 @@ const FILE_TOKENS = 700;
 /** At most this many more of a file's own rules are listed by title when it is opened. */
 const FILE_TITLES = 20;
 /** At most this many more rules for a commit are listed by title. */
-const COMMIT_TITLES = 40;
-/** Tokens of rules the code just written brings: one or two, right after the edit. */
-const CODE_TOKENS = 500;
-/** Tokens of rules a commit check shows for the staged changes. */
-const COMMIT_TOKENS = 1500;
+const COMMIT_TITLES = 50;
+/** Of those, at least this many are the changed files' own rules (learned on or near them). */
+const COMMIT_NEARBY = 15;
+/** Tokens of rules the code just written brings in full: one or two, right after the edit. */
+const CODE_TOKENS = 300;
+/** At most this many more rules the code just written triggers are listed by title. */
+const CODE_TITLES = 15;
+/** Tokens of the rules a commit check shows in full: the code's best few. */
+const COMMIT_TOKENS = 900;
 
 /** The text an Edit, Write or MultiEdit just wrote; "" for a Read. */
 function writtenCode(input: HookInput): string {
@@ -759,11 +763,13 @@ async function fileUse(input: HookInput, io: Io) {
   // A triggered rule comes again even if the session start gave it: the code just written is
   // the moment it matters. Once per session, and never twice in one answer.
   const triggered = new Set([...(state.triggered ?? []), ...fileIds]);
-  const forCode = fillBudget(
-    rulesForCode(pool, rel, code).filter((e) => !triggered.has(e.frontmatter.id)),
-    { tokenBudget: CODE_TOKENS },
-  );
-  const codeIds = forCode.items.map((i) => i.entry.frontmatter.id);
+  const fired = rulesForCode(pool, rel, code).filter((e) => !triggered.has(e.frontmatter.id));
+  // In a team trial one edit fired a median of 5 rules and up to 80; the best go in full, and
+  // the agent picks from the others' titles better than any ranking of them.
+  const forCode = fillBudget(fired.slice(0, 2), { tokenBudget: CODE_TOKENS });
+  const codeFull = new Set(forCode.items.map((i) => i.entry.frontmatter.id));
+  const codeTitles = fired.filter((e) => !codeFull.has(e.frontmatter.id)).slice(0, CODE_TITLES);
+  const codeIds = [...codeFull, ...codeTitles.map((e) => e.frontmatter.id)];
   writeState(kbRoot, input.session_id, {
     ...state,
     files: opening ? [...(state.files ?? []), rel] : (state.files ?? []),
@@ -798,10 +804,21 @@ async function fileUse(input: HookInput, io: Io) {
       source: "code",
       cwd,
       ...(repo ? { repo } : {}),
-      entries: forCode.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
+      entries: [
+        ...forCode.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
+        ...codeTitles.map((e) => ({ id: e.frontmatter.id, form: "title" })),
+      ],
     });
     parts.push(
-      `# Team rules about the code you just wrote (homeostat)\n\nWhat you just wrote in ${rel} is the kind of code these rules are about. Check it against them now, and fix it if it breaks one.\n\n${ruleBlocks(forCode)}`,
+      [
+        `# Team rules about the code you just wrote (homeostat)\n\nWhat you just wrote in ${rel} is the kind of code these rules are about. Check it against them now, and fix it if it breaks one.`,
+        forCode.items.length ? ruleBlocks(forCode) : "",
+        codeTitles.length
+          ? `The code also matches these; read any that fit what you wrote (explain <id>):\n${renderTitles(codeTitles)}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
     );
   }
   if (!parts.length) return;
@@ -866,9 +883,14 @@ async function commitCheck(input: HookInput, io: Io) {
   const broad = broadScopesFor(config, repo);
   const triggered = new Map<string, Entry>();
   const files = [...addedLines(diff)].slice(0, 30);
-  // Code first: a trigger in the added lines is the surest sign a rule applies.
-  for (const [path, added] of files) {
-    for (const e of rulesForCode(pool, path, added)) triggered.set(e.frontmatter.id, e);
+  // Code first: a trigger in the added lines is the surest sign a rule applies. Each file's
+  // best first, file by file in turn, so one busy file does not fill the list.
+  const perFile = files.map(([path, added]) => rulesForCode(pool, path, added));
+  for (let i = 0; perFile.some((r) => i < r.length); i++) {
+    for (const r of perFile) {
+      const e = r[i];
+      if (e) triggered.set(e.frontmatter.id, e);
+    }
   }
   // Then each file's own rules (learned on it or its folder, naming it, or narrowly scoped),
   // nearest first, ranked by the lines added to it; listed by title for the agent to pick from.
@@ -882,11 +904,13 @@ async function commitCheck(input: HookInput, io: Io) {
       }
     }
   }
-  const selection = fillBudget([...triggered.values()], { tokenBudget: COMMIT_TOKENS });
+  const selection = fillBudget([...triggered.values()].slice(0, 3), { tokenBudget: COMMIT_TOKENS });
   const shown = new Set(selection.items.map((i) => i.entry.frontmatter.id));
-  const titles = [...selection.rest, ...nearby.values()]
-    .filter((e) => !shown.has(e.frontmatter.id))
-    .slice(0, COMMIT_TITLES);
+  const rest = (xs: Iterable<Entry>, n: number) =>
+    [...xs].filter((e) => !shown.has(e.frontmatter.id)).slice(0, n);
+  // The code's matches, then the changed files' own rules: both kept, neither crowding out the other.
+  const codeTitles = rest(triggered.values(), COMMIT_TITLES - COMMIT_NEARBY);
+  const titles = [...codeTitles, ...rest(nearby.values(), COMMIT_TITLES - codeTitles.length)];
   writeState(kbRoot, input.session_id, {
     ...state,
     commitChecked: [...(state.commitChecked ?? []), hash].slice(-20),
@@ -910,7 +934,7 @@ async function commitCheck(input: HookInput, io: Io) {
       ? `The code you are committing matches these rules:\n\n${ruleBlocks(selection)}`
       : "",
     titles.length
-      ? `Rules learned on or near the files you changed; read any your change touches (explain <id>):\n${renderTitles(titles)}`
+      ? `Also for these changes (their code matches, or the rule was learned on or near the files); read any your change touches (explain <id>):\n${renderTitles(titles)}`
       : "",
   ]
     .filter(Boolean)

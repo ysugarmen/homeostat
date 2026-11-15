@@ -138,6 +138,36 @@ describe("homeostat hook file: rules triggered by the code written", () => {
   });
 });
 
+describe("homeostat hook file: many rules fire on one edit", () => {
+  test("the best two come in full, the others by title", async () => {
+    const kbDir = kb(
+      ["a", "b", "c", "d"].map((x) => ({
+        id: `kinds-${x}`,
+        fm: { scope: ["**"], triggers: ["Literal["] },
+        text: `Rule ${x} about closed sets of kinds.`,
+      })),
+    );
+    const cwd = codeRepo(["services/shipping/kinds.py"]);
+    const { stdout } = await hook(
+      "file",
+      {
+        session_id: "m1",
+        cwd,
+        tool_name: "Write",
+        tool_input: {
+          file_path: join(cwd, "services/shipping/kinds.py"),
+          content: 'K = Literal["a"]',
+        },
+      },
+      { HOMEOSTAT_DIR: kbDir },
+    );
+    const context = out(stdout).additionalContext;
+    expect(context.match(/^## Title kinds-/gm)).toHaveLength(2);
+    expect(context).toContain("The code also matches these");
+    expect(context.match(/^- Title kinds-[a-d] \(kinds-[a-d]\)$/gm)).toHaveLength(2);
+  });
+});
+
 describe("homeostat hook commit (PreToolUse on Bash)", () => {
   const setup = (extra = "") => {
     const kbDir = kb(
