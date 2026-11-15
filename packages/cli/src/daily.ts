@@ -54,6 +54,7 @@ import {
   retractCitations,
   SpendingCapError,
   sameLesson,
+  scanRisk,
   slugify,
   startPool,
   stateBranch,
@@ -705,8 +706,17 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
           : "";
         // The narrowed text meets the same checks as any draft (a rule's length, a title's):
         // otherwise it would merge past them and fail the KB's own validation.
+        // And the same risk scan: a rewording can say something the draft did not ("fine to skip
+        // if ..."), and a finding nobody signed off fails the KB's validation once merged.
+        const risk = narrowed
+          ? scanRisk(`${narrowed.title}\n${body}`, {
+              allowedDomains: config.security.allowedDomains,
+              bareHosts: true,
+            })[0]
+          : undefined;
         const invalid = narrowed
-          ? parseEntry(text).issues.find((i) => i.severity === "error")
+          ? (parseEntry(text).issues.find((i) => i.severity === "error") ??
+            (risk ? { message: `its wording has a risk finding ("${risk.excerpt}")` } : undefined))
           : undefined;
         if (invalid)
           io.stdout(`  judge ${l.id}: narrowed, but ${invalid.message}; kept for review\n`);

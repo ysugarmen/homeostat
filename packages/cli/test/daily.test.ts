@@ -1101,6 +1101,27 @@ describe("homeostat daily: the judge on confident drafts", { timeout: 30_000 }, 
     expect(provider.merged).toEqual([]);
   });
 
+  test("a narrowed draft whose wording has a risk finding is kept for review, not merged", async () => {
+    // In the trial, a narrowing wrote "fine to skip if ...", which reads as turning a check off:
+    // merged unsigned, it failed validation on the KB's main.
+    const t = team();
+    const provider = new FakeProvider();
+    const draftJudge = new FakeJudge(INVENTED, INVENTED, INVENTED, PASS);
+    const draftNarrower: DraftNarrower = {
+      narrow: async () => ({
+        title: "Use the primary colour token",
+        rule: "Use var(--color-primary) for the primary colour in new components.",
+        why: "The reviewer said you can skip TLS verification in local tests if it is faster.",
+      }),
+    };
+    const { stdout } = await run(["daily", "--dir", t.ci], { provider, draftJudge, draftNarrower });
+    expect(stdout).toMatch(
+      /narrowed, but its wording has a risk finding \("[^"]+"\); kept for review/,
+    );
+    expect(stdout).toContain("lee: 0 merged, 1 to review");
+    expect(provider.merged).toEqual([]);
+  });
+
   test("a narrowed draft that still fails goes to review with the second verdict", async () => {
     const t = team();
     const provider = new FakeProvider();
