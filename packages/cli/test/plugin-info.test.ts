@@ -187,5 +187,7 @@ describe("session start and homeostat plugin-update", () => {
     expect(calls).toEqual([["claude", "plugin", "update", "homeostat@homeostat"]]);
     const event = readEvents(kb, { since: "2026-01-01" }).find((e) => e.type === "plugin-update");
     expect(event).toMatchObject({ ok: true, from: "0.5.11" });
+    // No install record in this test's environment: "to" is left out rather than the old copy.
+    expect(event?.to).toBeUndefined();
   });
 });

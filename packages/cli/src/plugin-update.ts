@@ -15,11 +15,14 @@ export async function runPluginUpdate(opts: { dir?: string }, io: Io): Promise<n
   const result = await io.spawn?.(claudeBinary(env), ["plugin", "update", PLUGIN_ID], {
     timeoutMs: 120_000,
   });
-  const after = installedPlugin(env)?.version;
+  // After the update, Claude Code's install record, not the plugin this process runs from: that
+  // one is the old copy until the next session.
+  const installed = { ...env, CLAUDE_PLUGIN_ROOT: undefined };
+  const after = installedPlugin(installed)?.version;
   const ok = result?.code === 0;
   const root = resolve(opts.dir ?? env.HOMEOSTAT_DIR ?? ".");
   if (existsSync(join(root, "homeostat.yaml"))) {
-    recordPlugin(root, env);
+    recordPlugin(root, installed);
     logEvent(root, {
       ts: (io.now?.() ?? new Date()).toISOString(),
       type: "plugin-update",
