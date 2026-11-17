@@ -47,7 +47,7 @@ import type { Io } from "./cli.ts";
 import { git, gitIdentity } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { loadKbInForce } from "./kb-cache.ts";
-import { recordPlugin } from "./plugin-info.ts";
+import { installedPlugin, recordPlugin, selfUpdateDue } from "./plugin-info.ts";
 import { pendingFingerprint, readSyncState, syncDue, takeNotices } from "./sync.ts";
 import { touchedPaths, uncommitted } from "./touched.ts";
 
@@ -220,6 +220,12 @@ async function selectForSession(
   // Which plugin Claude Code runs here, for the heartbeat: a hook an older plugin does not
   // register never runs, whatever version of this CLI it launches.
   recordPlugin(kbRoot, io.env ?? {});
+  // An older plugin updates itself, in the background, when its marketplace may auto-update
+  // (an admin's or the developer's setting): Claude Code skips that where its own updates are
+  // off, and a hook an older plugin does not register never runs.
+  const plugin = installedPlugin(io.env ?? {});
+  if (plugin && selfUpdateDue(kbRoot, plugin, VERSION, io.env ?? {}, io.now?.() ?? new Date()))
+    io.background?.(["plugin-update", "--dir", kbRoot]);
   // Catch up with the daily run in the background; this session starts with what is local now.
   if (syncDue(kbRoot, io.now?.() ?? new Date(), 0))
     io.background?.(["sync", "--dir", kbRoot, "--quiet"]);

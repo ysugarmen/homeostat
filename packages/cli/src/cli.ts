@@ -49,6 +49,7 @@ import { type LearnOptions, runLearn } from "./learn.ts";
 import { runMcp } from "./mcp.ts";
 import { runMetrics } from "./metrics-command.ts";
 import { runMigrate } from "./migrate.ts";
+import { runPluginUpdate } from "./plugin-update.ts";
 import { runExplain, runList, runSearch, runStatus } from "./query.ts";
 import { type ReviewOptions, runReview } from "./review.ts";
 import { runSeed, type SeedOptions } from "./seed.ts";
@@ -580,6 +581,16 @@ export async function runCli(argv: readonly string[], given: Io = processIo): Pr
     .option("--push-only", "send pending lessons, skip the pull")
     .action(async (opts: SyncOptions) => {
       exitCode = await runSync(opts, io);
+    });
+
+  program
+    .command("plugin-update", { hidden: true })
+    .description(
+      "Update the homeostat Claude Code plugin. Session start runs it when the plugin is behind.",
+    )
+    .option("--dir <dir>", "knowledge base root (default: $HOMEOSTAT_DIR or the current dir)")
+    .action(async (opts: { dir?: string }) => {
+      exitCode = await runPluginUpdate(opts, io);
     });
 
   program
