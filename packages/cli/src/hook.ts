@@ -1,5 +1,12 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import {
   AGENT_ENV,
@@ -286,6 +293,10 @@ interface HandoffState {
   files?: string[];
   /** Rules given because code the agent wrote contained one of their triggers; once each. */
   triggered?: string[];
+  /** Rules this session was shown by title only, so a title is listed once. */
+  titled?: string[];
+  /** When the last shell command ended: files changed after it were edited by the next one. */
+  bashAt?: string;
   /** Diffs (by hash) the commit check already showed rules for; the next try goes through. */
   commitChecked?: string[];
   /** Document sections (`<doc>#<id>`) given for a message, so each is given once. */
@@ -719,76 +730,189 @@ function inCodeRepo(kbRoot: string, cwd: string, file: string) {
   return { root, rel };
 }
 
+/** At most this many files a single shell command opens get their rules: the rest come later. */
+const OPEN_PER_COMMAND = 3;
+/** A file a shell command changed is read whole for triggers only below this size. */
+const MAX_NEW_FILE = 100_000;
+const CODE_EXT =
+  /\.(?:py|pyi|ts|tsx|js|jsx|mjs|cjs|go|rb|java|kt|rs|sql|ya?ml|toml|json|sh|tf|md|proto|tpl|html|css|scss)$/;
+
+/** A file the agent touched: where it is, and the code just written to it ("" for a read). */
+interface Touch {
+  root: string;
+  rel: string;
+  code: string;
+}
+
 /**
- * PostToolUse on Read, Edit and Write. The first time a session opens a file: the rules about
- * it (learned on it or near it, naming it, or scoped to it), before the agent plans anything
+ * The files a shell command touched: every path it names that is a file, resolved from the
+ * session's folder or a `cd`/`-C` folder in the command. One that changed since the last command
+ * was edited (by sed, a heredoc, a script): its code is what the change added. Agents in auto
+ * mode read and edit with shell commands as often as with Read and Edit.
+ */
+export function bashTouches(
+  kbRoot: string,
+  cwd: string,
+  command: string,
+  since: number,
+  env: Io["env"],
+) {
+  const home = env?.HOME;
+  // A command runs where it cds to (or where git -C points): those folders come before the
+  // session's own, where the same relative path may name the main checkout instead.
+  const bases: string[] = [];
+  // Quoted folders may hold spaces ("~/Work Repos/app").
+  for (const m of command.matchAll(/(?:\bcd|\s-C)\s+(?:"([^"]+)"|'([^']+)'|([^\s"'&;|]+))/g)) {
+    const dir = m[1] ?? m[2] ?? m[3] ?? "";
+    bases.push(resolve(cwd, dir.startsWith("~/") && home ? join(home, dir.slice(2)) : dir));
+  }
+  bases.push(cwd);
+  const seen = new Set<string>();
+  const out: Touch[] = [];
+  // Quoted strings whole first (a path may hold spaces), then the words of the command.
+  const quoted = [...command.matchAll(/"([^"\n]+)"|'([^'\n]+)'/g)].map((m) => m[1] ?? m[2] ?? "");
+  for (const raw of [...quoted, ...command.split(/[\s"'`=(),;|&<>]+/)]) {
+    let token = raw.replace(/:\d+(?::\d+)?$/, "").replace(/[.:,]+$/, "");
+    if (!token || token.startsWith("-") || token.includes("://")) continue;
+    if (!token.includes("/") && !CODE_EXT.test(token)) continue;
+    if (token.startsWith("~/") && home) token = join(home, token.slice(2));
+    for (const base of bases) {
+      const abs = resolve(base, token);
+      if (seen.has(abs)) break;
+      let st: ReturnType<typeof statSync> | undefined;
+      try {
+        st = statSync(abs);
+      } catch {
+        continue;
+      }
+      if (!st.isFile()) break;
+      seen.add(abs);
+      const at = inCodeRepo(kbRoot, cwd, abs);
+      if (!at) break;
+      let code = "";
+      if (st.mtimeMs > since) {
+        const diff = git(at.root, "diff", "--unified=0", "--no-color", "HEAD", "--", at.rel) ?? "";
+        code = diff
+          .split("\n")
+          .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
+          .map((l) => l.slice(1))
+          .join("\n");
+        // Not in git yet: the whole new file is what was written.
+        if (!diff && st.size < MAX_NEW_FILE) {
+          try {
+            code = readFileSync(abs, "utf8");
+          } catch {
+            code = "";
+          }
+        }
+      }
+      out.push({ ...at, code });
+      break;
+    }
+    if (out.length >= 30) break;
+  }
+  return out;
+}
+
+/**
+ * PostToolUse on Read, Edit, Write and Bash. The first time a session opens a file: the rules
+ * about it (learned on it or near it, naming it, or scoped to it), before the agent plans anything
  * around it. Agents read code first and look rules up later, if ever; this way the rules a
  * reviewer wrote about a file arrive with the file. Then, on every edit: the rules whose
  * triggers the new code contains, once each, so a practice rule (a type, a call, a library)
- * arrives the moment the agent writes such code, in whatever file.
+ * arrives the moment the agent writes such code, in whatever file. A shell command counts too:
+ * a file it changed (sed, a heredoc, a script) is opened and edited; one it only names is not.
  */
 async function fileUse(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
-  const file = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
-  if (!file || !input.session_id) return;
+  if (!input.session_id) return;
   const kbRoot = findKb(io.env, cwd);
   if (!kbRoot) return;
-  const at = inCodeRepo(kbRoot, cwd, file);
-  if (!at) return;
-  const { root, rel } = at;
   const state = readState(kbRoot, input.session_id);
-  const opening = !state.files?.includes(rel);
-  const code = writtenCode(input);
-  if (!opening && !code) return;
+  const now = io.now?.() ?? new Date();
+  let touches: Touch[];
+  if (input.tool_name === "Bash") {
+    const command = input.tool_input?.command;
+    if (!command) return;
+    // Changed since the previous shell command (or the last minute): edited by this one.
+    const since = state.bashAt ? Date.parse(state.bashAt) : now.getTime() - 60_000;
+    touches = bashTouches(kbRoot, cwd, command, since, io.env);
+  } else {
+    const file = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
+    const at = file ? inCodeRepo(kbRoot, cwd, file) : undefined;
+    touches = at ? [{ ...at, code: writtenCode(input) }] : [];
+  }
+  const opened = new Set(state.files ?? []);
+  // From a shell command, only the files it changed: one it merely names (a grep, a diff, a cat
+  // of many files) is not one the agent is working on, and its rules would crowd the session.
+  const toOpen = touches
+    .filter((t) => !opened.has(t.rel) && (input.tool_name !== "Bash" || t.code))
+    // Edited files first: the ones the agent is working on.
+    .sort((a, b) => Number(!!b.code) - Number(!!a.code))
+    .slice(0, OPEN_PER_COMMAND);
+  const written = touches.filter((t) => t.code);
+  if (!toOpen.length && !written.length) {
+    if (input.tool_name === "Bash")
+      writeState(kbRoot, input.session_id, { ...state, bashAt: now.toISOString() });
+    return;
+  }
 
   const { config, entries } = loadKbInForce(kbRoot);
   if (!config) return;
-  const member = memberFromGit(config.team.members, gitIdentity(root));
-  const repo = repoHere(root, config);
+  const contexts = new Map<
+    string,
+    { repo: string | undefined; pool: Entry[]; broad: ReturnType<typeof broadScopesFor> }
+  >();
+  const contextFor = (root: string) => {
+    let c = contexts.get(root);
+    if (!c) {
+      const member = memberFromGit(config.team.members, gitIdentity(root));
+      const repo = repoHere(root, config);
+      const pool = visibleTo(
+        inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
+        config,
+        member,
+      );
+      c = { repo, pool, broad: broadScopesFor(config, repo) };
+      contexts.set(root, c);
+    }
+    return c;
+  };
   const seen = new Set(state.injected ?? []);
-  const pool = visibleTo(
-    inRepo(entries, config, repo).map((e) => ({ ...e.entry, path: e.path })),
-    config,
-    member,
-  );
-  const broad = broadScopesFor(config, repo);
-  const ranked = opening
-    ? rankForFile(
-        pool.filter((e) => !seen.has(e.frontmatter.id)),
-        rel,
-        { broad, ...(code ? { code } : {}) },
-      )
-    : [];
-  const forFile = fillBudget(
-    ranked.map((r) => r.entry),
-    { tokenBudget: FILE_TOKENS },
-  );
-  const fileIds = forFile.items.map((i) => i.entry.frontmatter.id);
-  // The file's other rules learned on it or near it, or about it, by title: a hot file holds
-  // dozens, and the agent picks the ones its change touches better than any ranking.
-  const alsoHere = ranked
-    .filter((r) => r.tier <= 3 && !fileIds.includes(r.entry.frontmatter.id))
-    .slice(0, FILE_TITLES)
-    .map((r) => r.entry);
-  // A triggered rule comes again even if the session start gave it: the code just written is
-  // the moment it matters. Once per session, and never twice in one answer.
-  const triggered = new Set([...(state.triggered ?? []), ...fileIds]);
-  const fired = rulesForCode(pool, rel, code).filter((e) => !triggered.has(e.frontmatter.id));
-  // In a team trial one edit fired a median of 5 rules and up to 80; the best go in full, and
-  // the agent picks from the others' titles better than any ranking of them.
-  const forCode = fillBudget(fired.slice(0, 2), { tokenBudget: CODE_TOKENS });
-  const codeFull = new Set(forCode.items.map((i) => i.entry.frontmatter.id));
-  const codeTitles = fired.filter((e) => !codeFull.has(e.frontmatter.id)).slice(0, CODE_TITLES);
-  const codeIds = [...codeFull, ...codeTitles.map((e) => e.frontmatter.id)];
-  writeState(kbRoot, input.session_id, {
-    ...state,
-    files: opening ? [...(state.files ?? []), rel] : (state.files ?? []),
-    injected: [...new Set([...seen, ...fileIds, ...codeIds])],
-    triggered: [...(state.triggered ?? []), ...codeIds],
-  });
-  const ts = (io.now?.() ?? new Date()).toISOString();
+  // A title is listed once a session: the files an agent works through share many rules.
+  const titled = new Set(state.titled ?? []);
+  const ts = now.toISOString();
   const parts: string[] = [];
-  if (fileIds.length) {
+  const fileIds: string[] = [];
+  let repoSeen: string | undefined;
+  for (const t of toOpen) {
+    const { repo, pool, broad } = contextFor(t.root);
+    repoSeen ??= repo;
+    const ranked = rankForFile(
+      pool.filter((e) => !seen.has(e.frontmatter.id)),
+      t.rel,
+      { broad, ...(t.code ? { code: t.code } : {}) },
+    );
+    const forFile = fillBudget(
+      ranked.map((r) => r.entry),
+      { tokenBudget: FILE_TOKENS },
+    );
+    const ids = forFile.items.map((i) => i.entry.frontmatter.id);
+    for (const id of ids) seen.add(id);
+    fileIds.push(...ids);
+    // The file's other rules learned on it or near it, or about it, by title: a hot file holds
+    // dozens, and the agent picks the ones its change touches better than any ranking.
+    const alsoHere = ranked
+      .filter(
+        (r) =>
+          r.tier <= 3 &&
+          !ids.includes(r.entry.frontmatter.id) &&
+          !titled.has(r.entry.frontmatter.id),
+      )
+      .slice(0, FILE_TITLES)
+      .map((r) => r.entry);
+    for (const e of alsoHere) titled.add(e.frontmatter.id);
+    if (!ids.length) continue;
     logEvent(kbRoot, {
       ts,
       type: "injection",
@@ -799,14 +923,41 @@ async function fileUse(input: HookInput, io: Io) {
       entries: forFile.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
     });
     parts.push(
-      `# Team rules about ${rel} (homeostat)\n\nReviewers wrote these about this file or the code near it. Follow them in what you plan or change here.\n\n${ruleBlocks(forFile)}${
+      `# Team rules about ${t.rel} (homeostat)\n\nReviewers wrote these about this file or the code near it. Follow them in what you plan or change here.\n\n${ruleBlocks(forFile)}${
         alsoHere.length
           ? `\n\nAlso learned on or near this file; read any that your change touches (explain <id>):\n${renderTitles(alsoHere)}`
           : ""
       }`,
     );
   }
+  // A triggered rule comes again even if the session start gave it: the code just written is
+  // the moment it matters. Once per session, and never twice in one answer.
+  const triggered = new Set([...(state.triggered ?? []), ...fileIds]);
+  const fired: Entry[] = [];
+  const firedIds = new Set<string>();
+  for (const t of written) {
+    for (const e of rulesForCode(contextFor(t.root).pool, t.rel, t.code)) {
+      if (triggered.has(e.frontmatter.id) || firedIds.has(e.frontmatter.id)) continue;
+      firedIds.add(e.frontmatter.id);
+      fired.push(e);
+    }
+  }
+  // In a team trial one edit fired a median of 5 rules and up to 80; the best go in full, and
+  // the agent picks from the others' titles better than any ranking of them.
+  const forCode = fillBudget(fired.slice(0, 2), { tokenBudget: CODE_TOKENS });
+  const codeFull = new Set(forCode.items.map((i) => i.entry.frontmatter.id));
+  const codeTitles = fired
+    .filter(
+      (e) =>
+        !codeFull.has(e.frontmatter.id) &&
+        !titled.has(e.frontmatter.id) &&
+        !seen.has(e.frontmatter.id),
+    )
+    .slice(0, CODE_TITLES);
+  for (const e of codeTitles) titled.add(e.frontmatter.id);
+  const codeIds = [...codeFull, ...codeTitles.map((e) => e.frontmatter.id)];
   if (codeIds.length) {
+    const repo = written[0] ? contextFor(written[0].root).repo : repoSeen;
     logEvent(kbRoot, {
       ts,
       type: "injection",
@@ -819,9 +970,10 @@ async function fileUse(input: HookInput, io: Io) {
         ...codeTitles.map((e) => ({ id: e.frontmatter.id, form: "title" })),
       ],
     });
+    const where = [...new Set(written.map((t) => t.rel))].slice(0, 3).join(", ");
     parts.push(
       [
-        `# Team rules about the code you just wrote (homeostat)\n\nWhat you just wrote in ${rel} is the kind of code these rules are about. Check it against them now, and fix it if it breaks one.`,
+        `# Team rules about the code you just wrote (homeostat)\n\nWhat you just wrote in ${where} is the kind of code these rules are about. Check it against them now, and fix it if it breaks one.`,
         forCode.items.length ? ruleBlocks(forCode) : "",
         codeTitles.length
           ? `The code also matches these; read any that fit what you wrote (explain <id>):\n${renderTitles(codeTitles)}`
@@ -831,6 +983,14 @@ async function fileUse(input: HookInput, io: Io) {
         .join("\n\n"),
     );
   }
+  writeState(kbRoot, input.session_id, {
+    ...state,
+    files: [...opened, ...toOpen.map((t) => t.rel)],
+    injected: [...new Set([...seen, ...codeIds])],
+    triggered: [...(state.triggered ?? []), ...codeIds],
+    titled: [...titled],
+    ...(input.tool_name === "Bash" ? { bashAt: ts } : {}),
+  });
   if (!parts.length) return;
   io.stdout(
     `${JSON.stringify({

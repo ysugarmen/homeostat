@@ -71,6 +71,20 @@ async function hook(event: string, input: object, env: Record<string, string>) {
   return { code, stdout, stderr };
 }
 const out = (stdout: string) => JSON.parse(stdout).hookSpecificOutput;
+/** The file hook with a given clock (a shell command's edits are those after the last one). */
+async function runHook(kbDir: string, input: object, now: string) {
+  let stdout = "";
+  const io: Io = {
+    stdout: (t) => (stdout += t),
+    stderr: () => {},
+    color: false,
+    env: { HOMEOSTAT_DIR: kbDir },
+    stdin: async () => JSON.stringify(input),
+    now: () => new Date(now),
+  };
+  await runCli(["node", "homeostat", "hook", "file"], io);
+  return { stdout };
+}
 const learnedAt = (path: string) => ({
   source: { type: "pr-feedback" as const, author: "ana", path },
 });
@@ -165,6 +179,60 @@ describe("homeostat hook file: many rules fire on one edit", () => {
     expect(context.match(/^## Title kinds-/gm)).toHaveLength(2);
     expect(context).toContain("The code also matches these");
     expect(context.match(/^- Title kinds-[a-d] \(kinds-[a-d]\)$/gm)).toHaveLength(2);
+  });
+});
+
+describe("homeostat hook file: shell commands (agents read and edit with Bash too)", () => {
+  const setup = () => {
+    const kbDir = kb([
+      {
+        id: "use-strenum",
+        fm: { scope: ["**"], triggers: ["Literal["] },
+        text: "Use StrEnum, not Literal, for closed sets of kinds.",
+      },
+      { id: "learned-here", fm: learnedAt("services/billing/totals.py") },
+    ]);
+    // A folder with a space, as many are.
+    const parent = mkdtempSync(join(tmpdir(), "homeostat work-"));
+    const cwd = join(parent, "my repo");
+    mkdirSync(cwd);
+    execFileSync("git", ["-C", cwd, "init", "-q"]);
+    execFileSync("git", ["-C", cwd, "config", "user.email", "ana@acme.test"]);
+    execFileSync("git", ["-C", cwd, "config", "user.name", "Ana"]);
+    mkdirSync(join(cwd, "services/billing"), { recursive: true });
+    writeFileSync(join(cwd, "services/billing/totals.py"), "x = 1\n");
+    execFileSync("git", ["-C", cwd, "add", "."]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "init"]);
+    return { kbDir, cwd, parent };
+  };
+  const bash = (kbDir: string, cwd: string, session: string, command: string, now: string) =>
+    runHook(kbDir, { session_id: session, cwd, tool_name: "Bash", tool_input: { command } }, now);
+
+  test("a file a command changed brings its rules and its code's triggered rules", async () => {
+    const { kbDir, cwd, parent } = setup();
+    // The edit happens (by a heredoc, sed, a script), then the hook runs after the command.
+    writeFileSync(join(cwd, "services/billing/totals.py"), 'x = 1\nKind = Literal["a", "b"]\n');
+    const { stdout } = await bash(
+      kbDir,
+      parent,
+      "s1",
+      `cd "${cwd}" && python3 - <<'EOF'\nopen("services/billing/totals.py","a").write("...")\nEOF`,
+      new Date(Date.now() + 1000).toISOString(),
+    );
+    const context = out(stdout).additionalContext;
+    expect(context).toContain("# Team rules about services/billing/totals.py (homeostat)");
+    expect(context).toContain("(learned-here)");
+    expect(context).toContain("# Team rules about the code you just wrote (homeostat)");
+    expect(context).toContain("(use-strenum)");
+  });
+
+  test("a file a command only names (cat, grep) brings nothing, and no-file commands are cheap", async () => {
+    const { kbDir, cwd } = setup();
+    const later = new Date(Date.now() + 60_000).toISOString();
+    // The first command in a session counts as since a minute ago; the file was written before.
+    await bash(kbDir, cwd, "s2", "git status", later);
+    expect((await bash(kbDir, cwd, "s2", "cat services/billing/totals.py", later)).stdout).toBe("");
+    expect((await bash(kbDir, cwd, "s2", "ls -la", later)).stdout).toBe("");
   });
 });
 

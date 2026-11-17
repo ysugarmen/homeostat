@@ -126,6 +126,17 @@ function matchesVersion(bin) {
  * again on every hook, which was most of a hook's time (about 0.8 s of 1.2 s). Only an exact
  * version match counts; without one, npx runs and fills the cache for the next hook.
  */
+function namesAFile(raw) {
+  try {
+    const event = JSON.parse(raw || "{}");
+    if (event.tool_name !== "Bash") return true;
+    const command = event.tool_input?.command ?? "";
+    return /\//.test(command) || /\.[a-z]{1,5}\b/i.test(command);
+  } catch {
+    return true;
+  }
+}
+
 function removeIfOnlyHomeostat(dir) {
   try {
     const top = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
@@ -164,6 +175,9 @@ function fromNpxCache() {
 }
 
 const input = isMcp ? undefined : await readStdin();
+// A shell command that names no file has nothing for the file hook: skip starting homeostat at
+// all, since this runs after every command an agent runs.
+if (mode === "file" && !namesAFile(input)) process.exit(0);
 // Each candidate is worked out only when the ones before it were missing, so a development
 // checkout never probes the PATH.
 const candidates = [

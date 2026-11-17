@@ -205,6 +205,25 @@ describe("the launcher and a homeostat on the PATH", () => {
     expect(readFileSync(f.npx, "utf8")).toBe(`--yes homeostat@${version} hook session-start\n`);
   });
 
+  test("after a shell command that names no file, homeostat is not started at all", () => {
+    // The file hook now follows every Bash command an agent runs; most name no file.
+    const run = (command: string) => {
+      const f = fakeBin(`echo ${version}`);
+      execFileSync(process.execPath, [launcher, "file"], {
+        input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+        env: {
+          PATH: `${f.bin}${delimiter}${dirname(process.execPath)}`,
+          HOME: process.env.HOME ?? "",
+          npm_config_cache: mkdtempSync(join(tmpdir(), "homeostat-launch-npm-")),
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      return existsSync(f.marker) ? readFileSync(f.marker, "utf8") : "";
+    };
+    expect(run("git status && ls -la")).toBe("");
+    expect(run("sed -i '' 's/a/b/' services/app/main.py")).toContain("hook file");
+  });
+
   test("the version answer is cached, so the probe runs once a day", () => {
     const f = fakeBin(`echo ${version}`);
     launch(f.bin);
