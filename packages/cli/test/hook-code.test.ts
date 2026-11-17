@@ -163,8 +163,9 @@ describe("homeostat hook file: a located finding the agent must answer", () => {
     });
     const kbDir = kb([rule("parse-db-url-by-last-at"), rule("parse-db-url-by-last-at-2")]);
     const cwd = codeRepo(["tools/probe.py"]);
+    // The fragment also sits in the docstring and a comment, which are not code.
     const content =
-      "import os\nfrom urllib.parse import urlsplit\n\nparts = urlsplit(os.environ['DB_URL'])\n";
+      '"""Usage: never urlsplit(DB_URL) here."""\nimport os\nfrom urllib.parse import urlsplit\n# urlsplit( is wrong\nparts = urlsplit(os.environ["DB_URL"])\n';
     writeFileSync(join(cwd, "tools/probe.py"), content);
     const { stdout } = await hook(
       "file",
@@ -178,8 +179,8 @@ describe("homeostat hook file: a located finding the agent must answer", () => {
     );
     const reply = JSON.parse(stdout);
     expect(reply.decision).toBe("block");
-    // The call, not the import: the trigger is the fragment "urlsplit(".
-    expect(reply.reason).toContain("tools/probe.py:4: `parts = urlsplit(os.environ['DB_URL'])`");
+    // The call, not the import, the docstring or the comment: the trigger is "urlsplit(".
+    expect(reply.reason).toContain('tools/probe.py:5: `parts = urlsplit(os.environ["DB_URL"])`');
     expect(reply.reason.match(/^- /gm)).toHaveLength(1);
     expect(reply.reason).toContain("fix the code, or say in one line why the rule does not apply");
   });
