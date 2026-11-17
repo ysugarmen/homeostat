@@ -1,6 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir, platform } from "node:os";
+import { platform } from "node:os";
 import { join } from "node:path";
+
+/**
+ * Claude Code's config folder, from the environment this CLI was given only: CLAUDE_CONFIG_DIR,
+ * else $HOME/.claude. Never the machine's home directly, so a test (or any caller passing its
+ * own environment) never reads the real user's plugins and settings.
+ */
+function claudeConfigDir(env: Record<string, string | undefined>): string | undefined {
+  if (env.CLAUDE_CONFIG_DIR) return env.CLAUDE_CONFIG_DIR;
+  return env.HOME ? join(env.HOME, ".claude") : undefined;
+}
 
 /** The installed Claude Code plugin, as a session start sees it. */
 export interface PluginInfo {
@@ -36,8 +46,9 @@ export function installedPlugin(env: Record<string, string | undefined>): Plugin
       : undefined;
   const found = fromRoot(own);
   if (found) return found;
+  const config = claudeConfigDir(env);
+  if (!config) return undefined;
   try {
-    const config = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
     const installed = JSON.parse(
       readFileSync(join(config, "plugins", "installed_plugins.json"), "utf8"),
     );
@@ -98,7 +109,8 @@ function managedSettingsPath(): string {
  * for the marketplace. Off unless someone turned it on: that is the permission this uses.
  */
 export function selfUpdateAllowed(env: Record<string, string | undefined>): boolean {
-  const config = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+  const config = claudeConfigDir(env);
+  if (!config) return false;
   const fromSettings = (path: string) => {
     const s = readJson(path) as
       | { extraKnownMarketplaces?: Record<string, { autoUpdate?: unknown }> }
@@ -107,7 +119,8 @@ export function selfUpdateAllowed(env: Record<string, string | undefined>): bool
     return typeof v === "boolean" ? v : undefined;
   };
   for (const path of [
-    managedSettingsPath(),
+    // The machine-wide file only for a real user's environment, never a test's.
+    ...(env.HOME ? [managedSettingsPath()] : []),
     join(config, "remote-settings.json"),
     join(config, "settings.json"),
   ]) {
