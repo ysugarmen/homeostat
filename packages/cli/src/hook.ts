@@ -1036,7 +1036,21 @@ function locate(abs: string, fragment: string): { n: number; text: string } | un
     return undefined;
   }
   const lines = text.split("\n");
-  const i = lines.findIndex((l) => l.includes(fragment));
+  // Code only: a comment or a docstring that names the fragment (an env var in usage notes)
+  // is not the code the rule is about.
+  let inDoc = false;
+  let i = -1;
+  for (let n = 0; n < lines.length; n++) {
+    const t = (lines[n] ?? "").trim();
+    const quotes = (t.match(/"""|'''/g) ?? []).length;
+    const docLine = inDoc || quotes > 0;
+    if (quotes % 2 === 1) inDoc = !inDoc;
+    if (docLine || /^(#|\/\/|\/\*|\*)/.test(t)) continue;
+    if (t.includes(fragment)) {
+      i = n;
+      break;
+    }
+  }
   if (i < 0) return undefined;
   const line = (lines[i] ?? "").trim();
   return { n: i + 1, text: line.length > 140 ? `${line.slice(0, 137)}...` : line };
