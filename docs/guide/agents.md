@@ -110,6 +110,8 @@ Nothing is scheduled there. The Claude Code plugin's hooks run `homeostat sync` 
 - retires rules nobody has confirmed in `staleAfterDays`, and rewrites the document sections that cite them without the retired claims ([retractions](#retract))
 - notes document coverage gaps and stale sections
 
+It never moves rules between topics. A rule in `general` stays there: the drafter's model put it there because no topic fit, and moving rules by the words they share with topic descriptions put hundreds into wrong topics in a team trial (a description mentioning "tests" or "constants" drew every rule that did). To move one, a reviewer comments on its PR, or a person edits the topic files.
+
 Its changes go in one PR, which a person merges. `--no-llm` skips the model; sections citing a retired rule are then listed in the PR instead.
 
 ## Bootstrap and seed (by hand only) {#seed}

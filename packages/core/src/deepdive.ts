@@ -10,7 +10,7 @@ import { findCitations, type Retractor, retiredRule, retractCitations } from "./
 import type { Frontmatter } from "./schema.ts";
 import { score } from "./score.ts";
 import { countTokens } from "./tokens.ts";
-import { GENERAL_TOPIC, matchTopic, overlayPending, topicsFor } from "./topics.ts";
+import { GENERAL_TOPIC, overlayPending, topicsFor } from "./topics.ts";
 import { type KbFiles, validate } from "./validate.ts";
 
 export interface RuleText {
@@ -113,16 +113,10 @@ export async function deepDive(input: DeepDiveInput): Promise<DeepDiveResult> {
     }
   }
 
-  // Rules filed under general move to a topic added since, when their words match it.
-  for (const w of work.values()) {
-    if (w.fm.topic !== GENERAL_TOPIC || w.fm.status === "retired") continue;
-    const topics = topicsFor(config, repoOf(w.path, config));
-    if (!topics) continue;
-    const topic = matchTopic(topics, `${w.fm.title} ${w.entry.sections.rule ?? ""}`);
-    if (topic === GENERAL_TOPIC) continue;
-    w.fm.topic = topic;
-    w.actions.push({ action: "moved-topic", note: `from general to ${topic}` });
-  }
+  // Rules filed under general stay there: the curator's model put them there because no topic
+  // fit. Matching their words against topic descriptions moved hundreds of rules into wrong
+  // topics in a team trial (a description saying "tests" or "constants" drew every rule that
+  // did), and even a stricter, rarity-weighted match was wrong as often as right.
 
   // The same test the daily run uses, so a duplicate it let through is caught here.
   const pairs: [Working, Working][] = [];
