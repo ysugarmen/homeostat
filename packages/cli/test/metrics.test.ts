@@ -250,4 +250,40 @@ describe("homeostat metrics: the team's shared usage", () => {
     expect(stdout).toMatch(/team lookups\s+3 MCP calls, 2 document reads/);
     expect(stdout).toMatch(/team turns\s+30: 10% looked something up, 3% credited a rule/);
   });
+
+  test("shows which laptops run a plugin with every hook, and which an older one", async () => {
+    // The CLI follows the KB's pin by itself; the plugin does not, and an older one never runs
+    // the file or commit hooks. Until heartbeats said so, nobody could tell.
+    const beat = (member: string, plugin?: { version: string; hooks: string[] }) => ({
+      member,
+      at: "2026-10-21T08:00:00Z",
+      kbCommit: null,
+      behind: 0,
+      pending: 0,
+      version: "0.5.20",
+      ...(plugin ? { plugin } : {}),
+    });
+    const kb = clone({
+      "heartbeats/dana.json": beat("dana", {
+        version: "0.5.20",
+        hooks: [
+          "SessionStart",
+          "UserPromptSubmit",
+          "Stop",
+          "PreCompact",
+          "PostToolUse",
+          "PreToolUse",
+        ],
+      }),
+      "heartbeats/lee.json": beat("lee", {
+        version: "0.5.11",
+        hooks: ["SessionStart", "UserPromptSubmit", "Stop", "PreCompact"],
+      }),
+      "heartbeats/sam.json": beat("sam"),
+    });
+    const { stdout } = await run(["--dir", kb, "--days", "7"]);
+    expect(stdout).toMatch(
+      /plugins\s+1 of 3 laptops have every hook; older plugin \(no file or commit hooks\): lee 0\.5\.11; not reported yet: sam/,
+    );
+  });
 });

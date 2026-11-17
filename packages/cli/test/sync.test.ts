@@ -146,6 +146,18 @@ describe("homeostat sync (automation, step 2)", { timeout: 30_000 }, () => {
       t.g(t.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json"),
     );
     expect(heartbeat).toMatchObject({ member: "lee", pending: 1, behind: 0 });
+    // No session start has recorded a plugin in this clone: the heartbeat does not invent one.
+    expect(heartbeat.plugin).toBeUndefined();
+    // Once a session start records the plugin, the next sync reports it, even with nothing new.
+    writeFileSync(
+      join(t.lee, ".homeostat", "plugin.json"),
+      JSON.stringify({ version: "0.5.11", hooks: ["SessionStart"] }),
+    );
+    await run(["sync", "--dir", t.lee]);
+    const withPlugin = JSON.parse(
+      t.g(t.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json"),
+    );
+    expect(withPlugin.plugin).toEqual({ version: "0.5.11", hooks: ["SessionStart"] });
     // Usage counts are not shared unless the member opts in; the sync itself is timed.
     expect(heartbeat.usage).toBeUndefined();
     const syncs = readEvents(t.lee, { types: ["sync-run"] });

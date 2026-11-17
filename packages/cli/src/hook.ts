@@ -47,6 +47,7 @@ import type { Io } from "./cli.ts";
 import { git, gitIdentity } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
 import { loadKbInForce } from "./kb-cache.ts";
+import { recordPlugin } from "./plugin-info.ts";
 import { pendingFingerprint, readSyncState, syncDue, takeNotices } from "./sync.ts";
 import { touchedPaths, uncommitted } from "./touched.ts";
 
@@ -216,6 +217,9 @@ async function selectForSession(
       dirtyAtStart: previous.dirtyAtStart ?? uncommitted(cwd),
     });
   }
+  // Which plugin Claude Code runs here, for the heartbeat: a hook an older plugin does not
+  // register never runs, whatever version of this CLI it launches.
+  recordPlugin(kbRoot, io.env ?? {});
   // Catch up with the daily run in the background; this session starts with what is local now.
   if (syncDue(kbRoot, io.now?.() ?? new Date(), 0))
     io.background?.(["sync", "--dir", kbRoot, "--quiet"]);

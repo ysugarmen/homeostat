@@ -21,11 +21,19 @@ export interface Reach {
   docs: { listed: number; read: number; pullThrough?: number };
   /** Members who share usage counts, and their last seven days summed per day. */
   team: { sharing: number; members: number; byDay: ({ day: string } & UsageDay)[] };
+  /**
+   * The Claude Code plugin on members' laptops, from their heartbeats: who has every hook this
+   * version uses, who has an older plugin (missing hooks never run), and who has not said.
+   */
+  plugins: { full: string[]; behind: { member: string; version: string }[]; unknown: string[] };
   previous: { sessions: number; distinctRules: number };
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const ids = (e: Event) => ((e.entries as { id: string }[] | undefined) ?? []).map((x) => x.id);
+
+/** The hook events a current plugin registers; a plugin missing any of them is behind. */
+export const PLUGIN_HOOKS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "PreToolUse"];
 
 export function reach(snap: MetricsSnapshot): Reach {
   const w = windows(snap.now, snap.window.days);
@@ -111,6 +119,17 @@ export function reach(snap: MetricsSnapshot): Reach {
       ...(pull === undefined ? {} : { pullThrough: pull }),
     },
     team: { sharing: sharing.length, members: snap.config.team.members.length, byDay: teamByDay },
+    plugins: pluginCoverage(snap),
     previous: { sessions: sessions(before), distinctRules: rules(before) },
   };
+}
+
+function pluginCoverage(snap: MetricsSnapshot): Reach["plugins"] {
+  const out: Reach["plugins"] = { full: [], behind: [], unknown: [] };
+  for (const h of [...snap.heartbeats].sort((a, b) => a.member.localeCompare(b.member))) {
+    if (!h.plugin) out.unknown.push(h.member);
+    else if (PLUGIN_HOOKS.every((k) => h.plugin?.hooks.includes(k))) out.full.push(h.member);
+    else out.behind.push({ member: h.member, version: h.plugin.version });
+  }
+  return out;
 }

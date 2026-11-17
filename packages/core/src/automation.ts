@@ -80,6 +80,12 @@ export interface Heartbeat {
   pending: number;
   version: string;
   /**
+   * The Claude Code plugin installed on this laptop, as its session start last saw it: its version
+   * and the hook events it registers. The CLI follows the KB's pinned version by itself; the
+   * plugin updates only when Claude Code updates it, and a hook it does not register never runs.
+   */
+  plugin?: { version: string; hooks: string[] };
+  /**
    * The last seven days' counts by day, only when the member opted in (`usage: true` on their
    * member entry, or HOMEOSTAT_SHARE_USAGE=1). Off by default: it is the one usage figure that
    * leaves a laptop.

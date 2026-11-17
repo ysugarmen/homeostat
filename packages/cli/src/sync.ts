@@ -27,6 +27,7 @@ import {
 import type { Io } from "./cli.ts";
 import { commitTree, forcePush, git, gitIdentity, gitNet } from "./git.ts";
 import { memberIdFrom } from "./init.ts";
+import { recordedPlugin } from "./plugin-info.ts";
 
 /**
  * Keeps one developer's KB clone in step with the team, with no scheduler on the laptop: the
@@ -229,7 +230,9 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   let pushed = state.pushed;
   let lastHeartbeat = state.lastHeartbeat;
   // An upgrade, a pull or falling behind changes what the dashboard should show: report it.
-  const position = `${VERSION}:${git(root, "rev-parse", "HEAD") ?? ""}:${behind}`;
+  const plugin = recordedPlugin(root);
+  // A new plugin is news too: the heartbeat goes out when it changes.
+  const position = `${VERSION}:${git(root, "rev-parse", "HEAD") ?? ""}:${behind}${plugin ? `:${plugin.version}` : ""}`;
   let reported = state.reported;
   const baseRef = git(root, "rev-parse", "--verify", "--quiet", `refs/remotes/origin/${base}`);
   if (isMember && baseRef && (fp !== state.pushed || heartbeatDue || position !== state.reported)) {
@@ -241,6 +244,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
       behind,
       pending: Object.keys(pending).length,
       version: VERSION,
+      ...(plugin ? { plugin } : {}),
     };
     // Usage counts leave the laptop only when the member chose to share them, as the config
     // just pulled says: read before the pull, a change of it reached heartbeats a sync late.

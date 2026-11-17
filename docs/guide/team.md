@@ -56,7 +56,9 @@ Nobody has to remember `git pull`. The plugin's hooks run `homeostat sync` in th
 1. **Fetches** `origin/main`, the daily run's history branch, and the developer's own `candidates/<member>` branch.
 2. **Clears decided lessons.** Pending lessons the daily run merged or declined are removed from the clone, and the next session says what happened to each.
 3. **Fast-forwards the clone** to `origin/main`, only when it is on `main` with no local edits to tracked files. Otherwise it changes nothing and the session says the clone is behind, and why.
-4. **Pushes** the developer's pending lessons and a small heartbeat (version, commits behind, pending count) to their `candidates/<member>` branch. The [dashboard](dashboard.md) shows who is syncing.
+4. **Pushes** the developer's pending lessons and a small heartbeat (version, commits behind, pending count, and the installed Claude Code plugin's version and hooks) to their `candidates/<member>` branch. The [dashboard](dashboard.md) shows who is syncing, and `homeostat metrics` shows how many laptops have a plugin with every hook.
+
+   The CLI follows the version the KB pins by itself, but the plugin, which tells Claude Code when to call it, updates only when Claude Code updates it. A hook an older plugin does not register (opening a file, writing code, committing) never runs. Turn on auto-update for the marketplace in your organization's managed settings (`extraKnownMarketplaces.homeostat.autoUpdate: true`). On machines where Claude Code's own auto-update is off (common with npm or Homebrew installs), Claude Code skips plugin updates too unless `FORCE_AUTOUPDATE_PLUGINS=1` is also set, for example in the managed settings' `env`.
 
 Developers never push to `main`: they only need to write their own `candidates/*` branch.
 

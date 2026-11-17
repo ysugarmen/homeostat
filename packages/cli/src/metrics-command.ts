@@ -113,6 +113,21 @@ export function formatMetrics(r: MetricsReport, present: boolean): string {
     `${re.docs.listed} covering sessions, ${re.docs.read} opened (${pct(re.docs.pullThrough)})`,
   );
   line("team", `${re.team.sharing} of ${re.team.members} members share usage counts`);
+  const pl = re.plugins;
+  if (pl.full.length + pl.behind.length + pl.unknown.length) {
+    line(
+      "plugins",
+      [
+        `${pl.full.length} of ${pl.full.length + pl.behind.length + pl.unknown.length} laptops have every hook`,
+        pl.behind.length
+          ? `older plugin (no file or commit hooks): ${pl.behind.map((b) => `${b.member} ${b.version}`).join(", ")}`
+          : "",
+        pl.unknown.length ? `not reported yet: ${pl.unknown.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("; "),
+    );
+  }
   // The figures above are this machine's; the team's come from members who share counts.
   if (re.team.sharing) {
     const t = re.team.byDay.reduce(
