@@ -153,6 +153,9 @@ export function originDistance(origin: string | undefined, path: string): number
   if (origin === path) return 0;
   const a = folder(origin);
   const b = folder(path);
+  // The repository root is not "near": everything learned on a root file (CI config, a
+  // README) would follow every file put there.
+  if (!a || !b) return undefined;
   if (a === b) return 1;
   const up = folder(a);
   return up && up === folder(b) ? 2 : undefined;

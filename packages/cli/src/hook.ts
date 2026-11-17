@@ -46,6 +46,7 @@ import {
   summarizeTurns,
   tokenize,
   UNKNOWN_KEY,
+  usableTrigger,
   VERSION,
   validate,
   visibleTo,
@@ -942,10 +943,31 @@ async function fileUse(input: HookInput, io: Io) {
       fired.push(e);
     }
   }
+  // The best matches, located: the line of the file that holds the fragment they fired on. In a
+  // team trial an agent was given the right rule in full a second after writing the code it
+  // forbids, and carried on: a located finding it must answer gets acted on, a list does not.
+  const findings: { e: Entry; where: string; line: string }[] = [];
+  for (const e of fired.slice(0, 2)) {
+    for (const t of written) {
+      const hit = (e.frontmatter.triggers ?? [])
+        .map((x) => x.trim())
+        .find((x) => usableTrigger(x) && t.code.includes(x));
+      if (!hit) continue;
+      const at = locate(join(t.root, t.rel), hit);
+      // One finding a line: near-duplicate rules on the same code say the same thing.
+      if (at && !findings.some((f) => f.where === `${t.rel}:${at.n}`))
+        findings.push({ e, where: `${t.rel}:${at.n}`, line: at.text });
+      break;
+    }
+  }
   // In a team trial one edit fired a median of 5 rules and up to 80; the best go in full, and
   // the agent picks from the others' titles better than any ranking of them.
-  const forCode = fillBudget(fired.slice(0, 2), { tokenBudget: CODE_TOKENS });
-  const codeFull = new Set(forCode.items.map((i) => i.entry.frontmatter.id));
+  const located = new Set(findings.map((f) => f.e.frontmatter.id));
+  const forCode = fillBudget(
+    fired.slice(0, 2).filter((e) => !located.has(e.frontmatter.id)),
+    { tokenBudget: CODE_TOKENS },
+  );
+  const codeFull = new Set([...located, ...forCode.items.map((i) => i.entry.frontmatter.id)]);
   const codeTitles = fired
     .filter(
       (e) =>
@@ -966,6 +988,7 @@ async function fileUse(input: HookInput, io: Io) {
       cwd,
       ...(repo ? { repo } : {}),
       entries: [
+        ...findings.map((f) => ({ id: f.e.frontmatter.id, form: "finding" })),
         ...forCode.items.map((i) => ({ id: i.entry.frontmatter.id, form: i.form })),
         ...codeTitles.map((e) => ({ id: e.frontmatter.id, form: "title" })),
       ],
@@ -991,12 +1014,42 @@ async function fileUse(input: HookInput, io: Io) {
     titled: [...titled],
     ...(input.tool_name === "Bash" ? { bashAt: ts } : {}),
   });
-  if (!parts.length) return;
+  if (!parts.length && !findings.length) return;
   io.stdout(
     `${JSON.stringify({
-      hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: parts.join("\n\n") },
+      // A located finding goes to the agent as feedback it must answer; the edit stands.
+      ...(findings.length ? { decision: "block", reason: findingsText(findings) } : {}),
+      hookSpecificOutput: {
+        hookEventName: "PostToolUse",
+        ...(parts.length ? { additionalContext: parts.join("\n\n") } : {}),
+      },
     })}\n`,
   );
+}
+
+/** The first line of a file holding `fragment`, numbered from 1, trimmed to fit a message. */
+function locate(abs: string, fragment: string): { n: number; text: string } | undefined {
+  let text: string;
+  try {
+    text = readFileSync(abs, "utf8");
+  } catch {
+    return undefined;
+  }
+  const lines = text.split("\n");
+  const i = lines.findIndex((l) => l.includes(fragment));
+  if (i < 0) return undefined;
+  const line = (lines[i] ?? "").trim();
+  return { n: i + 1, text: line.length > 140 ? `${line.slice(0, 137)}...` : line };
+}
+
+function findingsText(findings: { e: Entry; where: string; line: string }[]): string {
+  return [
+    "Homeostat: what you just wrote may break a team rule (reviewers flagged this before). Check it now: fix the code, or say in one line why the rule does not apply here.",
+    ...findings.map(
+      ({ e, where, line }) =>
+        `- ${where}: \`${line}\`\n  ${e.frontmatter.title} (${e.frontmatter.id}): ${(e.sections.rule ?? "").trim()}`,
+    ),
+  ].join("\n");
 }
 
 /** `git commit` in a shell command, not inside a quoted message or another word. */

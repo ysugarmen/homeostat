@@ -152,6 +152,39 @@ describe("homeostat hook file: rules triggered by the code written", () => {
   });
 });
 
+describe("homeostat hook file: a located finding the agent must answer", () => {
+  test("the best match points at the line, as feedback; near-duplicates on one line count once", async () => {
+    // In a team trial an agent got this rule in full a second after writing urlsplit(raw), and
+    // carried on: the script still parsed the URL the forbidden way.
+    const rule = (id: string) => ({
+      id,
+      fm: { scope: ["**"], triggers: ["urlsplit("] },
+      text: "Parse the shared database URL by its last @, not with urlsplit.",
+    });
+    const kbDir = kb([rule("parse-db-url-by-last-at"), rule("parse-db-url-by-last-at-2")]);
+    const cwd = codeRepo(["tools/probe.py"]);
+    const content =
+      "import os\nfrom urllib.parse import urlsplit\n\nparts = urlsplit(os.environ['DB_URL'])\n";
+    writeFileSync(join(cwd, "tools/probe.py"), content);
+    const { stdout } = await hook(
+      "file",
+      {
+        session_id: "u1",
+        cwd,
+        tool_name: "Write",
+        tool_input: { file_path: join(cwd, "tools/probe.py"), content },
+      },
+      { HOMEOSTAT_DIR: kbDir },
+    );
+    const reply = JSON.parse(stdout);
+    expect(reply.decision).toBe("block");
+    // The call, not the import: the trigger is the fragment "urlsplit(".
+    expect(reply.reason).toContain("tools/probe.py:4: `parts = urlsplit(os.environ['DB_URL'])`");
+    expect(reply.reason.match(/^- /gm)).toHaveLength(1);
+    expect(reply.reason).toContain("fix the code, or say in one line why the rule does not apply");
+  });
+});
+
 describe("homeostat hook file: many rules fire on one edit", () => {
   test("the best two come in full, the others by title", async () => {
     const kbDir = kb(
@@ -219,11 +252,14 @@ describe("homeostat hook file: shell commands (agents read and edit with Bash to
       `cd "${cwd}" && python3 - <<'EOF'\nopen("services/billing/totals.py","a").write("...")\nEOF`,
       new Date(Date.now() + 1000).toISOString(),
     );
-    const context = out(stdout).additionalContext;
+    const reply = JSON.parse(stdout);
+    const context = reply.hookSpecificOutput.additionalContext;
     expect(context).toContain("# Team rules about services/billing/totals.py (homeostat)");
     expect(context).toContain("(learned-here)");
-    expect(context).toContain("# Team rules about the code you just wrote (homeostat)");
-    expect(context).toContain("(use-strenum)");
+    // The code's best match comes back as a located finding the agent must answer.
+    expect(reply.decision).toBe("block");
+    expect(reply.reason).toContain('services/billing/totals.py:2: `Kind = Literal["a", "b"]`');
+    expect(reply.reason).toContain("(use-strenum)");
   });
 
   test("a file a command only names (cat, grep) brings nothing, and no-file commands are cheap", async () => {

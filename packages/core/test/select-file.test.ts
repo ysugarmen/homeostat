@@ -44,6 +44,9 @@ describe("where a rule was learned", () => {
     expect(originDistance("services/billing/refunds/api.py", f)).toBe(2);
     expect(originDistance("services/shipping/rates.py", f)).toBeUndefined();
     expect(originDistance(undefined, f)).toBeUndefined();
+    // The repository root is not a folder: a rule learned on a root file is not "near" another.
+    expect(originDistance("bitbucket-pipelines.yml", "check_data.py")).toBeUndefined();
+    expect(originDistance("README.md", "README.md")).toBe(0);
   });
 
   test("a file's own rules come before the area's, which only say what area it is in", () => {
