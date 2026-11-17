@@ -173,6 +173,38 @@ describe("the launcher and a homeostat on the PATH", () => {
     expect(readFileSync(other.npx, "utf8")).toBe(`--yes homeostat@${version} hook session-start\n`);
   });
 
+  test("a half-installed copy of the wanted version is removed, so npx downloads it again", () => {
+    // In the trial, a first run cut off mid-download left the package without its bin/: npx took
+    // it for installed and every start failed ("homeo: command not found") until removed by hand.
+    const f = fakeBin("echo 0.0.1");
+    const cache = mkdtempSync(join(tmpdir(), "homeostat-launch-npm-"));
+    const half = join(cache, "_npx", "abc123");
+    mkdirSync(join(half, "node_modules", "homeostat", "dist"), { recursive: true });
+    writeFileSync(
+      join(half, "package.json"),
+      JSON.stringify({ dependencies: { homeostat: `^${version}` } }),
+    );
+    writeFileSync(
+      join(half, "node_modules", "homeostat", "package.json"),
+      JSON.stringify({ name: "homeostat", version, bin: { homeostat: "./bin/homeostat.js" } }),
+    );
+    // Someone else's npx folder holding homeostat among others is left alone.
+    const shared = join(cache, "_npx", "def456");
+    mkdirSync(join(shared, "node_modules", "homeostat"), { recursive: true });
+    writeFileSync(
+      join(shared, "package.json"),
+      JSON.stringify({ dependencies: { homeostat: `^${version}`, other: "1.0.0" } }),
+    );
+    writeFileSync(
+      join(shared, "node_modules", "homeostat", "package.json"),
+      JSON.stringify({ name: "homeostat", version, bin: { homeostat: "./bin/homeostat.js" } }),
+    );
+    launch(f.bin, { npm_config_cache: cache });
+    expect(existsSync(half)).toBe(false);
+    expect(existsSync(shared)).toBe(true);
+    expect(readFileSync(f.npx, "utf8")).toBe(`--yes homeostat@${version} hook session-start\n`);
+  });
+
   test("the version answer is cached, so the probe runs once a day", () => {
     const f = fakeBin(`echo ${version}`);
     launch(f.bin);

@@ -11,7 +11,7 @@
 // The MCP server is long-lived and talks over stdio, so it gets stdio passed straight through.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 
@@ -126,6 +126,16 @@ function matchesVersion(bin) {
  * again on every hook, which was most of a hook's time (about 0.8 s of 1.2 s). Only an exact
  * version match counts; without one, npx runs and fills the cache for the next hook.
  */
+function removeIfOnlyHomeostat(dir) {
+  try {
+    const top = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+    const deps = Object.keys(top.dependencies ?? {});
+    if (deps.length === 1 && deps[0] === "homeostat") rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // Not one npx wrote: leave it.
+  }
+}
+
 function fromNpxCache() {
   const root = join(process.env.npm_config_cache || join(homedir(), ".npm"), "_npx");
   let dirs;
@@ -142,8 +152,12 @@ function fromNpxCache() {
       const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.homeostat;
       const script = bin ? join(dirname(manifest), bin) : undefined;
       if (script && existsSync(script)) return script;
+      // A half-written install of this version (a first run cut off mid-download): npx takes it
+      // for installed and fails on the missing command at every start. Removing it lets npx
+      // download it again. Only a folder npx made for homeostat alone is removed.
+      removeIfOnlyHomeostat(join(root, dir));
     } catch {
-      // Not a homeostat install, or a half-written one: npx handles it.
+      // Not a homeostat install: npx handles it.
     }
   }
   return undefined;
