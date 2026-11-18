@@ -1159,9 +1159,47 @@ function findingsText(findings: { e: Entry; where: string; line: string }[]): st
 }
 
 /** `git commit` in a shell command, not inside a quoted message or another word. */
-const GIT_COMMIT = /(?:^|[;&|(]\s*|\s)git(?:\s+-[Cc]\s+\S+)*\s+commit\b/;
+const GIT_COMMIT = /(?:^|[;&|(]\s*|\s)git(?:\s+-[Cc]\s+(?:"[^"]*"|'[^']*'|\S+))*\s+commit\b/;
 /** `-a`, `--all` or a short-flag group holding `a` (`-am`): the commit takes tracked changes. */
 const COMMIT_ALL = /\s(?:--all|-[A-Za-z]*a[A-Za-z]*)(?=\s|$)/;
+
+/** `git add` in the same command as the commit: the check sees nothing staged yet. */
+const STAGES = /\bgit\b(?:\s+-[Cc]\s+(?:"[^"]*"|'[^']*'|\S+))*\s+add\b/;
+
+/** The folder a command's commit runs in: the last `cd` or `git -C` before it, else `cwd`. */
+function commandDir(command: string, cwd: string, home: string | undefined): string {
+  const at = command.search(GIT_COMMIT);
+  let dir = cwd;
+  for (const m of command.matchAll(/(?:\bcd|\s-C)\s+(?:"([^"]+)"|'([^']+)'|([^\s"'&;|]+))/g)) {
+    if (at >= 0 && (m.index ?? 0) > at) break;
+    const d = m[1] ?? m[2] ?? m[3] ?? "";
+    dir = resolve(dir, d.startsWith("~/") && home ? join(home, d.slice(2)) : d);
+  }
+  return dir;
+}
+
+/** New files git does not track yet, as added lines in diff form (they are about to be added). */
+function untrackedAsDiff(top: string): string {
+  const files = (git(top, "ls-files", "--others", "--exclude-standard") ?? "")
+    .split("\n")
+    .filter(Boolean)
+    .slice(0, 30);
+  let out = "";
+  for (const rel of files) {
+    try {
+      const abs = join(top, rel);
+      if (statSync(abs).size > MAX_NEW_FILE) continue;
+      const text = readFileSync(abs, "utf8");
+      out += `\n+++ b/${rel}\n${text
+        .split("\n")
+        .map((l) => `+${l}`)
+        .join("\n")}`;
+    } catch {
+      // Unreadable: left out.
+    }
+  }
+  return out;
+}
 
 /** Added lines per file, from a `git diff --unified=0`. */
 function addedLines(diff: string): Map<string, string> {
@@ -1190,13 +1228,20 @@ async function commitCheck(input: HookInput, io: Io) {
   const cwd = input.cwd ?? process.cwd();
   const kbRoot = findKb(io.env, cwd);
   if (!kbRoot) return;
-  const top = git(cwd, "rev-parse", "--show-toplevel");
+  // The commit happens where the command cds to (or git -C points), often a worktree, not the
+  // session's folder: in a team trial every agent commit was `cd "<worktree>" && git add … &&
+  // git commit …`, and the check looked at the wrong repository.
+  const top = git(commandDir(command, cwd, io.env?.HOME), "rev-parse", "--show-toplevel");
   if (!top || resolve(top) === resolve(kbRoot)) return;
   const { config, entries } = loadKbInForce(kbRoot);
   if (!config || !config.distribution.commitCheck) return;
-  const diff =
-    git(top, "diff", COMMIT_ALL.test(command) ? "HEAD" : "--cached", "--unified=0", "--no-color") ??
-    "";
+  // The check runs before the command: when the same command stages (`git add`) or commits
+  // with -a, nothing is staged yet, so what will be committed is the working tree's changes
+  // and new files, not the (empty) index.
+  const stagesToo = STAGES.test(command) || COMMIT_ALL.test(command);
+  const diff = stagesToo
+    ? `${git(top, "diff", "HEAD", "--unified=0", "--no-color") ?? ""}${untrackedAsDiff(top)}`
+    : (git(top, "diff", "--cached", "--unified=0", "--no-color") ?? "");
   if (!diff.trim()) return;
   const hash = createHash("sha256").update(diff).digest("hex").slice(0, 16);
   const state = readState(kbRoot, input.session_id);

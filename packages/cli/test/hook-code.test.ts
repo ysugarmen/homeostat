@@ -404,6 +404,40 @@ describe("homeostat hook commit (PreToolUse on Bash)", () => {
     expect(after).toEqual([expect.objectContaining({ changed: true })]);
   });
 
+  test("an agent's real commit: cd into a worktree, stage and commit in one command", async () => {
+    // In a team trial every agent commit looked like this, and none was ever checked: the hook
+    // looked at the session's folder, and nothing was staged yet when it ran.
+    const kbDir = kb([
+      {
+        id: "use-strenum",
+        fm: { scope: ["**"], triggers: ["Literal["] },
+        text: "Use StrEnum, not Literal, for closed sets of kinds.",
+      },
+    ]);
+    const parent = mkdtempSync(join(tmpdir(), "homeostat work-"));
+    const tree = join(parent, "my worktree");
+    mkdirSync(join(tree, "services"), { recursive: true });
+    execFileSync("git", ["-C", tree, "init", "-q"]);
+    execFileSync("git", ["-C", tree, "config", "user.email", "ana@acme.test"]);
+    execFileSync("git", ["-C", tree, "config", "user.name", "Ana"]);
+    writeFileSync(join(tree, "services/app.py"), "x = 1\n");
+    execFileSync("git", ["-C", tree, "add", "."]);
+    execFileSync("git", ["-C", tree, "commit", "-qm", "init"]);
+    // Not staged: a change to a tracked file, and a new file.
+    writeFileSync(join(tree, "services/kinds.py"), 'Kind = Literal["a", "b"]\n');
+    const command = `cd "${tree}" && git add -A services && git commit -q -F - <<'EOF'\nAdd kinds\nEOF`;
+    const run = () =>
+      hook(
+        "commit",
+        { session_id: "w1", cwd: parent, tool_name: "Bash", tool_input: { command } },
+        { HOMEOSTAT_DIR: kbDir },
+      );
+    const first = out((await run()).stdout);
+    expect(first.permissionDecision).toBe("deny");
+    expect(first.permissionDecisionReason).toContain("(use-strenum)");
+    expect((await run()).stdout).toBe("");
+  });
+
   test("other commands, and a team that turned it off, are left alone", async () => {
     const { kbDir, cwd } = setup();
     expect((await commit(cwd, kbDir, "git status")).stdout).toBe("");
