@@ -68,6 +68,14 @@ export interface UsageDay {
   turns?: number;
   retrievedTurns?: number;
   creditedTurns?: number;
+  /** Rules given by moment: start, prompt, mcp, file, code, commit. */
+  moments?: Record<string, number>;
+  /** Located findings given, and those the agent fixed (the code that fired was changed). */
+  findings?: number;
+  findingsFixed?: number;
+  /** Commits the commit check held, and those changed before they went through. */
+  commitsHeld?: number;
+  commitsChanged?: number;
 }
 
 export interface Heartbeat {
@@ -84,7 +92,7 @@ export interface Heartbeat {
    * and the hook events it registers. The CLI follows the KB's pinned version by itself; the
    * plugin updates only when Claude Code updates it, and a hook it does not register never runs.
    */
-  plugin?: { version: string; hooks: string[] };
+  plugin?: { version: string; hooks: string[]; shell?: boolean };
   /**
    * The last seven days' counts by day, only when the member opted in (`usage: true` on their
    * member entry, or HOMEOSTAT_SHARE_USAGE=1). Off by default: it is the one usage figure that

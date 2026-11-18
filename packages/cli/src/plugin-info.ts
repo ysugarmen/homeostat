@@ -16,6 +16,8 @@ function claudeConfigDir(env: Record<string, string | undefined>): string | unde
 export interface PluginInfo {
   version: string;
   hooks: string[];
+  /** Whether its file hook follows shell commands too (a PostToolUse matcher with Bash). */
+  shell?: boolean;
 }
 
 const RECORD = ".homeostat/plugin.json";
@@ -33,8 +35,13 @@ export function installedPlugin(env: Record<string, string | undefined>): Plugin
         readFileSync(join(root, ".claude-plugin", "plugin.json"), "utf8"),
       );
       const hooks = JSON.parse(readFileSync(join(root, "hooks", "hooks.json"), "utf8")).hooks ?? {};
+      const post = (hooks.PostToolUse ?? []) as { matcher?: string }[];
       return typeof manifest.version === "string"
-        ? { version: manifest.version, hooks: Object.keys(hooks) }
+        ? {
+            version: manifest.version,
+            hooks: Object.keys(hooks),
+            shell: post.some((h) => /\bBash\b/.test(h.matcher ?? "")),
+          }
         : undefined;
     } catch {
       return undefined;

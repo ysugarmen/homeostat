@@ -99,6 +99,10 @@ export function reach(snap: MetricsSnapshot): Reach {
       sum.turns = (sum.turns ?? 0) + (u.turns ?? 0);
       sum.retrievedTurns = (sum.retrievedTurns ?? 0) + (u.retrievedTurns ?? 0);
       sum.creditedTurns = (sum.creditedTurns ?? 0) + (u.creditedTurns ?? 0);
+      for (const [m, n] of Object.entries(u.moments ?? {}))
+        sum.moments = { ...sum.moments, [m]: (sum.moments?.[m] ?? 0) + n };
+      for (const k of ["findings", "findingsFixed", "commitsHeld", "commitsChanged"] as const)
+        if (u[k]) sum[k] = (sum[k] ?? 0) + (u[k] ?? 0);
     }
     teamByDay.push({ day: d, ...sum });
   }
@@ -124,11 +128,22 @@ export function reach(snap: MetricsSnapshot): Reach {
   };
 }
 
+/**
+ * Whether the plugin's file hook also follows shell commands (from 0.5.23): agents in auto mode
+ * edit with sed and scripts as often as with Edit. Older reports carry no flag: their version says.
+ */
+function followsShell(p: { version: string; shell?: boolean }): boolean {
+  if (p.shell !== undefined) return p.shell;
+  const [a = 0, b = 0, c = 0] = p.version.split(".").map(Number);
+  return a > 0 || b > 5 || (b === 5 && c >= 23);
+}
+
 function pluginCoverage(snap: MetricsSnapshot): Reach["plugins"] {
   const out: Reach["plugins"] = { full: [], behind: [], unknown: [] };
   for (const h of [...snap.heartbeats].sort((a, b) => a.member.localeCompare(b.member))) {
     if (!h.plugin) out.unknown.push(h.member);
-    else if (PLUGIN_HOOKS.every((k) => h.plugin?.hooks.includes(k))) out.full.push(h.member);
+    else if (PLUGIN_HOOKS.every((k) => h.plugin?.hooks.includes(k)) && followsShell(h.plugin))
+      out.full.push(h.member);
     else out.behind.push({ member: h.member, version: h.plugin.version });
   }
   return out;

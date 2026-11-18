@@ -34,6 +34,7 @@ describe("the installed plugin, for heartbeats", () => {
     expect(installedPlugin({ CLAUDE_PLUGIN_ROOT: own })).toEqual({
       version: "0.5.20",
       hooks: ["SessionStart", "PostToolUse", "PreToolUse"],
+      shell: false,
     });
     // An older launcher may not pass where it is: Claude Code's own record says.
     const old = plugin("0.5.11", ["SessionStart", "UserPromptSubmit"]);
@@ -54,7 +55,11 @@ describe("the installed plugin, for heartbeats", () => {
     const kb = mkdtempSync(join(tmpdir(), "homeostat-kb-"));
     expect(recordedPlugin(kb)).toBeUndefined();
     recordPlugin(kb, { CLAUDE_PLUGIN_ROOT: plugin("0.5.20", ["SessionStart"]) });
-    expect(recordedPlugin(kb)).toEqual({ version: "0.5.20", hooks: ["SessionStart"] });
+    expect(recordedPlugin(kb)).toEqual({
+      version: "0.5.20",
+      hooks: ["SessionStart"],
+      shell: false,
+    });
   });
 });
 

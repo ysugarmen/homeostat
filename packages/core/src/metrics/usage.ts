@@ -45,10 +45,23 @@ export function usageCounts(
     const u = out[d];
     if (!u) continue;
     switch (e.type) {
-      case "injection":
+      case "injection": {
+        const entries = (e.entries as { form?: string }[] | undefined) ?? [];
         u.injections++;
-        u.rules += ((e.entries as unknown[] | undefined) ?? []).length;
+        u.rules += entries.length;
         if (typeof e.session === "string") sessions.get(d)?.add(e.session);
+        const moment = momentOf(e.source);
+        u.moments = { ...u.moments, [moment]: (u.moments?.[moment] ?? 0) + entries.length };
+        const found = entries.filter((x) => x.form === "finding").length;
+        if (found) u.findings = (u.findings ?? 0) + found;
+        if (moment === "commit") u.commitsHeld = (u.commitsHeld ?? 0) + 1;
+        break;
+      }
+      case "finding-settled":
+        if (e.outcome === "fixed") u.findingsFixed = (u.findingsFixed ?? 0) + 1;
+        break;
+      case "commit-after-hold":
+        if (e.changed === true) u.commitsChanged = (u.commitsChanged ?? 0) + 1;
         break;
       case "mcp-call":
         u.mcpCalls++;
@@ -63,4 +76,12 @@ export function usageCounts(
     if (u) u.sessions = ids.size;
   }
   return out;
+}
+
+/** The moment an injection came at: session start (any kind), a prompt, MCP, a file, code, a commit. */
+export function momentOf(source: unknown): string {
+  const s = typeof source === "string" ? source : "";
+  if (["startup", "resume", "clear", "compact"].includes(s)) return "start";
+  if (s === "update") return "prompt";
+  return s || "other";
 }

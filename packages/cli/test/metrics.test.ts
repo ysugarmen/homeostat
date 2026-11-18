@@ -254,27 +254,30 @@ describe("homeostat metrics: the team's shared usage", () => {
   test("shows which laptops run a plugin with every hook, and which an older one", async () => {
     // The CLI follows the KB's pin by itself; the plugin does not, and an older one never runs
     // the file or commit hooks. Until heartbeats said so, nobody could tell.
-    const beat = (member: string, plugin?: { version: string; hooks: string[] }) => ({
+    const beat = (
+      member: string,
+      plugin?: { version: string; hooks: string[]; shell?: boolean },
+    ) => ({
       member,
       at: "2026-10-21T08:00:00Z",
       kbCommit: null,
       behind: 0,
       pending: 0,
-      version: "0.5.20",
+      version: "0.5.27",
       ...(plugin ? { plugin } : {}),
     });
+    const every = [
+      "SessionStart",
+      "UserPromptSubmit",
+      "Stop",
+      "PreCompact",
+      "PostToolUse",
+      "PreToolUse",
+    ];
     const kb = clone({
-      "heartbeats/dana.json": beat("dana", {
-        version: "0.5.20",
-        hooks: [
-          "SessionStart",
-          "UserPromptSubmit",
-          "Stop",
-          "PreCompact",
-          "PostToolUse",
-          "PreToolUse",
-        ],
-      }),
+      "heartbeats/dana.json": beat("dana", { version: "0.5.27", hooks: every, shell: true }),
+      // Every hook event, but a file hook that does not follow shell edits yet (before 0.5.23).
+      "heartbeats/kim.json": beat("kim", { version: "0.5.21", hooks: every }),
       "heartbeats/lee.json": beat("lee", {
         version: "0.5.11",
         hooks: ["SessionStart", "UserPromptSubmit", "Stop", "PreCompact"],
@@ -283,7 +286,40 @@ describe("homeostat metrics: the team's shared usage", () => {
     });
     const { stdout } = await run(["--dir", kb, "--days", "7"]);
     expect(stdout).toMatch(
-      /plugins\s+1 of 3 laptops have every hook; older plugin \(no file or commit hooks\): lee 0\.5\.11; not reported yet: sam/,
+      /plugins\s+1 of 4 laptops have every hook; older plugin \(not every moment, e\.g\. no shell edits\): kim 0\.5\.21, lee 0\.5\.11; not reported yet: sam/,
+    );
+  });
+
+  test("shows when rules reached agents, and whether agents acted on them", async () => {
+    const kb = clone({
+      "heartbeats/dana.json": {
+        member: "dana",
+        at: "2026-10-21T08:00:00Z",
+        kbCommit: null,
+        behind: 0,
+        pending: 0,
+        version: "0.5.27",
+        usage: {
+          "2026-10-21": {
+            sessions: 2,
+            injections: 6,
+            rules: 20,
+            mcpCalls: 0,
+            docReads: 0,
+            moments: { start: 12, prompt: 3, file: 3, code: 1, commit: 1 },
+            findings: 4,
+            findingsFixed: 3,
+            commitsHeld: 2,
+            commitsChanged: 1,
+          },
+        },
+      },
+    });
+    const { stdout } = await run(["--dir", kb, "--days", "7"]);
+    expect(stdout).toMatch(/team moments\s+start 12, prompt 3, file 3, code 1, commit 1 rules/);
+    expect(stdout).toMatch(/team findings\s+4 given, 3 fixed \(75%\)/);
+    expect(stdout).toMatch(
+      /team commits\s+2 held by the commit check, 1 changed before going through/,
     );
   });
 });

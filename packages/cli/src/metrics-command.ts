@@ -120,7 +120,7 @@ export function formatMetrics(r: MetricsReport, present: boolean): string {
       [
         `${pl.full.length} of ${pl.full.length + pl.behind.length + pl.unknown.length} laptops have every hook`,
         pl.behind.length
-          ? `older plugin (no file or commit hooks): ${pl.behind.map((b) => `${b.member} ${b.version}`).join(", ")}`
+          ? `older plugin (not every moment, e.g. no shell edits): ${pl.behind.map((b) => `${b.member} ${b.version}`).join(", ")}`
           : "",
         pl.unknown.length ? `not reported yet: ${pl.unknown.join(", ")}` : "",
       ]
@@ -148,6 +148,32 @@ export function formatMetrics(r: MetricsReport, present: boolean): string {
       `${t.sessions} over ${re.team.byDay.length} days, ${t.rules} rules injected`,
     );
     line("team lookups", `${t.mcpCalls} MCP calls, ${t.docReads} document reads`);
+    // When rules reached agents, and whether agents acted on them (counts from 0.5.27 on).
+    const sum = (k: "findings" | "findingsFixed" | "commitsHeld" | "commitsChanged") =>
+      re.team.byDay.reduce((a, d) => a + (d[k] ?? 0), 0);
+    const moments: Record<string, number> = {};
+    for (const d of re.team.byDay)
+      for (const [m, n] of Object.entries(d.moments ?? {})) moments[m] = (moments[m] ?? 0) + n;
+    const order = ["start", "prompt", "file", "code", "commit", "mcp"];
+    const rank = (m: string) => (order.includes(m) ? order.indexOf(m) : order.length);
+    if (Object.keys(moments).length) {
+      const listed = Object.entries(moments).sort(([a], [b]) => rank(a) - rank(b));
+      line("team moments", `${listed.map(([m, n]) => `${m} ${n}`).join(", ")} rules`);
+    }
+    const given = sum("findings");
+    if (given) {
+      line(
+        "team findings",
+        `${given} given, ${sum("findingsFixed")} fixed (${pct(sum("findingsFixed") / given)})`,
+      );
+    }
+    const held = sum("commitsHeld");
+    if (held) {
+      line(
+        "team commits",
+        `${held} held by the commit check, ${sum("commitsChanged")} changed before going through`,
+      );
+    }
     line(
       "team turns",
       `${t.turns}: ${share(t.retrieved)} looked something up, ${share(t.credited)} credited a rule`,

@@ -294,6 +294,10 @@ interface HandoffState {
   files?: string[];
   /** Rules given because code the agent wrote contained one of their triggers; once each. */
   triggered?: string[];
+  /** Located findings not fixed yet: the file, the fragment that fired, and the rule. */
+  findings?: { id: string; abs: string; fragment: string }[];
+  /** The diff the commit check held last; the next commit attempt says whether it changed. */
+  heldDiff?: string;
   /** Rules this session was shown by title only, so a title is listed once. */
   titled?: string[];
   /** When the last shell command ended: files changed after it were edited by the next one. */
@@ -409,6 +413,7 @@ async function stop(input: HookInput, io: Io) {
   }
   try {
     logTurns(input, io, kbRoot);
+    settleFindings(kbRoot, input.session_id, io);
   } catch {
     // Usage counts are a by-product: they never stop a session or the handoff below.
   }
@@ -829,6 +834,7 @@ async function fileUse(input: HookInput, io: Io) {
   if (!input.session_id) return;
   const kbRoot = findKb(io.env, cwd);
   if (!kbRoot) return;
+  settleFindings(kbRoot, input.session_id, io);
   const state = readState(kbRoot, input.session_id);
   const now = io.now?.() ?? new Date();
   let touches: Touch[];
@@ -946,17 +952,18 @@ async function fileUse(input: HookInput, io: Io) {
   // The best matches, located: the line of the file that holds the fragment they fired on. In a
   // team trial an agent was given the right rule in full a second after writing the code it
   // forbids, and carried on: a located finding it must answer gets acted on, a list does not.
-  const findings: { e: Entry; where: string; line: string }[] = [];
+  const findings: { e: Entry; where: string; line: string; abs: string; fragment: string }[] = [];
   for (const e of fired.slice(0, 2)) {
     for (const t of written) {
       const hit = (e.frontmatter.triggers ?? [])
         .map((x) => x.trim())
         .find((x) => usableTrigger(x) && t.code.includes(x));
       if (!hit) continue;
-      const at = locate(join(t.root, t.rel), hit);
+      const abs = join(t.root, t.rel);
+      const at = locate(abs, hit);
       // One finding a line: near-duplicate rules on the same code say the same thing.
       if (at && !findings.some((f) => f.where === `${t.rel}:${at.n}`))
-        findings.push({ e, where: `${t.rel}:${at.n}`, line: at.text });
+        findings.push({ e, where: `${t.rel}:${at.n}`, line: at.text, abs, fragment: hit });
       break;
     }
   }
@@ -1012,6 +1019,10 @@ async function fileUse(input: HookInput, io: Io) {
     injected: [...new Set([...seen, ...codeIds])],
     triggered: [...(state.triggered ?? []), ...codeIds],
     titled: [...titled],
+    findings: [
+      ...(state.findings ?? []),
+      ...findings.map((f) => ({ id: f.e.frontmatter.id, abs: f.abs, fragment: f.fragment })),
+    ],
     ...(input.tool_name === "Bash" ? { bashAt: ts } : {}),
   });
   if (!parts.length && !findings.length) return;
@@ -1025,6 +1036,33 @@ async function fileUse(input: HookInput, io: Io) {
       },
     })}\n`,
   );
+}
+
+/**
+ * Findings the agent fixed since: the fragment that fired is no longer on any code line of the
+ * file (or the file is gone). Each is logged once, as `finding-settled`, and leaves the list.
+ */
+function settleFindings(kbRoot: string, session: string, io: Io) {
+  const state = readState(kbRoot, session);
+  if (!state.findings?.length) return;
+  const open: NonNullable<HandoffState["findings"]> = [];
+  const ts = (io.now?.() ?? new Date()).toISOString();
+  for (const f of state.findings) {
+    const gone = !existsSync(f.abs);
+    if (!gone && locate(f.abs, f.fragment)) {
+      open.push(f);
+      continue;
+    }
+    logEvent(kbRoot, {
+      ts,
+      type: "finding-settled",
+      session,
+      id: f.id,
+      outcome: gone ? "gone" : "fixed",
+    });
+  }
+  if (open.length !== state.findings.length)
+    writeState(kbRoot, session, { ...state, findings: open });
 }
 
 /** The first line of a file holding `fragment`, numbered from 1, trimmed to fit a message. */
@@ -1108,6 +1146,17 @@ async function commitCheck(input: HookInput, io: Io) {
   if (!diff.trim()) return;
   const hash = createHash("sha256").update(diff).digest("hex").slice(0, 16);
   const state = readState(kbRoot, input.session_id);
+  // After a hold, the next try says whether the agent changed anything before committing.
+  if (state.heldDiff) {
+    logEvent(kbRoot, {
+      ts: (io.now?.() ?? new Date()).toISOString(),
+      type: "commit-after-hold",
+      session: input.session_id,
+      changed: state.heldDiff !== hash,
+    });
+    writeState(kbRoot, input.session_id, { ...state, heldDiff: undefined });
+    state.heldDiff = undefined;
+  }
   if (state.commitChecked?.includes(hash)) return;
 
   const member = memberFromGit(config.team.members, gitIdentity(top));
@@ -1148,11 +1197,13 @@ async function commitCheck(input: HookInput, io: Io) {
   // The code's matches, then the changed files' own rules: both kept, neither crowding out the other.
   const codeTitles = rest(triggered.values(), COMMIT_TITLES - COMMIT_NEARBY);
   const titles = [...codeTitles, ...rest(nearby.values(), COMMIT_TITLES - codeTitles.length)];
+  const held = selection.items.length > 0 || titles.length > 0;
   writeState(kbRoot, input.session_id, {
     ...state,
     commitChecked: [...(state.commitChecked ?? []), hash].slice(-20),
+    ...(held ? { heldDiff: hash } : {}),
   });
-  if (!selection.items.length && !titles.length) return;
+  if (!held) return;
   logEvent(kbRoot, {
     ts: (io.now?.() ?? new Date()).toISOString(),
     type: "injection",

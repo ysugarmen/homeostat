@@ -183,6 +183,27 @@ describe("homeostat hook file: a located finding the agent must answer", () => {
     expect(reply.reason).toContain('tools/probe.py:5: `parts = urlsplit(os.environ["DB_URL"])`');
     expect(reply.reason.match(/^- /gm)).toHaveLength(1);
     expect(reply.reason).toContain("fix the code, or say in one line why the rule does not apply");
+    // The agent fixes it; the next hook (any file) sees the fragment gone and counts it fixed.
+    writeFileSync(
+      join(cwd, "tools/probe.py"),
+      "import os\nparts = parse_db_url(os.environ['DB_URL'])\n",
+    );
+    await hook(
+      "file",
+      {
+        session_id: "u1",
+        cwd,
+        tool_name: "Read",
+        tool_input: { file_path: join(cwd, "tools/probe.py") },
+      },
+      { HOMEOSTAT_DIR: kbDir },
+    );
+    const settled = readEvents(kbDir, { since: "2026-01-01" }).filter(
+      (e) => e.type === "finding-settled",
+    );
+    expect(settled).toEqual([
+      expect.objectContaining({ id: "parse-db-url-by-last-at", outcome: "fixed" }),
+    ]);
   });
 });
 
@@ -309,6 +330,23 @@ describe("homeostat hook commit (PreToolUse on Bash)", () => {
     expect(decision.permissionDecisionReason).toContain("(use-strenum)");
     expect(decision.permissionDecisionReason).toContain("Title learned-here (learned-here)");
     expect((await commit(cwd, kbDir)).stdout).toBe("");
+    // The retry carried the same diff: logged as a commit that went through unchanged.
+    const after = readEvents(kbDir, { since: "2026-01-01" }).filter(
+      (e) => e.type === "commit-after-hold",
+    );
+    expect(after).toEqual([expect.objectContaining({ changed: false })]);
+  });
+
+  test("a held commit the agent changed before retrying is counted as changed", async () => {
+    const { kbDir, cwd } = setup();
+    expect(out((await commit(cwd, kbDir)).stdout).permissionDecision).toBe("deny");
+    writeFileSync(join(cwd, "services/billing/totals.py"), "class Kind(StrEnum):\n    A = 'a'\n");
+    execFileSync("git", ["-C", cwd, "add", "."]);
+    await commit(cwd, kbDir);
+    const after = readEvents(kbDir, { since: "2026-01-01" }).filter(
+      (e) => e.type === "commit-after-hold",
+    );
+    expect(after).toEqual([expect.objectContaining({ changed: true })]);
   });
 
   test("other commands, and a team that turned it off, are left alone", async () => {

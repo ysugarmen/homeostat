@@ -257,12 +257,19 @@ describe("homeostat sync (automation, step 2)", { timeout: 30_000 }, () => {
       "docReads",
       "injections",
       "mcpCalls",
+      "moments",
       "retrievedTurns",
       "rules",
       "sessions",
       "turns",
     ]);
-    expect(Object.values(today).every((v) => typeof v === "number")).toBe(true);
+    // Moments are named by when, never by rule or file.
+    for (const k of Object.keys(today.moments ?? {}))
+      expect(["start", "prompt", "mcp", "file", "code", "commit", "other"]).toContain(k);
+    // Numbers only: counts, and the moments' counts by when.
+    const numbers = (o: object): boolean =>
+      Object.values(o).every((v) => typeof v === "number" || (typeof v === "object" && numbers(v)));
+    expect(numbers(today)).toBe(true);
     expect(JSON.stringify(heartbeat.usage)).not.toContain("u1");
     // The same through the config, so the choice is visible in the KB.
     const t2 = team();
