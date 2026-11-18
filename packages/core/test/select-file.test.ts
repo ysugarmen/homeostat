@@ -6,6 +6,7 @@ import {
   rankForFile,
   rulesForCode,
   selectEntries,
+  strongMatch,
   usableTrigger,
 } from "../src/index.ts";
 
@@ -138,9 +139,11 @@ describe("code triggers", () => {
 
   test("the rule more of whose triggers the code holds comes first, then the longer match", () => {
     const entries = [
-      rule("short", { scope: ["**"], triggers: ["ledger"] }),
+      rule("short", { scope: ["**"], triggers: ["batch"] }),
       rule("long", { scope: ["**"], triggers: ["ledger_client.post("] }),
-      rule("two", { scope: ["**"], triggers: ["ledger", "with_retry("] }),
+      rule("two", { scope: ["**"], triggers: ["batch", "with_retry("] }),
+      // Inside a longer name is not a match: "ledger" is part of "ledger_client".
+      rule("inside", { scope: ["**"], triggers: ["ledger"] }),
     ];
     const code = "with_retry(lambda: ledger_client.post(batch))";
     expect(rulesForCode(entries, "a.py", code).map((e) => e.frontmatter.id)).toEqual([
@@ -148,5 +151,22 @@ describe("code triggers", () => {
       "long",
       "short",
     ]);
+  });
+
+  test("a finding needs a strong match: two triggers, or a name the rule mentions in the file", () => {
+    // In a trial, "max_length=" raised a rule about one service's scheduling inputs on any model.
+    const scheduling = rule(
+      "scheduling",
+      { scope: ["**"], triggers: ["max_length="] },
+      "In `instagram_scheduling.py`, bound fields with `MAX_MESSAGE_LENGTH`.",
+    );
+    const pydantic = rule(
+      "pydantic",
+      { scope: ["**"], triggers: ["Field("] },
+      "Declare checks on the field, e.g. `min_length`, not by hand.",
+    );
+    const code = "name: str = Field(min_length=1, max_length=80)";
+    expect(strongMatch(scheduling, code, code)).toBe(false);
+    expect(strongMatch(pydantic, code, code)).toBe(true);
   });
 });

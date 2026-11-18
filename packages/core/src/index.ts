@@ -478,6 +478,7 @@ export {
   broadScopesFor,
   CONTEXT_HEADER,
   codeAffinity,
+  containsFragment,
   fileRefs,
   fillBudget,
   KIND_GUIDANCE,
@@ -494,6 +495,7 @@ export {
   type SelectOptions,
   selectEntries,
   selectForFile,
+  strongMatch,
   usableTrigger,
 } from "./select.ts";
 export {

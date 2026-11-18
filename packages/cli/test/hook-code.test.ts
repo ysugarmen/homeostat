@@ -159,7 +159,8 @@ describe("homeostat hook file: a located finding the agent must answer", () => {
     const rule = (id: string) => ({
       id,
       fm: { scope: ["**"], triggers: ["urlsplit("] },
-      text: "Parse the shared database URL by its last @, not with urlsplit.",
+      // It names DB_URL, which the code holds: a strong match, so a finding.
+      text: "Parse `DB_URL` by its last @, not with urlsplit.",
     });
     const kbDir = kb([rule("parse-db-url-by-last-at"), rule("parse-db-url-by-last-at-2")]);
     const cwd = codeRepo(["tools/probe.py"]);
@@ -179,10 +180,16 @@ describe("homeostat hook file: a located finding the agent must answer", () => {
     );
     const reply = JSON.parse(stdout);
     expect(reply.decision).toBe("block");
+    // The developer sees one line; the agent gets the finding in full as context.
+    expect(reply.reason).toBe(
+      "Homeostat: check probe.py:5 against team rule parse-db-url-by-last-at (details in context): fix it, or say in one line why it does not apply.",
+    );
+    const context = reply.hookSpecificOutput.additionalContext;
     // The call, not the import, the docstring or the comment: the trigger is "urlsplit(".
-    expect(reply.reason).toContain('tools/probe.py:5: `parts = urlsplit(os.environ["DB_URL"])`');
-    expect(reply.reason.match(/^- /gm)).toHaveLength(1);
-    expect(reply.reason).toContain("fix the code, or say in one line why the rule does not apply");
+    expect(context).toContain('tools/probe.py:5: `parts = urlsplit(os.environ["DB_URL"])`');
+    // One finding: the near-duplicate rule on the same line is only listed by title.
+    expect(context.match(/^- tools\/probe\.py:/gm)).toHaveLength(1);
+    expect(context).toContain("fix the code, or say in one line why the rule does not apply");
     // The agent fixes it; the next hook (any file) sees the fragment gone and counts it fixed.
     writeFileSync(
       join(cwd, "tools/probe.py"),
@@ -208,7 +215,7 @@ describe("homeostat hook file: a located finding the agent must answer", () => {
 });
 
 describe("homeostat hook file: many rules fire on one edit", () => {
-  test("the best two come in full, the others by title", async () => {
+  test("a match that names nothing else in the file is listed by title, never raised", async () => {
     const kbDir = kb(
       ["a", "b", "c", "d"].map((x) => ({
         id: `kinds-${x}`,
@@ -230,10 +237,11 @@ describe("homeostat hook file: many rules fire on one edit", () => {
       },
       { HOMEOSTAT_DIR: kbDir },
     );
-    const context = out(stdout).additionalContext;
-    expect(context.match(/^## Title kinds-/gm)).toHaveLength(2);
+    const reply = JSON.parse(stdout);
+    expect(reply.decision).toBeUndefined();
+    const context = reply.hookSpecificOutput.additionalContext;
     expect(context).toContain("The code also matches these");
-    expect(context.match(/^- Title kinds-[a-d] \(kinds-[a-d]\)$/gm)).toHaveLength(2);
+    expect(context.match(/^- Title kinds-[a-d] \(kinds-[a-d]\)$/gm)).toHaveLength(4);
   });
 });
 
@@ -243,7 +251,8 @@ describe("homeostat hook file: shell commands (agents read and edit with Bash to
       {
         id: "use-strenum",
         fm: { scope: ["**"], triggers: ["Literal["] },
-        text: "Use StrEnum, not Literal, for closed sets of kinds.",
+        // Names `Kind`, which the edited code holds: a strong match.
+        text: "Use StrEnum, not Literal, for closed sets like `Kind`.",
       },
       { id: "learned-here", fm: learnedAt("services/billing/totals.py") },
     ]);
@@ -280,8 +289,8 @@ describe("homeostat hook file: shell commands (agents read and edit with Bash to
     expect(context).toContain("(learned-here)");
     // The code's best match comes back as a located finding the agent must answer.
     expect(reply.decision).toBe("block");
-    expect(reply.reason).toContain('services/billing/totals.py:2: `Kind = Literal["a", "b"]`');
-    expect(reply.reason).toContain("(use-strenum)");
+    expect(reply.reason).toContain("check totals.py:2 against team rule use-strenum");
+    expect(context).toContain('services/billing/totals.py:2: `Kind = Literal["a", "b"]`');
   });
 
   test("a file a command only names (cat, grep) brings nothing, and no-file commands are cheap", async () => {

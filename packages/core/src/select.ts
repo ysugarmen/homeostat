@@ -309,7 +309,7 @@ export function rulesForCode(entries: readonly Entry[], path: string, code: stri
     if (!triggers.length) continue;
     if (e.frontmatter.status !== "accepted" || isRejectedDecision(e.frontmatter)) continue;
     if (!e.frontmatter.scope.some((g) => isGlobalGlob(g) || glob(g).match(path))) continue;
-    const hit = triggers.filter((t) => code.includes(t));
+    const hit = triggers.filter((t) => containsFragment(code, t));
     if (hit.length)
       fired.push({ e, count: hit.length, longest: Math.max(...hit.map((t) => t.length)) });
   }
@@ -322,6 +322,50 @@ export function rulesForCode(entries: readonly Entry[], path: string, code: stri
         a.e.frontmatter.id.localeCompare(b.e.frontmatter.id),
     )
     .map((x) => x.e);
+}
+
+/**
+ * Whether `code` holds `fragment` as code, not inside a longer name: a fragment that starts or
+ * ends with a word character must not continue a word there (`4xx` is not in `requests_4xx`).
+ */
+export function containsFragment(code: string, fragment: string): boolean {
+  const word = /\w/;
+  for (let i = code.indexOf(fragment); i >= 0; i = code.indexOf(fragment, i + 1)) {
+    const before = code[i - 1];
+    const after = code[i + fragment.length];
+    const startsWord = word.test(fragment[0] ?? "");
+    const endsWord = word.test(fragment.at(-1) ?? "");
+    if (startsWord && before && word.test(before)) continue;
+    if (endsWord && after && word.test(after)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** The names a rule's text mentions: `code spans`, snake_case and camelCase words. */
+function namesIn(text: string): string[] {
+  const spans = (text.match(/`([^`]+)`/g) ?? []).map((x) => x.slice(1, -1).trim());
+  const words =
+    text.match(/\b[A-Za-z_][A-Za-z0-9_]*(?:_[A-Za-z0-9]|[a-z][A-Z])[A-Za-z0-9_]*\b/g) ?? [];
+  return [...new Set([...spans, ...words])].filter((x) => x.length >= 4);
+}
+
+/**
+ * Whether a fired rule is about this code, not only sharing a fragment with it: two of its
+ * triggers are in the code just written, or it names something else the file holds (a name
+ * that is not one of its triggers). In a team trial one agent got 19 findings in nine minutes,
+ * 2 of them useful: "max_length=" raised a rule about one service's scheduling inputs on any
+ * Pydantic model. Only a strong match becomes a finding the agent must answer.
+ */
+export function strongMatch(e: Entry, written: string, file: string): boolean {
+  const triggers = (e.frontmatter.triggers ?? []).map((t) => t.trim()).filter(usableTrigger);
+  const hit = triggers.filter((t) => containsFragment(written, t));
+  if (hit.length >= 2) return true;
+  return namesIn(`${e.frontmatter.title} ${e.sections.rule ?? ""}`).some(
+    (name) =>
+      !triggers.some((t) => t.includes(name) || name.includes(t.replace(/\W+$/, ""))) &&
+      containsFragment(file, name),
+  );
 }
 
 /**

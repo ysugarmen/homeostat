@@ -15,6 +15,7 @@ import {
   CONFIG_FILE,
   CORE_AREA,
   type Config,
+  containsFragment,
   countTokens,
   detectRepo,
   docContext,
@@ -43,6 +44,7 @@ import {
   selectEntries,
   selectForFile,
   sessionGuide,
+  strongMatch,
   summarizeTurns,
   tokenize,
   UNKNOWN_KEY,
@@ -294,6 +296,11 @@ interface HandoffState {
   files?: string[];
   /** Rules given because code the agent wrote contained one of their triggers; once each. */
   triggered?: string[];
+  /** Lines of code already matched against triggers, per file (short hashes): scanned once. */
+  scanned?: Record<string, string[]>;
+  /** Findings raised this session, against the per-session budget, and the files they were in. */
+  findingsRaised?: number;
+  findingFiles?: string[];
   /** Located findings not fixed yet: the file, the fragment that fired, and the rule. */
   findings?: { id: string; abs: string; fragment: string }[];
   /** The diff the commit check held last; the next commit attempt says whether it changed. */
@@ -696,7 +703,7 @@ const COMMIT_NEARBY = 15;
 /** Tokens of rules the code just written brings in full: one or two, right after the edit. */
 const CODE_TOKENS = 300;
 /** At most this many more rules the code just written triggers are listed by title. */
-const CODE_TITLES = 15;
+const CODE_TITLES = 8;
 /** Tokens of the rules a commit check shows in full: the code's best few. */
 const COMMIT_TOKENS = 900;
 
@@ -738,6 +745,11 @@ function inCodeRepo(kbRoot: string, cwd: string, file: string) {
 
 /** At most this many files a single shell command opens get their rules: the rest come later. */
 const OPEN_PER_COMMAND = 3;
+/**
+ * Findings a session gets at most: one per action and per file, and past this, titles only.
+ * Replayed on a trial session that got 19 findings (2 useful) in nine minutes: 5, most useful.
+ */
+const FINDINGS_PER_SESSION = 5;
 /** Files whose text quotes code rather than being it: no findings, only titles. */
 const NOT_CODE = /\.(?:md|mdx|markdown|txt|rst|json|csv|log)$/i;
 /** A file a shell command changed is read whole for triggers only below this size. */
@@ -862,6 +874,17 @@ async function fileUse(input: HookInput, io: Io) {
     // Edited files first: the ones the agent is working on.
     .sort((a, b) => Number(!!b.code) - Number(!!a.code))
     .slice(0, OPEN_PER_COMMAND);
+  // Each line is matched once a session: formatting or re-running a file the agent just wrote
+  // rescanned it whole, and every pass raised the next rules down the list.
+  const scanned = { ...(state.scanned ?? {}) };
+  const lineKey = (l: string) => createHash("sha1").update(l.trim()).digest("hex").slice(0, 10);
+  for (const t of touches) {
+    if (!t.code) continue;
+    const seenLines = new Set(scanned[t.rel] ?? []);
+    const fresh = t.code.split("\n").filter((l) => l.trim() && !seenLines.has(lineKey(l)));
+    t.code = fresh.join("\n");
+    scanned[t.rel] = [...seenLines, ...fresh.map(lineKey)].slice(-4000);
+  }
   const written = touches.filter((t) => t.code);
   if (!toOpen.length && !written.length) {
     if (input.tool_name === "Bash")
@@ -958,28 +981,32 @@ async function fileUse(input: HookInput, io: Io) {
   // team trial an agent was given the right rule in full a second after writing the code it
   // forbids, and carried on: a located finding it must answer gets acted on, a list does not.
   const findings: { e: Entry; where: string; line: string; abs: string; fragment: string }[] = [];
-  for (const e of fired.slice(0, 2)) {
-    // Code only: a pattern quoted in review notes, a PR description or data is not code written.
-    for (const t of written.filter((w) => !NOT_CODE.test(w.rel))) {
+  const budget = FINDINGS_PER_SESSION - (state.findingsRaised ?? 0);
+  // Only a strong match, at most one an action and three a session, becomes a finding.
+  for (const e of fired) {
+    if (findings.length >= Math.min(1, budget)) break;
+    const flagged = new Set(state.findingFiles ?? []);
+    for (const t of written.filter((w) => !NOT_CODE.test(w.rel) && !flagged.has(w.rel))) {
+      const abs = join(t.root, t.rel);
+      let file = "";
+      try {
+        file = readFileSync(abs, "utf8");
+      } catch {
+        continue;
+      }
+      if (!strongMatch(e, t.code, file)) continue;
       const hit = (e.frontmatter.triggers ?? [])
         .map((x) => x.trim())
-        .find((x) => usableTrigger(x) && t.code.includes(x));
+        .find((x) => usableTrigger(x) && containsFragment(t.code, x));
       if (!hit) continue;
-      const abs = join(t.root, t.rel);
       const at = locate(abs, hit);
-      // One finding a line: near-duplicate rules on the same code say the same thing.
-      if (at && !findings.some((f) => f.where === `${t.rel}:${at.n}`))
-        findings.push({ e, where: `${t.rel}:${at.n}`, line: at.text, abs, fragment: hit });
+      if (at) findings.push({ e, where: `${t.rel}:${at.n}`, line: at.text, abs, fragment: hit });
       break;
     }
   }
-  // In a team trial one edit fired a median of 5 rules and up to 80; the best go in full, and
-  // the agent picks from the others' titles better than any ranking of them.
+  // The rest are listed by title: what the code matched, for the agent to read if it fits.
   const located = new Set(findings.map((f) => f.e.frontmatter.id));
-  const forCode = fillBudget(
-    fired.slice(0, 2).filter((e) => !located.has(e.frontmatter.id)),
-    { tokenBudget: CODE_TOKENS },
-  );
+  const forCode = fillBudget([], { tokenBudget: CODE_TOKENS });
   const codeFull = new Set([...located, ...forCode.items.map((i) => i.entry.frontmatter.id)]);
   const codeTitles = fired
     .filter(
@@ -1025,6 +1052,12 @@ async function fileUse(input: HookInput, io: Io) {
     injected: [...new Set([...seen, ...codeIds])],
     triggered: [...(state.triggered ?? []), ...codeIds],
     titled: [...titled],
+    scanned,
+    findingsRaised: (state.findingsRaised ?? 0) + findings.length,
+    findingFiles: [
+      ...(state.findingFiles ?? []),
+      ...findings.map((f) => f.where.replace(/:\d+$/, "")),
+    ],
     findings: [
       ...(state.findings ?? []),
       ...findings.map((f) => ({ id: f.e.frontmatter.id, abs: f.abs, fragment: f.fragment })),
@@ -1035,10 +1068,18 @@ async function fileUse(input: HookInput, io: Io) {
   io.stdout(
     `${JSON.stringify({
       // A located finding goes to the agent as feedback it must answer; the edit stands.
-      ...(findings.length ? { decision: "block", reason: findingsText(findings) } : {}),
+      // The reason is what the developer sees in the terminal: one line. The finding in full
+      // (the line, the rule's text) goes to the agent as context with it.
+      ...(findings.length ? { decision: "block", reason: findingsSummary(findings) } : {}),
       hookSpecificOutput: {
         hookEventName: "PostToolUse",
-        ...(parts.length ? { additionalContext: parts.join("\n\n") } : {}),
+        ...(parts.length || findings.length
+          ? {
+              additionalContext: [findings.length ? findingsText(findings) : "", ...parts]
+                .filter(Boolean)
+                .join("\n\n"),
+            }
+          : {}),
       },
     })}\n`,
   );
@@ -1098,6 +1139,13 @@ function locate(abs: string, fragment: string): { n: number; text: string } | un
   if (i < 0) return undefined;
   const line = (lines[i] ?? "").trim();
   return { n: i + 1, text: line.length > 140 ? `${line.slice(0, 137)}...` : line };
+}
+
+/** The one line a developer sees for a finding; the agent gets `findingsText` as context. */
+function findingsSummary(findings: { e: Entry; where: string }[]): string {
+  const f = findings[0];
+  if (!f) return "";
+  return `Homeostat: check ${f.where.replace(/^.*\//, "")} against team rule ${f.e.frontmatter.id} (details in context): fix it, or say in one line why it does not apply.`;
 }
 
 function findingsText(findings: { e: Entry; where: string; line: string }[]): string {
