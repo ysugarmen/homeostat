@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
@@ -58,12 +59,16 @@ export interface SyncState {
   pushed?: string;
   /** Version, clone commit and lag last reported in a heartbeat. */
   reported?: string;
+  /** The shared usage counts last reported (a hash), so changed counts go out within the hour. */
+  usageReported?: string;
   /** Notices not yet shown in a session. */
   unseen?: Notice[];
 }
 
 const STATE_FILE = ".homeostat/sync.json";
 const HEARTBEAT_EVERY_MS = 12 * 3_600_000;
+/** A heartbeat whose shared counts changed goes out at most this often. */
+const USAGE_EVERY_MS = 3_600_000;
 
 export function readSyncState(root: string): SyncState {
   try {
@@ -234,8 +239,32 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
   // A new plugin is news too: the heartbeat goes out when it changes.
   const position = `${VERSION}:${git(root, "rev-parse", "HEAD") ?? ""}:${behind}${plugin ? `:${plugin.version}` : ""}`;
   let reported = state.reported;
+  let usageReported = state.usageReported;
+  // Usage counts leave the laptop only when the member chose to share them, as the config
+  // just pulled says: read before the pull, a change of it reached heartbeats a sync late.
+  const shares =
+    (now3 ?? config).team.members.find((m) => m.id === member)?.usage === true ||
+    io.env?.HOMEOSTAT_SHARE_USAGE === "1";
+  const usage = shares
+    ? usageCounts(
+        readEvents(root, { since: new Date(Date.parse(now) - 8 * 86_400_000).toISOString() }),
+        new Date(now),
+      )
+    : undefined;
+  // Changed counts go out within the hour, so the team's view keeps up during the day.
+  const usageKey = usage
+    ? createHash("sha256").update(JSON.stringify(usage)).digest("hex").slice(0, 16)
+    : undefined;
+  const usageDue =
+    !!usageKey &&
+    usageKey !== state.usageReported &&
+    (!state.lastHeartbeat || Date.parse(now) - Date.parse(state.lastHeartbeat) > USAGE_EVERY_MS);
   const baseRef = git(root, "rev-parse", "--verify", "--quiet", `refs/remotes/origin/${base}`);
-  if (isMember && baseRef && (fp !== state.pushed || heartbeatDue || position !== state.reported)) {
+  if (
+    isMember &&
+    baseRef &&
+    (fp !== state.pushed || heartbeatDue || usageDue || position !== state.reported)
+  ) {
     const pending = readPendingFiles(root);
     const heartbeat: Heartbeat = {
       member,
@@ -246,15 +275,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
       version: VERSION,
       ...(plugin ? { plugin } : {}),
     };
-    // Usage counts leave the laptop only when the member chose to share them, as the config
-    // just pulled says: read before the pull, a change of it reached heartbeats a sync late.
-    const shares =
-      (now3 ?? config).team.members.find((m) => m.id === member)?.usage === true ||
-      io.env?.HOMEOSTAT_SHARE_USAGE === "1";
-    if (shares) {
-      const since = new Date(Date.parse(now) - 8 * 86_400_000).toISOString();
-      heartbeat.usage = usageCounts(readEvents(root, { since }), new Date(now));
-    }
+    if (usage) heartbeat.usage = usage;
     try {
       const commit = commitTree(
         root,
@@ -266,6 +287,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
       pushed = fp;
       lastHeartbeat = now;
       reported = position;
+      usageReported = usageKey;
       const count = Object.keys(pending).length;
       say(
         count
@@ -295,6 +317,7 @@ export async function runSync(opts: SyncOptions, io: Io): Promise<number> {
     ...(lastHeartbeat ? { lastHeartbeat } : {}),
     ...(pushed ? { pushed } : {}),
     ...(reported ? { reported } : {}),
+    ...(usageReported ? { usageReported } : {}),
     unseen: [...(state.unseen ?? []), ...notices].slice(-20),
   });
   record();

@@ -292,6 +292,52 @@ describe("homeostat hook file: shell commands (agents read and edit with Bash to
     expect((await bash(kbDir, cwd, "s2", "cat services/billing/totals.py", later)).stdout).toBe("");
     expect((await bash(kbDir, cwd, "s2", "ls -la", later)).stdout).toBe("");
   });
+
+  test("a reviewer's checkout writes nothing: a fresh but unchanged file brings no findings", async () => {
+    // In a team trial the main reviewer's agent, which only reads PRs and comments, got 20
+    // findings in an hour: every file a checkout touched was read whole as code it had written.
+    const { kbDir, cwd } = setup();
+    writeFileSync(join(cwd, "services/billing/totals.py"), 'Kind = Literal["a", "b"]\n');
+    execFileSync("git", ["-C", cwd, "commit", "-qam", "the PR author's code"]);
+    // Checked out again: a new modification time, the same content as the commit.
+    writeFileSync(join(cwd, "services/billing/totals.py"), 'Kind = Literal["a", "b"]\n');
+    const { stdout } = await bash(
+      kbDir,
+      cwd,
+      "r1",
+      "git diff main -- services/billing/totals.py",
+      new Date(Date.now() + 1000).toISOString(),
+    );
+    expect(stdout).toBe("");
+  });
+});
+
+describe("homeostat hook file: findings only in code", () => {
+  test("a rule's pattern quoted in review notes is listed, never raised as a finding", async () => {
+    const kbDir = kb([
+      {
+        id: "use-strenum",
+        fm: { scope: ["**"], triggers: ["Literal["] },
+        text: "Use StrEnum, not Literal, for closed sets of kinds.",
+      },
+    ]);
+    const cwd = codeRepo(["notes/review.md"]);
+    const content = 'The PR adds `Kind = Literal["a", "b"]`; suggest StrEnum.\n';
+    writeFileSync(join(cwd, "notes/review.md"), content);
+    const { stdout } = await hook(
+      "file",
+      {
+        session_id: "n1",
+        cwd,
+        tool_name: "Write",
+        tool_input: { file_path: join(cwd, "notes/review.md"), content },
+      },
+      { HOMEOSTAT_DIR: kbDir },
+    );
+    const reply = JSON.parse(stdout);
+    expect(reply.decision).toBeUndefined();
+    expect(reply.hookSpecificOutput.additionalContext).toContain("(use-strenum)");
+  });
 });
 
 describe("homeostat hook commit (PreToolUse on Bash)", () => {

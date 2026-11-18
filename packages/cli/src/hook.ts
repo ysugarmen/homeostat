@@ -738,6 +738,8 @@ function inCodeRepo(kbRoot: string, cwd: string, file: string) {
 
 /** At most this many files a single shell command opens get their rules: the rest come later. */
 const OPEN_PER_COMMAND = 3;
+/** Files whose text quotes code rather than being it: no findings, only titles. */
+const NOT_CODE = /\.(?:md|mdx|markdown|txt|rst|json|csv|log)$/i;
 /** A file a shell command changed is read whole for triggers only below this size. */
 const MAX_NEW_FILE = 100_000;
 const CODE_EXT =
@@ -803,8 +805,11 @@ export function bashTouches(
           .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
           .map((l) => l.slice(1))
           .join("\n");
-        // Not in git yet: the whole new file is what was written.
-        if (!diff && st.size < MAX_NEW_FILE) {
+        // Not in git yet: the whole new file is what was written. A tracked file with no diff
+        // was only checked out or pulled (a reviewer's PR branch): nothing was written. Read
+        // whole, a PR author's code became findings the reviewer's agent was told to fix.
+        const tracked = !!git(at.root, "ls-files", "--", at.rel);
+        if (!diff && !tracked && st.size < MAX_NEW_FILE) {
           try {
             code = readFileSync(abs, "utf8");
           } catch {
@@ -954,7 +959,8 @@ async function fileUse(input: HookInput, io: Io) {
   // forbids, and carried on: a located finding it must answer gets acted on, a list does not.
   const findings: { e: Entry; where: string; line: string; abs: string; fragment: string }[] = [];
   for (const e of fired.slice(0, 2)) {
-    for (const t of written) {
+    // Code only: a pattern quoted in review notes, a PR description or data is not code written.
+    for (const t of written.filter((w) => !NOT_CODE.test(w.rel))) {
       const hit = (e.frontmatter.triggers ?? [])
         .map((x) => x.trim())
         .find((x) => usableTrigger(x) && t.code.includes(x));

@@ -285,6 +285,29 @@ describe("homeostat sync (automation, step 2)", { timeout: 30_000 }, () => {
     ).toBeDefined();
   });
 
+  test("changed counts go out within the hour, not only every 12 hours", async () => {
+    // In a team trial the morning's heartbeats showed none of the day's work until evening.
+    const t = team();
+    const env = { HOMEOSTAT_SHARE_USAGE: "1" };
+    const at = (iso: string) => ({ env, now: () => new Date(iso) });
+    const sessions = () =>
+      (
+        Object.values(
+          JSON.parse(t.g(t.origin, "show", "candidates/lee:.homeostat-sync/heartbeat.json")).usage,
+        ).at(-1) as { sessions: number }
+      ).sessions;
+    await session(t.lee, "s1");
+    await run(["sync", "--dir", t.lee], at("2026-10-16T09:00:00Z"));
+    expect(sessions()).toBe(1);
+    await session(t.lee, "s2");
+    // Twenty minutes later: changed, but not sent yet.
+    await run(["sync", "--dir", t.lee], at("2026-10-16T09:20:00Z"));
+    expect(sessions()).toBe(1);
+    // Past the hour: sent.
+    await run(["sync", "--dir", t.lee], at("2026-10-16T10:05:00Z"));
+    expect(sessions()).toBe(2);
+  });
+
   test("turned on in the KB by an admin, usage counts go in the very sync that pulls the change", async () => {
     // A team turned usage on for everyone; the first syncs after it sent no counts, since the
     // config was read before the pull.
