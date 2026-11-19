@@ -13,8 +13,11 @@ const HOST_NAME: Record<Host, string> = { github: "GitHub", bitbucket: "Bitbucke
 /** Matches scp-style (`git@host:org/repo`) and URL-style (`https://user@host/org/repo`) remotes. */
 export function detectHost(remoteUrl: string): Host | undefined {
   const host = /^(?:[\w+.-]+:\/\/)?(?:[^@/]+@)?([^:/]+)[:/]/.exec(remoteUrl.trim())?.[1];
-  if (host === "github.com") return "github";
-  if (host === "bitbucket.org") return "bitbucket";
+  // The hosts' SSH endpoints too: Bitbucket moved SSH to ssh.bitbucket.org in November 2026,
+  // and a global `insteadOf` rewrite makes git report that host for every clone.
+  if (host === "github.com" || host === "ssh.github.com") return "github";
+  if (host === "bitbucket.org" || /^(?:alt)?ssh\.bitbucket\.org$/.test(host ?? ""))
+    return "bitbucket";
   return undefined;
 }
 
