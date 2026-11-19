@@ -33,7 +33,7 @@ export const draftSchema = z.object({
   keep: z
     .boolean()
     .describe(
-      "false when the thread is a one-off (typo, naming nit, question) with no lasting rule",
+      "false unless a developer on a different change would write code differently for knowing this; one-offs about this change alone (a missed case, a wrong value, a test this diff needs, a nit, a question) are false",
     ),
   title: z.string().describe("imperative sentence, at most 80 characters"),
   rule: z.string().describe("one paragraph, at most 60 words: what to do from now on"),
@@ -60,6 +60,8 @@ export const draftSchema = z.object({
 export const DRAFT_SYSTEM = `You maintain a software team's knowledge base of coding rules that AI coding agents follow.
 
 You get one code-review thread: a reviewer's comment on a pull request, any replies, and the fact that the author changed the code afterwards. Decide whether it holds a lasting rule that would help on other pull requests too, and if so write it.
+
+The bar is high. Keep a lesson only when a developer working on a different change, in a different file, would write their code differently for knowing it: a practice, a convention, a library's right use, a trap in this codebase. Most review comments are about this change alone (a missed case in this function, a wrong value here, a test this diff needs, a name to fix, a description to update, a rollout step for this release): those hold no rule, however good the comment. When in doubt, set keep to false; a team's knowledge base is worth more small than large.
 
 Write the rule so it generalises beyond this pull request but stays concrete: name the function, package, path or pattern involved. Use only names, values and examples that appear in the thread; do not add illustrative values of your own, because other agents will treat every detail in the rule as fact. Take the reason only from the thread; never invent facts or motivations it does not state. If the reviewer gives no reason, write the most direct reason the thread supports, briefly.
 

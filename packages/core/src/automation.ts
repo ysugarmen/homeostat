@@ -73,6 +73,8 @@ export interface UsageDay {
   /** Located findings given, and those the agent fixed (the code that fired was changed). */
   findings?: number;
   findingsFixed?: number;
+  /** Findings the agent answered in its reply (considered, and said why not) without a fix. */
+  findingsAnswered?: number;
   /** Commits the commit check held, and those changed before they went through. */
   commitsHeld?: number;
   commitsChanged?: number;

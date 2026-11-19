@@ -59,6 +59,11 @@ const CONTRADICTS: JudgeVerdict = {
   problems: [{ trap: "contradicts-thread", evidence: "the thread asked for tokens" }],
 };
 
+const ONE_OFF: JudgeVerdict = {
+  ok: false,
+  problems: [{ trap: "one-off", evidence: "the thread is about this function's missing case" }],
+};
+
 /** Answers in turn; the last answer repeats. */
 const judgeOf = (...answers: (JudgeVerdict | null | Error)[]) => {
   let calls = 0;
@@ -149,7 +154,13 @@ describe("judgeDraft: majority on the failing side", () => {
 
 describe("the judge's prompt", () => {
   test("names every trap and sends the thread and the draft, not the area's paths", async () => {
-    for (const trap of ["invented-detail", "wider-scope", "overgeneralised", "contradicts-thread"])
+    for (const trap of [
+      "invented-detail",
+      "wider-scope",
+      "overgeneralised",
+      "contradicts-thread",
+      "one-off",
+    ])
       expect(DRAFT_JUDGE_SYSTEM).toContain(trap);
     const seen: string[] = [];
     const ask: Asker = async (system, user) => {
@@ -217,6 +228,21 @@ areas:
     expect(judged.reason).toContain("invented-detail: x");
   });
 
+  test("a one-off is declined, not narrowed or sent to a person", () => {
+    const c = confidence({
+      entry,
+      config: config(),
+      originator: "sam",
+      judged: {
+        problems: ["one-off: the thread is about this function's missing case"],
+        contradicts: false,
+        oneOff: true,
+      },
+    });
+    expect(c.decision).toBe("declined");
+    expect(c.reason).toContain("no lesson beyond its own pull request");
+  });
+
   test("a rule that contradicts its own thread is declined", () => {
     const c = confidence({
       entry,
@@ -233,5 +259,17 @@ areas:
     expect(sonnet && judgeModelFor(sonnet)).toBe("claude-haiku-4-5-20251001");
     const set = parseConfig(`${yaml}agents:\n  curator: { judgeModel: claude-haiku-4-5 }\n`).config;
     expect(set && judgeModelFor(set)).toBe("claude-haiku-4-5");
+  });
+});
+
+describe("judgeDraft: a one-off", () => {
+  test("a majority naming one-off marks the draft as holding no lesson beyond its PR", async () => {
+    // In a team trial 99 of 100 threads drafted became rules, most about one change alone.
+    const kept = await judgeDraft(judgeOf(ONE_OFF, ONE_OFF, OK).judge, input);
+    expect(kept?.oneOff).toBe(true);
+    expect(kept?.contradicts).toBe(false);
+    const flipped = await judgeDraft(judgeOf(ONE_OFF, OK, OK).judge, input);
+    expect(flipped?.oneOff).toBe(false);
+    expect(flipped?.verdict).toEqual(OK);
   });
 });

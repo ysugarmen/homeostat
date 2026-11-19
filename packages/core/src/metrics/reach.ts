@@ -101,7 +101,13 @@ export function reach(snap: MetricsSnapshot): Reach {
       sum.creditedTurns = (sum.creditedTurns ?? 0) + (u.creditedTurns ?? 0);
       for (const [m, n] of Object.entries(u.moments ?? {}))
         sum.moments = { ...sum.moments, [m]: (sum.moments?.[m] ?? 0) + n };
-      for (const k of ["findings", "findingsFixed", "commitsHeld", "commitsChanged"] as const)
+      for (const k of [
+        "findings",
+        "findingsFixed",
+        "findingsAnswered",
+        "commitsHeld",
+        "commitsChanged",
+      ] as const)
         if (u[k]) sum[k] = (sum[k] ?? 0) + (u[k] ?? 0);
     }
     teamByDay.push({ day: d, ...sum });

@@ -29,7 +29,7 @@ export interface ConfidenceInput {
    * The judge's kept failure (see `curator/judge.ts`): the drafted rule says what its thread did
    * not. It never merges: a reviewer reads it, or, when it contradicts the thread, it is declined.
    */
-  judged?: { problems: readonly string[]; contradicts: boolean };
+  judged?: { problems: readonly string[]; contradicts: boolean; oneOff?: boolean };
 }
 
 export interface Confidence {
@@ -128,6 +128,15 @@ export function confidence(input: ConfidenceInput): Confidence {
       parts,
       decision: "declined",
       reason: `${summary}; the judge found it contradicts its own review thread: ${input.judged.problems.join("; ")}`,
+    };
+  }
+  // A lesson about one change alone is not a rule: declined, not narrowed, not read by a person.
+  if (input.judged?.oneOff) {
+    return {
+      score,
+      parts,
+      decision: "declined",
+      reason: `${summary}; the judge found no lesson beyond its own pull request: ${input.judged.problems.join("; ")}`,
     };
   }
   if (input.risks?.length)

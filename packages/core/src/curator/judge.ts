@@ -21,6 +21,7 @@ export const JUDGE_TRAPS = [
   "wider-scope",
   "overgeneralised",
   "contradicts-thread",
+  "one-off",
 ] as const;
 export type JudgeTrap = (typeof JUDGE_TRAPS)[number];
 
@@ -73,6 +74,7 @@ Check the rule (title, rule and why) against these traps only. Where the rule ap
 - wider-scope: the rule's own words claim more than the thread addressed: other services, languages, layers or situations the thread did not talk about ("every call site across all services", "in any language"). Applying the thread's point to similar code in the same part of the codebase is the purpose of a rule and is not wider scope.
 - overgeneralised: the thread makes a one-off or conditional suggestion ("maybe", "here", "in this case", "consider") and the rule turns it into "always" or "never".
 - contradicts-thread: the rule says the opposite of what the thread asked for or concluded, or keeps something a later reply withdrew.
+- one-off: the thread is about this change alone (a missed case in this function, a wrong value here, a test this diff needs, a description or rollout step for this release) and the rule only restates it with "always" or "when": a developer on a different change would not write code differently for knowing it. A practice, a convention, a library's right use or a trap in this codebase is not a one-off, even when the thread shows it on one example.
 
 Do not judge style, length or usefulness. Generalising the thread's own point into a rule for future pull requests is expected and is not a problem by itself; adding facts is. When the rule passes, set ok to true and list no problems. When it hits a trap, set ok to false and give one problem per trap, quoting the rule's words and saying what the thread says instead.`;
 
@@ -156,6 +158,8 @@ export interface JudgedDraft {
   tally: string;
   /** A majority named contradicts-thread: the rule says the opposite of its own evidence. */
   contradicts: boolean;
+  /** A majority named one-off: the thread holds no lesson beyond its own pull request. */
+  oneOff: boolean;
   calls: number;
 }
 
@@ -176,6 +180,7 @@ export async function judgeDraft(
       verdict: primary,
       tally: primary.ok ? "passed" : "1/1 failed",
       contradicts: !primary.ok && primary.problems.some((p) => p.trap === "contradicts-thread"),
+      oneOff: !primary.ok && primary.problems.some((p) => p.trap === "one-off"),
       calls: 1,
     };
   }
@@ -187,7 +192,7 @@ export async function judgeDraft(
   const calls = 1 + confirmations;
   const tally = `${failed.length}/${answers.length} failed`;
   if (failed.length * 2 <= answers.length) {
-    return { verdict: { ok: true, problems: [] }, tally, contradicts: false, calls };
+    return { verdict: { ok: true, problems: [] }, tally, contradicts: false, oneOff: false, calls };
   }
   const named = (trap: JudgeTrap) =>
     failed.filter((v) => v.problems.some((p) => p.trap === trap)).length * 2 > answers.length;
@@ -201,6 +206,7 @@ export async function judgeDraft(
     verdict: { ok: false, problems },
     tally,
     contradicts: named("contradicts-thread"),
+    oneOff: named("one-off"),
     calls,
   };
 }

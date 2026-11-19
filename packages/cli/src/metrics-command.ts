@@ -149,8 +149,9 @@ export function formatMetrics(r: MetricsReport, present: boolean): string {
     );
     line("team lookups", `${t.mcpCalls} MCP calls, ${t.docReads} document reads`);
     // When rules reached agents, and whether agents acted on them (counts from 0.5.27 on).
-    const sum = (k: "findings" | "findingsFixed" | "commitsHeld" | "commitsChanged") =>
-      re.team.byDay.reduce((a, d) => a + (d[k] ?? 0), 0);
+    const sum = (
+      k: "findings" | "findingsFixed" | "findingsAnswered" | "commitsHeld" | "commitsChanged",
+    ) => re.team.byDay.reduce((a, d) => a + (d[k] ?? 0), 0);
     const moments: Record<string, number> = {};
     for (const d of re.team.byDay)
       for (const [m, n] of Object.entries(d.moments ?? {})) moments[m] = (moments[m] ?? 0) + n;
@@ -164,7 +165,7 @@ export function formatMetrics(r: MetricsReport, present: boolean): string {
     if (given) {
       line(
         "team findings",
-        `${given} given, ${sum("findingsFixed")} fixed (${pct(sum("findingsFixed") / given)})`,
+        `${given} given, ${sum("findingsFixed")} fixed (${pct(sum("findingsFixed") / given)}), ${sum("findingsAnswered")} answered without a fix`,
       );
     }
     const held = sum("commitsHeld");

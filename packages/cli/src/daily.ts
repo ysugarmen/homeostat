@@ -165,7 +165,7 @@ interface Lesson {
   /** The redacted review thread a drafted lesson came from, for the judge. */
   thread?: ReviewThread;
   /** The judge's kept failure: what the rule says that its thread does not. */
-  judged?: { problems: string[]; contradicts: boolean; tally: string };
+  judged?: { problems: string[]; contradicts: boolean; oneOff: boolean; tally: string };
   /** Waits with this lesson, which is in an open review PR. */
   twin?: string;
 }
@@ -746,7 +746,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     if (judged.verdict.ok) return false;
     // Claims the thread does not make, but nothing it contradicts: narrow the wording to what
     // the thread says and judge it again, rather than hand the rule to a person as it is.
-    if (narrower && !judged.contradicts && judgeBudget > 0) {
+    if (narrower && !judged.contradicts && !judged.oneOff && judgeBudget > 0) {
       try {
         const narrowed = await narrower.narrow({ ...input, problems: judged.verdict.problems });
         const again = narrowed
@@ -798,6 +798,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     l.judged = {
       problems: judged.verdict.problems.map((p) => `${p.trap}: ${p.evidence}`),
       contradicts: judged.contradicts,
+      oneOff: judged.oneOff,
       tally: judged.tally,
     };
     return true;
@@ -1515,7 +1516,7 @@ function judgeFindings(list: Lesson[]): string[] {
     "",
     "The judge (a second model) found claims these drafted rules make that their review threads do not; check them against the thread before merging:",
     ...judged.flatMap((l) => [
-      `- \`${l.id}\` (${l.judged?.tally ?? ""}${l.judged?.contradicts ? "; contradicts its thread, so declined" : ""}):`,
+      `- \`${l.id}\` (${l.judged?.tally ?? ""}${l.judged?.contradicts ? "; contradicts its thread, so declined" : l.judged?.oneOff ? "; no lesson beyond its own PR, so declined" : ""}):`,
       ...(l.judged?.problems ?? []).map((p) => `  - ${p}`),
     ]),
   ];

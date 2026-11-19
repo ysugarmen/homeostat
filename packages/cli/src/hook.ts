@@ -301,8 +301,10 @@ interface HandoffState {
   /** Findings raised this session, against the per-session budget, and the files they were in. */
   findingsRaised?: number;
   findingFiles?: string[];
-  /** Located findings not fixed yet: the file, the fragment that fired, and the rule. */
-  findings?: { id: string; abs: string; fragment: string }[];
+  /** Located findings not fixed yet: the file, the fragment that fired, the rule, and when. */
+  findings?: { id: string; abs: string; fragment: string; at?: string }[];
+  /** When the Stop hook last ran: findings raised since are this turn's. */
+  stopAt?: string;
   /** The diff the commit check held last; the next commit attempt says whether it changed. */
   heldDiff?: string;
   /** Rules this session was shown by title only, so a title is listed once. */
@@ -420,7 +422,7 @@ async function stop(input: HookInput, io: Io) {
   }
   try {
     logTurns(input, io, kbRoot);
-    settleFindings(kbRoot, input.session_id, io);
+    settleFindings(kbRoot, input.session_id, io, input.last_assistant_message);
   } catch {
     // Usage counts are a by-product: they never stop a session or the handoff below.
   }
@@ -697,9 +699,9 @@ const FILE_TOKENS = 700;
 /** At most this many more of a file's own rules are listed by title when it is opened. */
 const FILE_TITLES = 20;
 /** At most this many more rules for a commit are listed by title. */
-const COMMIT_TITLES = 50;
-/** Of those, at least this many are the changed files' own rules (learned on or near them). */
-const COMMIT_NEARBY = 15;
+const COMMIT_TITLES = 10;
+/** Of those, at least this many are rules learned on the very files changed. */
+const COMMIT_NEARBY = 5;
 /** Tokens of rules the code just written brings in full: one or two, right after the edit. */
 const CODE_TOKENS = 300;
 /** At most this many more rules the code just written triggers are listed by title. */
@@ -1060,7 +1062,12 @@ async function fileUse(input: HookInput, io: Io) {
     ],
     findings: [
       ...(state.findings ?? []),
-      ...findings.map((f) => ({ id: f.e.frontmatter.id, abs: f.abs, fragment: f.fragment })),
+      ...findings.map((f) => ({
+        id: f.e.frontmatter.id,
+        abs: f.abs,
+        fragment: f.fragment,
+        at: ts,
+      })),
     ],
     ...(input.tool_name === "Bash" ? { bashAt: ts } : {}),
   });
@@ -1089,14 +1096,27 @@ async function fileUse(input: HookInput, io: Io) {
  * Findings the agent fixed since: the fragment that fired is no longer on any code line of the
  * file (or the file is gone). Each is logged once, as `finding-settled`, and leaves the list.
  */
-function settleFindings(kbRoot: string, session: string, io: Io) {
+function settleFindings(kbRoot: string, session: string, io: Io, reply?: string) {
   const state = readState(kbRoot, session);
-  if (!state.findings?.length) return;
-  const open: NonNullable<HandoffState["findings"]> = [];
   const ts = (io.now?.() ?? new Date()).toISOString();
+  if (!state.findings?.length) {
+    if (reply !== undefined) writeState(kbRoot, session, { ...state, stopAt: ts });
+    return;
+  }
+  const open: NonNullable<HandoffState["findings"]> = [];
+  // The reply that ends the turn a finding was raised in: when it speaks of the rule (by id,
+  // or as a rule that does or does not apply), the agent considered it. Dismissed is not
+  // ignored, and the two were counted the same.
+  const turnStart = state.stopAt ? Date.parse(state.stopAt) : 0;
+  const text = reply ?? "";
+  const answered = (f: { id: string; at?: string }) =>
+    reply !== undefined &&
+    (f.at === undefined || Date.parse(f.at) >= turnStart) &&
+    (text.includes(f.id) || /\b(?:team )?rule\b|homeostat/i.test(text));
   for (const f of state.findings) {
     const gone = !existsSync(f.abs);
-    if (!gone && locate(f.abs, f.fragment)) {
+    const fixed = gone || !locate(f.abs, f.fragment);
+    if (!fixed && !answered(f)) {
       open.push(f);
       continue;
     }
@@ -1105,11 +1125,14 @@ function settleFindings(kbRoot: string, session: string, io: Io) {
       type: "finding-settled",
       session,
       id: f.id,
-      outcome: gone ? "gone" : "fixed",
+      outcome: gone ? "gone" : fixed ? "fixed" : "answered",
     });
   }
-  if (open.length !== state.findings.length)
-    writeState(kbRoot, session, { ...state, findings: open });
+  writeState(kbRoot, session, {
+    ...state,
+    findings: open,
+    ...(reply !== undefined ? { stopAt: ts } : {}),
+  });
 }
 
 /** The first line of a file holding `fragment`, numbered from 1, trimmed to fit a message. */
@@ -1266,34 +1289,47 @@ async function commitCheck(input: HookInput, io: Io) {
     member,
   );
   const broad = broadScopesFor(config, repo);
+  // A commit is held only for something specific: a strong match of a rule in the lines added
+  // (two of its triggers, or a name it mentions, in the file), or a rule learned on the very
+  // file changed. In a team trial, holds that listed every rule near the changed files (about
+  // forty titles each) were waved through 39 times in 41: agents read a short, specific list.
   const triggered = new Map<string, Entry>();
   const files = [...addedLines(diff)].slice(0, 30);
-  // Code first: a trigger in the added lines is the surest sign a rule applies. Each file's
-  // best first, file by file in turn, so one busy file does not fill the list.
-  const perFile = files.map(([path, added]) => rulesForCode(pool, path, added));
+  const fileText = new Map<string, string>();
+  const textOf = (path: string) => {
+    let text = fileText.get(path);
+    if (text === undefined) {
+      try {
+        text = readFileSync(join(top, path), "utf8");
+      } catch {
+        text = "";
+      }
+      fileText.set(path, text);
+    }
+    return text;
+  };
+  const perFile = files.map(([path, added]) =>
+    NOT_CODE.test(path)
+      ? []
+      : rulesForCode(pool, path, added).filter((e) => strongMatch(e, added, textOf(path))),
+  );
   for (let i = 0; perFile.some((r) => i < r.length); i++) {
     for (const r of perFile) {
       const e = r[i];
       if (e) triggered.set(e.frontmatter.id, e);
     }
   }
-  // Then each file's own rules (learned on it or its folder, naming it, or narrowly scoped),
-  // nearest first, ranked by the lines added to it; listed by title for the agent to pick from.
   const nearby = new Map<string, Entry>();
-  for (const tier of [0, 1, 2]) {
-    for (const [path, added] of files) {
-      for (const r of rankForFile(pool, path, { broad, code: added })) {
-        if (r.tier === tier && !triggered.has(r.entry.frontmatter.id)) {
-          nearby.set(r.entry.frontmatter.id, r.entry);
-        }
-      }
+  for (const [path, added] of files) {
+    for (const r of rankForFile(pool, path, { broad, code: added })) {
+      if (r.tier === 0 && !triggered.has(r.entry.frontmatter.id))
+        nearby.set(r.entry.frontmatter.id, r.entry);
     }
   }
   const selection = fillBudget([...triggered.values()].slice(0, 3), { tokenBudget: COMMIT_TOKENS });
   const shown = new Set(selection.items.map((i) => i.entry.frontmatter.id));
   const rest = (xs: Iterable<Entry>, n: number) =>
     [...xs].filter((e) => !shown.has(e.frontmatter.id)).slice(0, n);
-  // The code's matches, then the changed files' own rules: both kept, neither crowding out the other.
   const codeTitles = rest(triggered.values(), COMMIT_TITLES - COMMIT_NEARBY);
   const titles = [...codeTitles, ...rest(nearby.values(), COMMIT_TITLES - codeTitles.length)];
   const held = selection.items.length > 0 || titles.length > 0;
@@ -1321,7 +1357,7 @@ async function commitCheck(input: HookInput, io: Io) {
       ? `The code you are committing matches these rules:\n\n${ruleBlocks(selection)}`
       : "",
     titles.length
-      ? `Also for these changes (their code matches, or the rule was learned on or near the files); read any your change touches (explain <id>):\n${renderTitles(titles)}`
+      ? `Also for these changes (their code matches, or the rule was learned on a file you changed); read any your change touches (explain <id>):\n${renderTitles(titles)}`
       : "",
   ]
     .filter(Boolean)

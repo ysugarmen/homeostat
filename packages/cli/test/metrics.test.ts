@@ -309,6 +309,7 @@ describe("homeostat metrics: the team's shared usage", () => {
             moments: { start: 12, prompt: 3, file: 3, code: 1, commit: 1 },
             findings: 4,
             findingsFixed: 3,
+            findingsAnswered: 1,
             commitsHeld: 2,
             commitsChanged: 1,
           },
@@ -317,7 +318,7 @@ describe("homeostat metrics: the team's shared usage", () => {
     });
     const { stdout } = await run(["--dir", kb, "--days", "7"]);
     expect(stdout).toMatch(/team moments\s+start 12, prompt 3, file 3, code 1, commit 1 rules/);
-    expect(stdout).toMatch(/team findings\s+4 given, 3 fixed \(75%\)/);
+    expect(stdout).toMatch(/team findings\s+4 given, 3 fixed \(75%\), 1 answered without a fix/);
     expect(stdout).toMatch(
       /team commits\s+2 held by the commit check, 1 changed before going through/,
     );

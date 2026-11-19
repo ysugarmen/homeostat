@@ -59,6 +59,7 @@ export function usageCounts(
       }
       case "finding-settled":
         if (e.outcome === "fixed") u.findingsFixed = (u.findingsFixed ?? 0) + 1;
+        if (e.outcome === "answered") u.findingsAnswered = (u.findingsAnswered ?? 0) + 1;
         break;
       case "commit-after-hold":
         if (e.changed === true) u.commitsChanged = (u.commitsChanged ?? 0) + 1;

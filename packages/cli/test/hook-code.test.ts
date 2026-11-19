@@ -212,6 +212,45 @@ describe("homeostat hook file: a located finding the agent must answer", () => {
       expect.objectContaining({ id: "parse-db-url-by-last-at", outcome: "fixed" }),
     ]);
   });
+
+  test("a finding the agent answers in its reply, without a fix, counts as answered", async () => {
+    // Agents often say why a rule does not apply; that was counted the same as ignoring it.
+    const kbDir = kb([
+      {
+        id: "parse-db-url-by-last-at",
+        fm: { scope: ["**"], triggers: ["urlsplit("] },
+        text: "Parse `DB_URL` by its last @, not with urlsplit.",
+      },
+    ]);
+    const cwd = codeRepo(["tools/probe.py"]);
+    const content = "import os\nparts = urlsplit(os.environ['DB_URL'])\n";
+    writeFileSync(join(cwd, "tools/probe.py"), content);
+    const stop = (last_assistant_message: string) =>
+      hook(
+        "stop",
+        { session_id: "a1", cwd, last_assistant_message, transcript_path: "/nonexistent" },
+        { HOMEOSTAT_DIR: kbDir, HOMEOSTAT_NO_SYNC: "1" },
+      );
+    await stop("Starting on the probe.");
+    const { stdout } = await hook(
+      "file",
+      {
+        session_id: "a1",
+        cwd,
+        tool_name: "Write",
+        tool_input: { file_path: join(cwd, "tools/probe.py"), content },
+      },
+      { HOMEOSTAT_DIR: kbDir },
+    );
+    expect(JSON.parse(stdout).decision).toBe("block");
+    await stop("That rule is about prod scripts; this throwaway probe keeps urlsplit.");
+    const settled = readEvents(kbDir, { since: "2026-01-01" }).filter(
+      (e) => e.type === "finding-settled",
+    );
+    expect(settled).toEqual([
+      expect.objectContaining({ id: "parse-db-url-by-last-at", outcome: "answered" }),
+    ]);
+  });
 });
 
 describe("homeostat hook file: many rules fire on one edit", () => {
@@ -356,7 +395,8 @@ describe("homeostat hook commit (PreToolUse on Bash)", () => {
         {
           id: "use-strenum",
           fm: { scope: ["**"], triggers: ["Literal["] },
-          text: "Use StrEnum, not Literal, for closed sets of kinds.",
+          // Names `Kind`, which the committed code holds: a strong match.
+          text: "Use StrEnum, not Literal, for closed sets like `Kind`.",
         },
         { id: "learned-here", fm: learnedAt("services/billing/totals.py") },
       ],
@@ -411,7 +451,7 @@ describe("homeostat hook commit (PreToolUse on Bash)", () => {
       {
         id: "use-strenum",
         fm: { scope: ["**"], triggers: ["Literal["] },
-        text: "Use StrEnum, not Literal, for closed sets of kinds.",
+        text: "Use StrEnum, not Literal, for closed sets like `Kind`.",
       },
     ]);
     const parent = mkdtempSync(join(tmpdir(), "homeostat work-"));
@@ -436,6 +476,28 @@ describe("homeostat hook commit (PreToolUse on Bash)", () => {
     expect(first.permissionDecision).toBe("deny");
     expect(first.permissionDecisionReason).toContain("(use-strenum)");
     expect((await run()).stdout).toBe("");
+  });
+
+  test("nothing specific, no hold: an area's rules alone do not stop a commit", async () => {
+    // In a team trial, holds listing every rule near the changed files were waved through
+    // 39 times in 41.
+    const kbDir = kb([
+      { id: "area-rule-a", fm: { score: 9 } },
+      { id: "area-rule-b", fm: { score: 8 } },
+      { id: "learned-nearby", fm: learnedAt("services/billing/other.py") },
+      // A pattern match that names nothing else in the file: a title at most, not a hold.
+      {
+        id: "weak-match",
+        fm: { scope: ["**"], triggers: ["Literal["] },
+        text: "Use StrEnum, not Literal, for closed sets of kinds.",
+      },
+    ]);
+    const cwd = codeRepo(["services/billing/totals.py"]);
+    execFileSync("git", ["-C", cwd, "add", "."]);
+    execFileSync("git", ["-C", cwd, "commit", "-qm", "init"]);
+    writeFileSync(join(cwd, "services/billing/totals.py"), 'Kind = Literal["a", "b"]\n');
+    execFileSync("git", ["-C", cwd, "add", "."]);
+    expect((await commit(cwd, kbDir)).stdout).toBe("");
   });
 
   test("other commands, and a team that turned it off, are left alone", async () => {
