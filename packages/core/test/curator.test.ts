@@ -9,6 +9,7 @@ import {
   type DraftContext,
   type Drafter,
   draftPrompt,
+  draftSystem,
 } from "../src/curator/draft.ts";
 import { type ReviewThread, reviewThreads } from "../src/curator/threads.ts";
 import { commentKeyOf, parseCommentUrl } from "../src/curator/urls.ts";
@@ -134,8 +135,12 @@ describe("draftPrompt", () => {
     expect(prompt).toContain("Pull request: Retry partner calls (by sam)");
     expect(prompt).toContain("Comment on: services/integrations/partner.ts:3");
     expect(prompt).toContain("dana: comment 1\n\nsam: comment 2");
-    expect(prompt).toContain("- integrations: services/**");
-    expect(prompt).toContain("- core: applies everywhere");
+    // The areas are the same for every thread: they go in the system prompt, which the runtime
+    // caches across calls, not after the thread where they were paid for on every call.
+    expect(prompt).not.toContain("- integrations: services/**");
+    const system = draftSystem({ areas: { integrations: ["services/**"] } });
+    expect(system).toContain("- integrations: services/**");
+    expect(system).toContain("- core: applies everywhere");
   });
 });
 

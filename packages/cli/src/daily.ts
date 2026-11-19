@@ -58,6 +58,7 @@ import {
   slugify,
   startPool,
   stateBranch,
+  THREAD_TOKENS,
   type Verdict,
   validate,
 } from "@homeostat/core";
@@ -100,6 +101,35 @@ export interface DailyOptions {
  * run and never judged: the confident drafts are dropped at the cap and nothing merges.
  */
 export const DRAFT_SHARE = 0.7;
+/** What judging one drafted lesson costs when no run has measured it yet (Haiku, with retries). */
+export const DEFAULT_JUDGE_PER_LESSON = 0.012;
+/** The share of the cap kept for consolidation and narrowing after drafting and judging. */
+export const RESERVE_SHARE = 0.08;
+
+/**
+ * Where drafting stops so that the judge can still afford every draft made: the cap, less a
+ * reserve, less the judge's cost for the drafts so far. The fixed share alone left a third of
+ * the drafts unjudged at the cap in a team trial, and they were drafted again the next run.
+ */
+export function draftStopUsd(at: {
+  maxCostUsd: number;
+  judgePerLesson: number;
+  draftsSoFar: number;
+}): number {
+  const reserve = at.maxCostUsd * RESERVE_SHARE;
+  return Math.min(
+    at.maxCostUsd * DRAFT_SHARE,
+    at.maxCostUsd - reserve - at.judgePerLesson * at.draftsSoFar,
+  );
+}
+
+/** The last run's judge cost per lesson it judged, to size this run's drafting. */
+export function judgeCostPerLesson(last: RunReport | undefined): number | undefined {
+  const cost = last?.timing?.byAgent?.judge?.costUsd;
+  const lessons = last?.lessons.filter((l) => l.origin === "review").length ?? 0;
+  if (cost === undefined || !lessons) return undefined;
+  return cost / lessons;
+}
 
 /** Tries at writing the state branch when other runs keep moving it, before the run fails. */
 export const STATE_PUSH_ATTEMPTS = 5;
@@ -352,6 +382,8 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
   // The spending cap: lessons left undecided wait for the next run, and review threads not drafted.
   const held = new Set<Lesson>();
   let undrafted = 0;
+  /** Where drafting stopped under the cap, for the notice. */
+  let draftStoppedAt: number | undefined;
   // Where the next run reads from when this one stops at the cap: the PR drafting stopped in.
   let resumeFrom: string | undefined;
   let capError: SpendingCapError | undefined;
@@ -370,9 +402,28 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
         `reading reviews since ${last.capped.since}: the last run stopped at the spending cap\n`,
       );
     }
+    // Never further back than maxLagDays: a lost night then costs that night's threads, not a
+    // backlog that grows for a week while every run reads the oldest reviews first.
+    const oldest = new Date(now.getTime() - config.agents.curator.maxLagDays * 86_400_000);
+    if (!opts.since && since < oldest) {
+      io.stdout(
+        `reviews before ${oldest.toISOString()} are skipped: agents.curator.maxLagDays is ${config.agents.curator.maxLagDays}\n`,
+      );
+      since = oldest;
+    }
     const judging = config.agents.curator.judgeCalls > 0;
+    const maxCost = stats.maxCostUsd;
+    const judgePerLesson = judgeCostPerLesson(last) ?? DEFAULT_JUDGE_PER_LESSON;
     const draftLimit =
-      judging && stats.maxCostUsd !== undefined ? stats.maxCostUsd * DRAFT_SHARE : undefined;
+      judging && maxCost !== undefined
+        ? () =>
+            draftStopUsd({
+              maxCostUsd: maxCost,
+              judgePerLesson,
+              // The curator's calls so far: drafts, plus the few document checks among them.
+              draftsSoFar: stats.byAgent?.curator?.calls ?? 0,
+            })
+        : undefined;
     const asker = askerFor(config, "curator", io, root, stats, draftLimit);
     const result = await curate({
       files,
@@ -386,12 +437,17 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     });
     drafted = result.entries;
     skipped = result.skipped.map((s) => ({ url: s.url, reason: s.reason }));
+    if (result.trimmed)
+      io.stdout(
+        `  ${plural(result.trimmed, "long review thread")} cut to ${THREAD_TOKENS} tokens\n`,
+      );
     if (result.capped) {
       // Stopped at the drafting share only (a limit under the cap): the run goes on, and judges
       // what was drafted.
       const atShare =
         stats.maxCostUsd !== undefined && result.capped.error.maxCostUsd < stats.maxCostUsd;
       if (!atShare) capError ??= result.capped.error;
+      if (atShare) draftStoppedAt = result.capped.error.maxCostUsd;
       undrafted = result.capped.threads;
       resumeFrom = result.capped.from;
     }
@@ -1151,7 +1207,7 @@ async function daily(opts: DailyOptions, io: Io, run: { stats?: RunStats }): Pro
     notice(
       atCap()
         ? capLine(stats, left)
-        : `drafting stopped at $${(Math.round((stats.maxCostUsd ?? 0) * DRAFT_SHARE * 100) / 100).toFixed(2)}, ${Math.round(DRAFT_SHARE * 100)}% of the $${(stats.maxCostUsd ?? 0).toFixed(2)} cap, so the rest judged what was drafted; ${left} review thread${left === 1 ? "" : "s"} left for the next run`,
+        : `drafting stopped at $${(Math.round((draftStoppedAt ?? 0) * 100) / 100).toFixed(2)} of the $${(stats.maxCostUsd ?? 0).toFixed(2)} cap, so the judge could afford every draft; ${left} review thread${left === 1 ? "" : "s"} left for the next run`,
     );
   }
   const slack = opts.dryRun ? undefined : slackProblem(config, io);

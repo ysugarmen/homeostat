@@ -298,6 +298,12 @@ export const configSchema = z.strictObject({
            */
           docPatchCalls: z.int().min(0).default(20),
           /**
+           * Days back a run reads merged PRs at most, however far behind the last run stopped.
+           * Reads are oldest first, so without a bound one lost night becomes a backlog that
+           * never clears.
+           */
+          maxLagDays: z.int().positive().default(3),
+          /**
            * Model calls the daily run makes at once, drafting and judging. One at a time, a busy
            * day's few hundred calls took the run past its CI step's time limit.
            */

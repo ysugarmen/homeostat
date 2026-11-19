@@ -1809,7 +1809,7 @@ describe("homeostat daily: the spending cap", { timeout: 30_000 }, () => {
     expect(stdout).toContain("judge use-colour-tokens-instead-of-hex-values: ok (passed)");
     expect(stdout).toContain("lee: 1 merged, 0 to review, 0 declined");
     expect(stdout).toContain(
-      "drafting stopped at $0.35, 70% of the $0.50 cap, so the rest judged what was drafted; 1 review thread left for the next run",
+      "drafting stopped at $0.35 of the $0.50 cap, so the judge could afford every draft; 1 review thread left for the next run",
     );
     expect(stdout).not.toContain("stopped at the spending cap:");
     expect(stateFile(t, "runs/2026-10-16T06-00-00Z.json").capped).toMatchObject({
@@ -2110,5 +2110,71 @@ describe("homeostat daily: reviewers' comments on review PRs", { timeout: 30_000
     });
     expect(asked).toHaveLength(1);
     expect(replies).toHaveLength(1);
+  });
+});
+
+describe("homeostat daily: the reading window is bounded", { timeout: 30_000 }, () => {
+  test("a run never reads further back than maxLagDays, however far behind the last one stopped", async () => {
+    // One lost night used to become a backlog that never cleared: every run read the oldest
+    // reviews first and stopped at the cap a day's worth later.
+    const t = team();
+    const config = join(t.ci, "homeostat.yaml");
+    writeFileSync(
+      config,
+      readFileSync(config, "utf8").replace("agents:\n", "agents:\n  maxCostUsd: 0.01\n"),
+    );
+    t.g(t.ci, "commit", "-qam", "cap");
+    t.g(t.ci, "push", "-q", "origin", "main");
+    // The fake host lists every PR whatever the date; what matters is the date it is asked for.
+    const askedSince: string[] = [];
+    const provider = new (class extends TwoReviews {
+      override async listMergedPullRequests(repo: RepoRef, since: Date) {
+        if (repo.name !== "team-kb") askedSince.push(since.toISOString());
+        return super.listMergedPullRequests(repo, since);
+      }
+    })();
+    const first = await run(["daily", "--dir", t.ci], {
+      provider,
+      drafter: twoDrafts,
+      draftJudge: undefined,
+      runtime: passingRuntime(),
+    });
+    expect(first.stdout).toContain("1 lesson left for the next run");
+    t.g(t.origin, "update-ref", "refs/heads/main", "refs/heads/homeostat/daily-lee-2026-10-16");
+    t.g(t.ci, "pull", "-q", "origin", "main");
+    // Ten days later: the capped run's resume point is past the bound, so it is not used.
+    const later = await run(["daily", "--dir", t.ci, "--max-cost", "5"], {
+      provider,
+      drafter: twoDrafts,
+      draftJudge: undefined,
+      runtime: passingRuntime(),
+      now: () => new Date("2026-10-26T06:00:00Z"),
+    });
+    expect(later.stdout).toContain(
+      "reviews before 2026-10-23T06:00:00.000Z are skipped: agents.curator.maxLagDays is 3",
+    );
+    expect(askedSince.at(-1)).toBe("2026-10-23T06:00:00.000Z");
+  });
+});
+
+describe("homeostat daily: where drafting stops", () => {
+  test("drafting stops where the judge can still afford every draft, under the fixed share", async () => {
+    const { DEFAULT_JUDGE_PER_LESSON, draftStopUsd, judgeCostPerLesson } = await import(
+      "../src/daily.ts"
+    );
+    // A $5 cap, judging at $0.0107 a lesson (a trial's measure): with no drafts yet the fixed
+    // share holds; after 130 drafts the judge's bill for them pulls the stop under it.
+    expect(draftStopUsd({ maxCostUsd: 5, judgePerLesson: 0.0107, draftsSoFar: 0 })).toBe(3.5);
+    expect(draftStopUsd({ maxCostUsd: 5, judgePerLesson: 0.0107, draftsSoFar: 130 })).toBeCloseTo(
+      5 - 0.4 - 1.391,
+      3,
+    );
+    const last = {
+      lessons: [{ origin: "review" }, { origin: "review" }, { origin: "handoff" }],
+      timing: { byAgent: { judge: { costUsd: 0.05 } } },
+    } as unknown as Parameters<typeof judgeCostPerLesson>[0];
+    expect(judgeCostPerLesson(last)).toBeCloseTo(0.025, 6);
+    expect(judgeCostPerLesson(undefined)).toBeUndefined();
+    expect(DEFAULT_JUDGE_PER_LESSON).toBeGreaterThan(0);
   });
 });

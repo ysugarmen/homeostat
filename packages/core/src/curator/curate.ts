@@ -20,7 +20,7 @@ import { GENERAL_TOPIC, topicsFor } from "../topics.ts";
 import { type KbFiles, validate } from "../validate.ts";
 import type { DocCandidate, DocPatcher } from "./doc-patcher.ts";
 import type { Draft, Drafter } from "./draft.ts";
-import { type ReviewThread, reviewThreads } from "./threads.ts";
+import { type ReviewThread, reviewThreads, trimThread } from "./threads.ts";
 import { commentKey, commentKeyOf } from "./urls.ts";
 
 export interface CurateInput {
@@ -80,6 +80,8 @@ export interface CurateResult {
   scanned: { repo: string; pullRequests: number; threads: number }[];
   /** Secrets removed from review threads before they were sent to a model. */
   redacted: number;
+  /** Threads cut to `THREAD_TOKENS` before any model saw them. */
+  trimmed: number;
   docs: DocUpdate[];
   /**
    * Set when the run's spending cap stopped the drafting: the threads read but not drafted. Merged
@@ -120,7 +122,14 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
   const waiting = new Set((input.waiting ?? []).flatMap((u) => commentKeyOf(u) ?? []));
   const declined = new Set((input.declined ?? []).flatMap((u) => commentKeyOf(u) ?? []));
   const ids = new Set(kb.entries.map(({ entry }) => entry.frontmatter.id));
-  const result: CurateResult = { entries: [], skipped: [], scanned: [], redacted: 0, docs: [] };
+  const result: CurateResult = {
+    entries: [],
+    skipped: [],
+    scanned: [],
+    redacted: 0,
+    trimmed: 0,
+    docs: [],
+  };
   // Threads already behind a document section count as known, like those behind entries.
   for (const { doc } of kb.docs) {
     for (const s of doc.sections) {
@@ -249,8 +258,10 @@ export async function curate(input: CurateInput): Promise<CurateResult> {
         skip(`reviewer ${thread.root.author.id} has no member handle in homeostat.yaml`);
         continue;
       }
-      const { thread: safe, redacted } = redactThread(thread);
+      const { thread: redactedThread, redacted } = redactThread(thread);
       result.redacted += redacted;
+      const { thread: safe, trimmed } = trimThread(redactedThread);
+      if (trimmed) result.trimmed++;
       eligible.push({ pr, repo, kbRepo, areas, topics, safe, url, key, reviewer });
     }
   }

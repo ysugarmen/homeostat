@@ -67,12 +67,31 @@ When the rule is about how a kind of code is written (a type, a call, a library,
 
 Set keep to false for one-offs: typos, naming nits specific to this code, questions, praise, or anything that only makes sense for this diff.`;
 
-/** The user turn for one thread: the PR, the file and line, and the conversation. */
-export function draftPrompt(thread: ReviewThread, ctx: DraftContext): string {
+/**
+ * The system prompt for one run's drafts: the instructions plus the areas and topics, which are
+ * the same for every thread. Claude Code caches the system prompt across calls, so this part
+ * is paid once; in the user turn, after the thread, it was paid in full on every call.
+ */
+export function draftSystem(ctx: DraftContext): string {
   const areas = [
     "core: applies everywhere",
     ...Object.entries(ctx.areas).map(([name, globs]) => `${name}: ${globs.join(", ")}`),
   ];
+  return `${DRAFT_SYSTEM}
+
+Areas and the paths they cover:
+${areas.map((a) => `- ${a}`).join("\n")}${
+  ctx.topics
+    ? `
+
+Topics (put the rule in the one it belongs to; if none fits, use general and suggest a new topic name):
+${[...Object.entries(ctx.topics), ["general", "anything that fits no other topic"]].map(([name, about]) => `- ${name}: ${about}`).join("\n")}`
+    : ""
+}`;
+}
+
+/** The user turn for one thread: the PR, the file and line, and the conversation. */
+export function draftPrompt(thread: ReviewThread, ctx: DraftContext): string {
   const location = thread.root.path
     ? `${thread.root.path}${thread.root.line ? `:${thread.root.line}` : ""}`
     : "the pull request as a whole";
@@ -86,19 +105,9 @@ The author changed the code after this feedback.
 
 <thread>
 ${conversation}
-</thread>
-
-Areas and the paths they cover:
-${areas.map((a) => `- ${a}`).join("\n")}${
-  ctx.topics
-    ? `
-
-Topics (put the rule in the one it belongs to; if none fits, use general and suggest a new topic name):
-${[...Object.entries(ctx.topics), ["general", "anything that fits no other topic"]].map(([name, about]) => `- ${name}: ${about}`).join("\n")}`
-    : ""
-}${
-  ctx.revise
-    ? `
+</thread>${
+    ctx.revise
+      ? `
 
 Your previous draft broke these limits:
 ${ctx.revise.problems.map((p) => `- ${p}`).join("\n")}
@@ -109,8 +118,8 @@ Rule: ${ctx.revise.previous.rule}
 Why: ${ctx.revise.previous.why}
 
 Write it again within the limits, keeping every name and fact it states.`
-    : ""
-}`;
+      : ""
+  }`;
 }
 
 /** Drafts with Claude through either runtime (API or Claude Code). */
@@ -122,7 +131,7 @@ export class ClaudeDrafter implements Drafter {
   }
 
   async draft(thread: ReviewThread, ctx: DraftContext): Promise<Draft | null> {
-    const out = await this.ask(DRAFT_SYSTEM, draftPrompt(thread, ctx), draftSchema);
+    const out = await this.ask(draftSystem(ctx), draftPrompt(thread, ctx), draftSchema);
     if (!out?.keep) return null;
     return {
       title: out.title.trim(),
