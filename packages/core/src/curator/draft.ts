@@ -30,10 +30,22 @@ export interface Drafter {
 }
 
 export const draftSchema = z.object({
+  second_situation: z
+    .string()
+    .optional()
+    .describe(
+      'a different, concrete situation in this codebase (another file or feature) where following this rule would change the code and the change would plausibly go wrong without it; empty when you cannot name one. Vague ones ("any similar code", "whenever X is used") do not count',
+    ),
+  specific_to_one_change: z
+    .boolean()
+    .optional()
+    .describe(
+      "true when the lesson names the one function, field, status, template or release it came from and only makes sense there",
+    ),
   keep: z
     .boolean()
     .describe(
-      "false unless a developer on a different change would write code differently for knowing this; one-offs about this change alone (a missed case, a wrong value, a test this diff needs, a nit, a question) are false",
+      "true only when second_situation is concrete and specific_to_one_change is false: a developer on a different change would write code differently for knowing this. One-offs about this change alone (a missed case, a wrong value, a test this diff needs, a nit, a question) are false",
     ),
   title: z.string().describe("imperative sentence, at most 80 characters"),
   rule: z.string().describe("one paragraph, at most 60 words: what to do from now on"),
@@ -61,7 +73,7 @@ export const DRAFT_SYSTEM = `You maintain a software team's knowledge base of co
 
 You get one code-review thread: a reviewer's comment on a pull request, any replies, and the fact that the author changed the code afterwards. Decide whether it holds a lasting rule that would help on other pull requests too, and if so write it.
 
-The bar is high. Keep a lesson only when a developer working on a different change, in a different file, would write their code differently for knowing it: a practice, a convention, a library's right use, a trap in this codebase. Most review comments are about this change alone (a missed case in this function, a wrong value here, a test this diff needs, a name to fix, a description to update, a rollout step for this release): those hold no rule, however good the comment. When in doubt, set keep to false; a team's knowledge base is worth more small than large.
+The bar is high. Keep a lesson only when a developer working on a different change, in a different file, would write their code differently for knowing it: a practice, a convention, a library's right use, a trap in this codebase. Most review comments are about this change alone (a missed case in this function, a wrong value here, a test this diff needs, a name to fix, a description to update, a rollout step for this release): those hold no rule, however good the comment. Test it before deciding: fill second_situation with a different, concrete place in this codebase where the rule would change the code, and say whether the lesson is specific to this one change; keep is true only when the situation is concrete and the lesson is not specific. When in doubt, set keep to false; a team's knowledge base is worth more small than large. Expect to keep well under half of the threads.
 
 Write the rule so it generalises beyond this pull request but stays concrete: name the function, package, path or pattern involved. Use only names, values and examples that appear in the thread; do not add illustrative values of your own, because other agents will treat every detail in the rule as fact. Take the reason only from the thread; never invent facts or motivations it does not state. If the reviewer gives no reason, write the most direct reason the thread supports, briefly.
 
@@ -134,7 +146,10 @@ export class ClaudeDrafter implements Drafter {
 
   async draft(thread: ReviewThread, ctx: DraftContext): Promise<Draft | null> {
     const out = await this.ask(draftSystem(ctx), draftPrompt(thread, ctx), draftSchema);
-    if (!out?.keep) return null;
+    // The bar, applied to the model's own test of it: no concrete second situation, or a lesson
+    // specific to this one change, is no rule, whatever keep says.
+    if (!out?.keep || out.specific_to_one_change === true || !out.second_situation?.trim())
+      return null;
     return {
       title: out.title.trim(),
       rule: out.rule.trim(),

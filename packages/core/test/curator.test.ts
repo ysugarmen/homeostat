@@ -168,7 +168,15 @@ describe("ClaudeDrafter", () => {
   }
 
   test("sends the configured model and effort with a structured-output format and fallbacks", async () => {
-    const { client, calls } = stub({ keep: true, title: " T ", rule: "R", why: "W", area: "core" });
+    const { client, calls } = stub({
+      keep: true,
+      second_situation: "a new router handler building filter args",
+      specific_to_one_change: false,
+      title: " T ",
+      rule: "R",
+      why: "W",
+      area: "core",
+    });
     const drafter = new ClaudeDrafter(
       apiAsker({ client, model: "claude-opus-5-5", effort: "medium" }),
     );
@@ -184,6 +192,20 @@ describe("ClaudeDrafter", () => {
       betas: ["server-side-fallback-2026-07-01"],
       output_config: { effort: "medium", format: expect.anything() },
     });
+  });
+
+  test("keep without the test behind it is no rule: no second situation, or specific to one change", async () => {
+    // The first night with the bar, 101 lessons still merged: keep alone is said too easily.
+    const base = { keep: true, title: "T", rule: "R", why: "W", area: "core" };
+    for (const out of [
+      { ...base, second_situation: "", specific_to_one_change: false },
+      { ...base, second_situation: "another handler", specific_to_one_change: true },
+      { ...base },
+    ]) {
+      const { client } = stub(out);
+      const drafter = new ClaudeDrafter(apiAsker({ client, model: "m", effort: "low" }));
+      expect(await drafter.draft(thread, { areas: {} })).toBeNull();
+    }
   });
 
   test("returns null when the model says there is no lasting rule", async () => {
